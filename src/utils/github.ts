@@ -1,4 +1,6 @@
 import { Octokit } from '@octokit/rest';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export class GitHubService {
   private static instance: GitHubService;
@@ -17,86 +19,101 @@ export class GitHubService {
     return GitHubService.instance;
   }
 
-  public getOctokit(): Octokit {
-      return this.octokit;
-  }
-
-  public async getIssue(owner: string, repo: string, issueNumber: number): Promise<any> {
-    const cacheKey = `issue_${owner}_${repo}_${issueNumber}`;
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey);
-    }
-    const response = await this.octokit.issues.get({
-      owner,
-      repo,
-      issue_number: issueNumber,
-    });
-    this.cache.set(cacheKey, response.data);
-    return response.data;
-  }
-
-  public async createBranch(owner: string, repo: string, newBranch: string, baseBranch: string = 'main'): Promise<any> {
-    const baseRef = await this.octokit.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${baseBranch}`,
-    });
-
-    const response = await this.octokit.git.createRef({
-      owner,
-      repo,
-      ref: `refs/heads/${newBranch}`,
-      sha: baseRef.data.object.sha,
-    });
-    return response.data;
-  }
-
-  public async createOrUpdateFile(
-    owner: string,
-    repo: string,
-    path: string,
-    message: string,
-    content: string,
-    branch: string,
-    sha?: string
-  ): Promise<any> {
-    const params: any = {
-      owner,
-      repo,
-      path,
-      message,
-      content: Buffer.from(content).toString('base64'),
-      branch,
-    };
-    if (sha) {
-      params.sha = sha;
-    }
-    const response = await this.octokit.repos.createOrUpdateFileContents(params);
-    return response.data;
-  }
-
-  public async createPullRequest(
-    owner: string,
-    repo: string,
-    title: string,
-    head: string,
-    base: string,
-    body: string
-  ): Promise<any> {
-    const response = await this.octokit.pulls.create({
-      owner,
-      repo,
-      title,
-      head,
-      base,
-      body,
-    });
-    return response.data;
-  }
-
   public clearCache(): void {
     this.cache.clear();
   }
-}
 
-export const githubService = GitHubService.getInstance();
+  private getRepoInfo(): { owner: string; repo: string } {
+    const repoStr = process.env.GITHUB_REPOSITORY || 'owner/repo';
+    const [owner, repo] = repoStr.split('/');
+    return { owner, repo };
+  }
+
+  public async getIssue(issueNumber: number) {
+    const cacheKey = `issue_${issueNumber}`;
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey);
+    }
+    const { owner, repo } = this.getRepoInfo();
+    const { data } = await this.octokit.issues.get({
+      owner,
+      repo,
+      issue_number: issueNumber
+    });
+    this.cache.set(cacheKey, data);
+    return data;
+  }
+
+  public async addCommentToIssue(issueNumber: number, body: string) {
+    const { owner, repo } = this.getRepoInfo();
+    const { data } = await this.octokit.issues.createComment({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      body
+    });
+    return data;
+  }
+
+  public async getIssueLabels(issueNumber: number) {
+    const issue = await this.getIssue(issueNumber);
+    return issue.labels || [];
+  }
+
+  public async setActivePersona(issueNumber: number, persona: string) {
+    const { owner, repo } = this.getRepoInfo();
+    const labels = await this.getIssueLabels(issueNumber);
+    const labelNames = labels.map((l: any) => typeof l === 'string' ? l : l.name);
+    
+    // Remove existing persona labels
+    const currentPersonas = labelNames.filter((name: string) => name && name.startsWith('persona:'));
+    for (const label of currentPersonas) {
+      await this.octokit.issues.removeLabel({
+        owner,
+        repo,
+        issue_number: issueNumber,
+        name: label
+      });
+    }
+
+    // Add new persona label
+    await this.octokit.issues.addLabels({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      labels: [`persona:${persona}`]
+    });
+  }
+
+  public async getFullIssueContext(issueNumber: number) {
+    const issue = await this.getIssue(issueNumber);
+    const { owner, repo } = this.getRepoInfo();
+    const { data: comments } = await this.octokit.issues.listComments({
+      owner,
+      repo,
+      issue_number: issueNumber
+    });
+    return {
+      issue,
+      comments
+    };
+  }
+
+  public async getFilesRecursive(dir: string): Promise<string[]> {
+    let results: string[] = [];
+    if (!fs.existsSync(dir)) return results;
+    
+    const list = fs.readdirSync(dir);
+    for (const file of list) {
+      const filePath = path.join(dir, file);
+      const stat = fs.statSync(filePath);
+      if (stat && stat.isDirectory()) {
+        const res = await this.getFilesRecursive(filePath);
+        results = results.concat(res);
+      } else {
+        results.push(filePath);
+      }
+    }
+    return results;
+  }
+}
