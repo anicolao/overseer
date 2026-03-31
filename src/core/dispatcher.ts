@@ -1,37 +1,20 @@
-export interface DispatchEvent {
-    type: string;
-    payload: any;
-}
-
-export type EventHandler = (event: DispatchEvent) => Promise<void>;
-
-/**
- * Generic dispatcher logic decoupled from the webhook handlers.
- * Allows personas and state machines to register dynamic listeners.
- */
 export class Dispatcher {
-    private handlers: Map<string, EventHandler[]> = new Map();
+  private handlers: Map<string, Function>;
 
-    public register(eventType: string, handler: EventHandler): void {
-        if (!this.handlers.has(eventType)) {
-            this.handlers.set(eventType, []);
-        }
-        this.handlers.get(eventType)!.push(handler);
-    }
+  constructor() {
+    this.handlers = new Map();
+  }
 
-    public async dispatch(event: DispatchEvent): Promise<void> {
-        const eventHandlers = this.handlers.get(event.type) || [];
-        for (const handler of eventHandlers) {
-            try {
-                await handler(event);
-            } catch (error) {
-                console.error(`Error handling event ${event.type}:`, error);
-                // Depending on the core bot logic, we might not want to halt execution of other handlers
-            }
-        }
-    }
+  public register(event: string, handler: Function): void {
+    this.handlers.set(event, handler);
+  }
 
-    public clearHandlers(): void {
-        this.handlers.clear();
+  public async dispatch(event: string, payload: any): Promise<void> {
+    const handler = this.handlers.get(event);
+    if (handler) {
+      await handler(payload);
+    } else {
+      console.log(`No handler registered for event: ${event}`);
     }
+  }
 }
