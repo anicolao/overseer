@@ -1,5 +1,6 @@
 import { GeminiService } from '../utils/gemini.js';
 import { GitHubService } from '../utils/github.js';
+import { PersonaHelper } from '../utils/persona_helper.js';
 
 export class PlannerPersona {
     private gemini: GeminiService;
@@ -30,7 +31,11 @@ Maintain a highly structured, task-oriented approach. Use clear and descriptive 
     async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string) {
         console.log(`Planner mentioned by ${mentioner} in issue #${issueNumber}`);
         
-        // Get full issue context
+        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
+            this.github, owner, repo, issueNumber, 'Planner', '@planner', mentioner, body
+        );
+        if (!shouldContinue) return;
+
         const issue = await this.github.getIssue(owner, repo, issueNumber);
         const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nLatest mention body:\n${body}`;
         
@@ -42,7 +47,7 @@ Maintain a highly structured, task-oriented approach. Use clear and descriptive 
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, response);
+        await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
         await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:planning', 'persona:planner']);
     }
 }
