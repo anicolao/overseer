@@ -1,72 +1,72 @@
 import { GitHubService } from '../../src/utils/github';
-import * as fs from 'fs';
-import * as path from 'path';
 
+// Mock Octokit comprehensively
 jest.mock('@octokit/rest', () => {
-  const mOctokit = {
-    issues: {
-      get: jest.fn().mockResolvedValue({ data: { labels: [{ name: 'bug' }, { name: 'persona:Planner' }] } }),
-      createComment: jest.fn().mockResolvedValue({ data: { id: 1 } }),
-      listComments: jest.fn().mockResolvedValue({ data: [{ body: 'First comment' }] }),
-      addLabels: jest.fn().mockResolvedValue({ data: {} }),
-      removeLabel: jest.fn().mockResolvedValue({ data: {} }),
-    }
+  return {
+    Octokit: jest.fn().mockImplementation(() => {
+      return {
+        issues: {
+          get: jest.fn().mockResolvedValue({ data: { id: 1, title: 'Test Issue' } }),
+          createComment: jest.fn().mockResolvedValue({ data: { id: 2 } }),
+          addLabels: jest.fn().mockResolvedValue({ data: [{ name: 'persona:developer-tester' }] }),
+        },
+        repos: {
+            createOrUpdateFileContents: jest.fn().mockResolvedValue({ data: { content: { name: 'file.ts' } } })
+        },
+        git: {
+            createRef: jest.fn().mockResolvedValue({ data: { ref: 'refs/heads/new-branch' } })
+        },
+        pulls: {
+            create: jest.fn().mockResolvedValue({ data: { id: 3, number: 1 } })
+        }
+      };
+    }),
   };
-  return { Octokit: jest.fn(() => mOctokit) };
 });
 
-describe('GitHubService Implementation', () => {
+describe('GitHubService', () => {
   let githubService: GitHubService;
 
   beforeEach(() => {
     githubService = GitHubService.getInstance();
     githubService.clearCache();
-    process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
   });
 
-  it('should be structured as a functional singleton', () => {
+  it('should be a singleton', () => {
     const instance1 = GitHubService.getInstance();
     const instance2 = GitHubService.getInstance();
     expect(instance1).toBe(instance2);
   });
 
-  it('should cache and retrieve sequential getIssue calls correctly', async () => {
-    const issue1 = await githubService.getIssue(42);
-    const issue2 = await githubService.getIssue(42);
-    expect(issue1.labels).toBeDefined();
-    expect(issue2).toEqual(issue1);
+  it('should get an issue and cache it', async () => {
+    const issue1 = await githubService.getIssue('owner', 'repo', 1);
+    expect(issue1).toEqual({ id: 1, title: 'Test Issue' });
+
+    const issue2 = await githubService.getIssue('owner', 'repo', 1);
+    expect(issue2).toEqual({ id: 1, title: 'Test Issue' });
   });
 
-  it('should properly proxy adding a comment to an issue', async () => {
-    const response = await githubService.addCommentToIssue(42, 'Hello from tests');
-    expect(response.id).toEqual(1);
+  it('should add a comment to an issue', async () => {
+    const response = await githubService.addCommentToIssue('owner', 'repo', 1, 'test comment');
+    expect(response).toEqual({ id: 2 });
   });
 
-  it('should fetch associated issue labels', async () => {
-    const labels = await githubService.getIssueLabels(42);
-    expect(labels.length).toBeGreaterThan(0);
+  it('should create or update a file', async () => {
+    const response = await githubService.createOrUpdateFile('owner', 'repo', 'path/to/file.ts', 'commit message', 'content', 'branch');
+    expect(response).toEqual({ content: { name: 'file.ts' } });
   });
 
-  it('should securely replace the active persona state', async () => {
-    await expect(githubService.setActivePersona(42, 'DeveloperTester')).resolves.not.toThrow();
+  it('should create a branch', async () => {
+    const response = await githubService.createBranch('owner', 'repo', 'new-branch', 'sha-hash');
+    expect(response).toEqual({ ref: 'refs/heads/new-branch' });
   });
 
-  it('should retrieve full contextual issue context including comments', async () => {
-    const context = await githubService.getFullIssueContext(42);
-    expect(context.issue).toBeDefined();
-    expect(context.comments.length).toBeGreaterThan(0);
+  it('should create a pull request', async () => {
+    const response = await githubService.createPullRequest('owner', 'repo', 'PR Title', 'new-branch', 'main', 'PR body');
+    expect(response).toEqual({ id: 3, number: 1 });
   });
 
-  it('should read the target file system directory recursively', async () => {
-    const testDir = path.join(__dirname, 'temp_test_dir');
-    if (!fs.existsSync(testDir)) fs.mkdirSync(testDir);
-    const testFile = path.join(testDir, 'test_mock.txt');
-    fs.writeFileSync(testFile, 'dummy content');
-
-    const files = await githubService.getFilesRecursive(testDir);
-    expect(files).toContain(testFile);
-
-    fs.unlinkSync(testFile);
-    fs.rmdirSync(testDir);
+  it('should set an active persona', async () => {
+    await expect(githubService.setActivePersona('owner', 'repo', 1, 'planner')).resolves.toBeUndefined();
   });
 });
