@@ -153,6 +153,34 @@ export class GitHubService {
         return context;
     }
 
+    async getFilesRecursive(owner: string, repo: string, path: string = '', ref: string = 'main'): Promise<{ path: string, content: string }[]> {
+        const { data } = await this.octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path,
+            ref,
+        });
+
+        let results: { path: string, content: string }[] = [];
+
+        if (Array.isArray(data)) {
+            for (const item of data) {
+                if (item.type === 'dir') {
+                    const subFiles = await this.getFilesRecursive(owner, repo, item.path, ref);
+                    results = results.concat(subFiles);
+                } else if (item.type === 'file') {
+                    const content = await this.getFileContent(owner, repo, item.path, ref);
+                    results.push({ path: item.path, content });
+                }
+            }
+        } else if (data.type === 'file') {
+            const content = await this.getFileContent(owner, repo, data.path, ref);
+            results.push({ path: data.path, content });
+        }
+
+        return results;
+    }
+
     async createPullRequest(owner: string, repo: string, title: string, body: string, head: string, base: string = 'main') {
         return this.octokit.rest.pulls.create({
             owner,

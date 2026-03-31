@@ -82,7 +82,7 @@ async function run() {
             targetedPersona = handleMap[nextStepMatch[1].toLowerCase()] || null;
         }
 
-        // If no suffix, look for the LAST mention in the body (usually the intended handoff)
+        // If no suffix, look for any mention in the body
         if (!targetedPersona) {
             const mentions = body.match(/@[a-z-]+/gi);
             if (mentions) {
@@ -96,20 +96,15 @@ async function run() {
             }
         }
 
-        if (!targetedPersona) {
-            console.log('No persona identified in comment');
-            return;
-        }
-
         // 2. State Machine Logic
         let shouldExecute = false;
 
         if (activePersona === 'overseer') {
-            // Overseer always runs when it has the token
+            // Overseer always runs when it has the token, even without a mention
             shouldExecute = true;
             executedPersona = 'overseer';
         } else if (activePersona !== null) {
-            // Specialized agent runs only if it was the one intended
+            // Specialized agent runs only if it was explicitly mentioned
             if (targetedPersona === activePersona) {
                 shouldExecute = true;
                 executedPersona = activePersona;
@@ -122,9 +117,13 @@ async function run() {
             }
         }
 
-        // 3. Persona-Specific Bot Protection: 
-        // Only ignore if the bot POSTED the comment AND it's that persona's OWN attribution.
-        if (shouldExecute && executedPersona && sender === botUser) {
+        if (!shouldExecute) {
+            console.log(`No authorized execution path for targetedPersona: ${targetedPersona}, activePersona: ${activePersona}`);
+            return;
+        }
+
+        // 3. Persona-Specific Bot Protection
+        if (executedPersona && sender === botUser) {
             const personaNameMap: Record<string, string> = {
                 'overseer': 'Overseer',
                 'product-architect': 'Product/Architect',

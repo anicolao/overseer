@@ -30,6 +30,7 @@ Maintain a professional, critical but constructive, and high-quality-oriented ap
         let context = `Issue Number: ${issueNumber}\nDeveloper: ${developer}\n`;
 
         try {
+            // 1. Review specific PR if provided
             if (prNumber > 0) {
                 const files = await this.github.getPullRequestFiles(owner, repo, prNumber);
                 context += `\nPull Request #${prNumber} Files:\n`;
@@ -44,14 +45,24 @@ Maintain a professional, critical but constructive, and high-quality-oriented ap
                         }
                     }
                 }
-            } else {
-                context += "\nNo specific PR number provided. Reviewing the latest state of the repository relative to the issue goals.";
+            } 
+            
+            // 2. Always inspect the latest repository state for overall quality
+            context += "\n\n--- CURRENT REPOSITORY STATE (Source Files) ---\n";
+            const repoFiles = await this.github.getFilesRecursive(owner, repo, 'src');
+            for (const file of repoFiles) {
+                // Filter for source files to keep context manageable
+                if (file.path.endsWith('.ts') || file.path.endsWith('.js') || file.path.endsWith('.md')) {
+                    context += `\n--- File: ${file.path} ---\n`;
+                    context += file.content + '\n';
+                }
             }
+
         } catch (error) {
-            context += `\nError gathering PR context: ${error instanceof Error ? error.message : String(error)}`;
+            context += `\nError gathering repository context: ${error instanceof Error ? error.message : String(error)}`;
         }
 
-        const userMessage = "A review request has been assigned to you. Please review the implementation provided in the context above against the project requirements.";
+        const userMessage = "A quality review has been requested. Please review the implementation and the overall repository state provided in the context above against the project requirements and engineering standards.";
 
         const response = await this.gemini.promptPersona(
             QualityPersona.SYSTEM_INSTRUCTION,
