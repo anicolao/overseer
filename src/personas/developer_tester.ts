@@ -43,15 +43,24 @@ export class NewFeature { ... }
         const fileRegex = /\[FILE:(.+?)\]([\s\S]+?)\[\/FILE\]/g;
         let match;
         let filePaths = [];
+        
+        const branchName = `bot/issue-${issueNumber}-${Date.now()}`;
+        let branchCreated = false;
+
         while ((match = fileRegex.exec(response)) !== null) {
+            if (!branchCreated) {
+                await this.github.createBranch(owner, repo, branchName);
+                branchCreated = true;
+            }
             const filePath = match[1];
             const content = match[2].trim();
             filePaths.push(filePath);
-            await this.github.createOrUpdateFile(owner, repo, filePath, `feat: implementation for #${issueNumber}`, content);
+            await this.github.createOrUpdateFile(owner, repo, filePath, `feat: implementation for #${issueNumber}`, content, branchName);
         }
 
         if (filePaths.length > 0) {
-            await this.github.addCommentToIssue(owner, repo, issueNumber, `I have implemented the following files: ${filePaths.join(', ')}.\n\n${response}`);
+            const pr = await this.github.createPullRequest(owner, repo, `Resolve issue #${issueNumber}`, `Automated PR by Developer/Tester for issue #${issueNumber}`, branchName);
+            await this.github.addCommentToIssue(owner, repo, issueNumber, `I have implemented the following files: ${filePaths.join(', ')}.\n\nA PR has been created: #${pr.data.number} (${pr.data.html_url})\n\n${response}`);
         } else {
             await this.github.addCommentToIssue(owner, repo, issueNumber, response);
         }
