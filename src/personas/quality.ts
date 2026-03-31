@@ -23,12 +23,12 @@ Maintain a professional, critical but constructive, and high-quality-oriented ap
         this.github = github;
     }
 
-    async handleReviewRequest(owner: string, repo: string, issueNumber: number, prNumber: number, developer: string) {
+    async handleReviewRequest(owner: string, repo: string, issueNumber: number, prNumber: number, developer: string): Promise<string> {
         console.log(`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`);
-        
+
         const attribution = PersonaHelper.getAttribution('Quality', issueNumber, developer);
         let context = `Issue Number: ${issueNumber}\nDeveloper: ${developer}\n`;
-        
+
         try {
             if (prNumber > 0) {
                 const files = await this.github.getPullRequestFiles(owner, repo, prNumber);
@@ -59,6 +59,5 @@ Maintain a professional, critical but constructive, and high-quality-oriented ap
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
+        return attribution + response;
     }
-}

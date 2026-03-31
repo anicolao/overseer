@@ -22,7 +22,7 @@ Maintain a highly structured, task-oriented approach. Use clear and descriptive 
         this.github = github;
     }
 
-    async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string) {
+    async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string): Promise<string> {
         console.log(`Planner handling mention from ${mentioner} in issue #${issueNumber}`);
         
         const attribution = PersonaHelper.getAttribution('Planner', issueNumber, mentioner);
@@ -36,6 +36,6 @@ Maintain a highly structured, task-oriented approach. Use clear and descriptive 
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
+        return attribution + response;
     }
 }

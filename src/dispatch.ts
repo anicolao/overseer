@@ -33,7 +33,6 @@ async function run() {
 
     console.log(`Received GitHub event: ${eventName} from ${sender}`);
 
-    // Get issue context
     let issueNumber: number;
     let owner: string;
     let repo: string;
@@ -57,7 +56,6 @@ async function run() {
 
     console.log(`Active persona: ${activePersona}`);
 
-    // Mapping of handles to persona internal keys
     const handleMap: Record<string, string> = {
         '@overseer': 'overseer',
         '@product-architect': 'product-architect',
@@ -66,14 +64,22 @@ async function run() {
         '@quality': 'quality'
     };
 
+    let responseContent: string = '';
+    let executedPersona: string | null = null;
+
     if (eventName === 'issues' && eventData.action === 'opened') {
-        // Human opening an issue triggers Overseer
-        await personas.overseer.handleNewIssue(owner, repo, issueNumber, eventData.issue.title, eventData.issue.body || '');
-        await finalizeToken(github, owner, repo, issueNumber, 'overseer');
+        responseContent = await personas.overseer.handleNewIssue(owner, repo, issueNumber, eventData.issue.title, eventData.issue.body || '');
+        executedPersona = 'overseer';
     } else if (eventName === 'issue_comment' && eventData.action === 'created') {
         const body = eventData.comment.body;
 
-        // 1. Identify target persona
+        // 1. Bot Protection: Ignore if the bot posted the comment AND it's our attribution pattern
+        if (sender === botUser && body.startsWith('I am the ') && body.includes('and I am responding to')) {
+            console.log('Ignoring bot-generated comment');
+            return;
+        }
+
+        // 2. Identify target persona from mentions
         let targetedPersona: string | null = null;
         for (const [handle, key] of Object.entries(handleMap)) {
             if (body.includes(handle)) {
@@ -82,91 +88,82 @@ async function run() {
             }
         }
 
-        if (!targetedPersona) {
-            console.log('No persona mentioned in comment');
-            return;
-        }
+        // 3. State Machine Logic
+        let shouldExecute = false;
 
-        // 2. Authorization Check
-        // Allow overseer to be triggered if active persona is null (quiescent) or explicitly overseer
-        const isAuthorized = (targetedPersona === activePersona) || 
-                             (targetedPersona === 'overseer' && activePersona === null);
-
-        if (!isAuthorized) {
-            console.log(`Unauthorized trigger: ${targetedPersona} is not the active persona (${activePersona})`);
-            return;
-        }
-
-        // 3. Execution
-        console.log(`Executing persona: ${targetedPersona}`);
-        try {
+        if (activePersona === 'overseer') {
+            // Overseer always runs when it has the token
+            shouldExecute = true;
+            executedPersona = 'overseer';
+        } else if (activePersona !== null) {
+            // Specialized agent runs only if mentioned
+            if (targetedPersona === activePersona) {
+                shouldExecute = true;
+                executedPersona = activePersona;
+            }
+        } else {
+            // Quiescent state: only Overseer runs if mentioned
             if (targetedPersona === 'overseer') {
-                await personas.overseer.handleComment(owner, repo, issueNumber, sender, body);
-            } else if (targetedPersona === 'product-architect') {
-                await personas.productArchitect.handleMention(owner, repo, issueNumber, sender, body);
-            } else if (targetedPersona === 'planner') {
-                await personas.planner.handleMention(owner, repo, issueNumber, sender, body);
-            } else if (targetedPersona === 'developer-tester') {
-                await personas.developerTester.handleTask(owner, repo, issueNumber, body);
-            } else if (targetedPersona === 'quality') {
+                shouldExecute = true;
+                executedPersona = 'overseer';
+            }
+        }
+
+        if (shouldExecute && executedPersona) {
+            console.log(`Executing persona: ${executedPersona}`);
+            if (executedPersona === 'overseer') {
+                responseContent = await personas.overseer.handleComment(owner, repo, issueNumber, sender, body);
+            } else if (executedPersona === 'product-architect') {
+                responseContent = await personas.productArchitect.handleMention(owner, repo, issueNumber, sender, body);
+            } else if (executedPersona === 'planner') {
+                responseContent = await personas.planner.handleMention(owner, repo, issueNumber, sender, body);
+            } else if (executedPersona === 'developer-tester') {
+                responseContent = await personas.developerTester.handleTask(owner, repo, issueNumber, body);
+            } else if (executedPersona === 'quality') {
                 const prMatch = body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
                 const prNumber = prMatch ? parseInt(prMatch[1], 10) : 0;
-                await personas.quality.handleReviewRequest(owner, repo, issueNumber, prNumber, sender);
+                responseContent = await personas.quality.handleReviewRequest(owner, repo, issueNumber, prNumber, sender);
             }
-
-            // 4. Finalize Token (Handoff)
-            await finalizeToken(github, owner, repo, issueNumber, targetedPersona);
-        } catch (error) {
-            console.error(`Error during persona execution:`, error);
         }
     }
-}
 
-async function finalizeToken(github: GitHubService, owner: string, repo: string, issueNumber: number, currentPersona: string) {
-    if (currentPersona !== 'overseer') {
-        // Specialized agents always return to overseer
-        console.log(`Agent ${currentPersona} finished. Returning token to overseer.`);
-        await github.setActivePersona(owner, repo, issueNumber, 'overseer');
-    } else {
-        // Overseer decides the next step. Parse the last comment.
-        const { data: comments } = await (github as any).octokit.rest.issues.listComments({
-            owner,
-            repo,
-            issue_number: issueNumber,
-            per_page: 1,
-            sort: 'created',
-            direction: 'desc'
-        });
+    if (responseContent && executedPersona) {
+        // Atomic Transition: Determine next persona, set label, THEN post comment
+        let nextPersona: string | null = null;
 
-        if (comments.length > 0) {
-            const lastComment = comments[0].body || '';
-            const nextStepMatch = lastComment.match(/Next step: (@[a-z-]+) to take action/i);
-            
+        if (executedPersona !== 'overseer') {
+            // Specialized agents always return to Overseer
+            nextPersona = 'overseer';
+        } else {
+            // Parse Overseer output for delegation
+            const nextStepMatch = responseContent.match(/Next step: (@[a-z-]+) to take action/i);
             if (nextStepMatch) {
                 const nextHandle = nextStepMatch[1].toLowerCase();
-                const handleMap: Record<string, string> = {
-                    '@overseer': 'overseer',
-                    '@product-architect': 'product-architect',
-                    '@planner': 'planner',
-                    '@developer-tester': 'developer-tester',
-                    '@quality': 'quality'
-                };
-                const nextPersona = handleMap[nextHandle];
-                if (nextPersona) {
-                    console.log(`Overseer delegated to ${nextPersona}. Setting token.`);
-                    await github.setActivePersona(owner, repo, issueNumber, nextPersona);
-                } else {
-                    console.log(`Overseer mentioned unknown persona ${nextHandle}. Clearing token.`);
-                    await github.setActivePersona(owner, repo, issueNumber, null);
+                nextPersona = handleMap[nextHandle] || null;
+                
+                // Safety Rule: No self-delegation or invalid persona
+                if (nextPersona === 'overseer' || !nextPersona) {
+                    const errorMsg = nextPersona === 'overseer' 
+                        ? "ERROR: Overseer attempted to delegate to itself. Transitioning to 'none' to prevent loop."
+                        : `ERROR: Overseer delegated to unknown persona ${nextHandle}. Transitioning to 'none'.`;
+                    console.error(errorMsg);
+                    await github.addCommentToIssue(owner, repo, issueNumber, errorMsg);
+                    nextPersona = null;
                 }
-            } else if (lastComment.includes('Next step: human review required')) {
-                console.log('Overseer requested human review. Clearing token.');
-                await github.setActivePersona(owner, repo, issueNumber, null);
+            } else if (responseContent.includes('Next step: human review required')) {
+                nextPersona = null;
             } else {
-                console.log('No explicit next step found in Overseer output. Clearing token.');
-                await github.setActivePersona(owner, repo, issueNumber, null);
+                // Fallback for missing suffix
+                const errorMsg = "ERROR: Overseer failed to specify a valid 'Next step:' suffix. Transitioning to 'none'.";
+                console.error(errorMsg);
+                await github.addCommentToIssue(owner, repo, issueNumber, errorMsg);
+                nextPersona = null;
             }
         }
+
+        console.log(`Setting next active persona: ${nextPersona}`);
+        await github.setActivePersona(owner, repo, issueNumber, nextPersona);
+        await github.addCommentToIssue(owner, repo, issueNumber, responseContent);
     }
 }
 

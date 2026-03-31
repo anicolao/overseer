@@ -28,7 +28,7 @@ Always strive for high-quality, well-tested, and idiomatically correct code.
         this.github = github;
     }
 
-    async handleTask(owner: string, repo: string, issueNumber: number, taskDescription: string) {
+    async handleTask(owner: string, repo: string, issueNumber: number, taskDescription: string): Promise<string> {
         console.log(`Developer/Tester handling task for issue #${issueNumber}: ${taskDescription}`);
         
         const attribution = PersonaHelper.getAttribution('Developer/Tester', issueNumber);
@@ -77,6 +77,6 @@ Always strive for high-quality, well-tested, and idiomatically correct code.
             finalComment += `\n\nI have implemented the following files: ${filePaths.join(', ')}.`;
         }
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, finalComment);
+        return finalComment;
     }
 }
