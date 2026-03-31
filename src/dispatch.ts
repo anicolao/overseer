@@ -28,7 +28,15 @@ async function run() {
         quality: new QualityPersona(gemini, github),
     };
 
-    console.log(`Processing GitHub event: ${eventName}`);
+    const sender = eventData.sender?.login;
+    const botUser = "anicolao"; // The identity used by OVERSEER_TOKEN
+
+    if (sender === botUser) {
+        console.log(`Ignoring event triggered by bot user: ${sender}`);
+        return;
+    }
+
+    console.log(`Processing GitHub event: ${eventName} from ${sender}`);
 
     if (eventName === 'issues' && eventData.action === 'opened') {
         const { owner, name } = eventData.repository;
