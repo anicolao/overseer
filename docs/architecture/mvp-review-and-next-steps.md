@@ -1,51 +1,46 @@
-# MVP Architectural Review and V2 Roadmap
+# MVP Architectural Review and Pre-V2 Remediation Design
 
 ## 1. Executive Summary
-The MVP implementation successfully validates the core premise of the Overseer project: an autonomous, multi-agent system capable of reading, reasoning about, and acting upon repository tasks. However, evaluating the current codebase against our long-term goals reveals that the MVP is suited only as a proof-of-concept. To achieve a production-grade, highly reliable system (V2), we must systematically eliminate technical debt and enforce strict architectural patterns.
+This document serves as the Product/Architect review of the current Minimum Viable Product (MVP) implementation of the Overseer system. While the MVP successfully proves the core concept of GitHub-issue-driven multi-agent orchestration, the current architectural foundation requires stabilization and refactoring before we can safely introduce V2 components (such as the State Manager and Context Compactor).
 
-## 2. MVP Suitability Assessment
+## 2. Architectural Suitability Assessment
+The MVP establishes a functional baseline but exhibits several architectural shortcuts typical of rapid prototyping:
 
-### Strengths (Conceptual Validations to Retain)
-- **Persona-Driven Logic:** The separation of concerns via distinct personas (Overseer, Architect, Quality, Planner, Developer) is fundamentally sound.
-- **Core Integrations:** The foundational hooks into the GitHub API (Issues, PRs) and the LLM execution layer are functional.
-- **Asynchronous Workflows:** Basic asynchronous communication between agents has been proven viable.
+*   **Coupling:** The orchestrator logic is tightly coupled with the GitHub API client and LLM service calls. This makes unit testing difficult and violates the Single Responsibility Principle.
+*   **Context Handling:** Currently, issue context and conversation history are passed naively. As issue threads grow, this will exceed context windows, necessitating the V2 Context Compactor. However, the *interfaces* for passing this context are not well-defined, making the future compactor integration risky.
+*   **Prompt Management:** Prompts and agent personas are hardcoded within the execution logic rather than being abstracted into a manageable configuration or template system.
+*   **State Management:** Execution state is implicitly tied to the GitHub issue state. We lack an internal, resilient state machine to handle intermittent API failures or LLM timeouts.
 
-### Architectural Gaps (Critical Deficiencies to Remediate)
-- **Mutable Shared State:** The MVP currently relies on shared, mutable state contexts. This lack of isolation leads to race conditions, non-deterministic agent behavior, and untraceable bugs.
-- **Tight Coupling:** Business logic is tightly interwoven with external SDKs (e.g., direct calls to the LLM and GitHub endpoints). This makes the system fragile and incredibly difficult to unit-test.
-- **Silent Failures:** Error boundaries are loosely defined. LLM hallucinations, schema mismatches, and network timeouts are frequently swallowed or mishandled, halting agent loops without raising alerts.
-- **Weak Type Boundaries:** Cross-agent communication and API payloads lack strict runtime validation, violating our data integrity invariants.
+## 3. Alignment with Initial Requirements
+*   **Requirement: Multi-Agent Interaction via GitHub** - *Met.* Agents can read and respond to mentions.
+*   **Requirement: Automated Task Execution** - *Partially Met.* The execution pipeline exists, but lacks standardized error handling and retry mechanisms.
+*   **Requirement: Extensibility** - *At Risk.* The current monolithic script structure prevents easy addition of new agent personas without modifying core logic.
 
-## 3. V2 Architecture: Next Steps & Design Requirements
+## 4. High-Level Technical Design for Remediation (Next Steps)
+Before V2 execution, the following structural refactoring must be completed. These serve as the requirements for the remediation PRs:
 
-To bring the MVP up to standard, the team must execute the following architectural requirements:
+### 4.1. Interface Segregation & Dependency Injection
+*   **Requirement:** Abstract external dependencies (GitHub API, LLM Provider) behind clear interfaces.
+*   **Design:**
+    *   Create an `IGitHubProvider` interface (`fetchIssue`, `postComment`, `createPR`).
+    *   Create an `ILLMProvider` interface (`generateResponse`).
+    *   Refactor the main Overseer loop to accept these interfaces via dependency injection, enabling the use of mock providers in tests.
 
-### Phase 1: Dependency Inversion & Decoupling
-*Requirement:* Isolate domain logic from external infrastructure.
-*Design:* 
-- Implement a **Ports and Adapters (Hexagonal)** architecture.
-- Define explicit interfaces: `ILLMClient`, `IGitHubAdapter`, and `IFileSystem`.
-- Inject these interfaces into the agent context, allowing for 100% mocked testing environments.
+### 4.2. Prompt and Persona Externalization
+*   **Requirement:** Decouple prompt definitions from application code.
+*   **Design:**
+    *   Implement a `PromptRegistry` class.
+    *   Move all system instructions (Architect, Planner, Developer, Quality) into separate Markdown or JSON configuration files.
+    *   The orchestrator will query the `PromptRegistry` based on the targeted agent persona.
 
-### Phase 2: Immutable State Management
-*Requirement:* Ensure predictable and traceable agent execution.
-*Design:*
-- Transition to an **Event-Sourced** or strict unidirectional data flow model.
-- Represent all agent actions as immutable events (e.g., `REQUIREMENTS_DEFINED`, `TESTS_FAILED`).
-- Implement pure reducer functions to compute the next state of the system based on the current state and incoming events.
+### 4.3. Standardized Event Payload
+*   **Requirement:** Standardize the data structure passed between the GitHub webhook/polling layer and the agent processing logic.
+*   **Design:**
+    *   Define an `AgentTask` domain object containing: `issueId`, `triggeringComment`, `author`, `mentionedRole`, and `historicalContext` (array of previous comments).
+    *   This object will serve as the exact injection point for the V2 Context Compactor.
 
-### Phase 3: Runtime Boundary Validation
-*Requirement:* Prevent corrupted data from entering the system state.
-*Design:*
-- Introduce a strict schema validation library (e.g., Zod) at all system boundaries.
-- All LLM responses must be parsed against predefined schemas. If parsing fails, the system must trigger a deterministic retry loop with feedback to the LLM.
-
-### Phase 4: Resiliency and Error Handling
-*Requirement:* Handle external volatility gracefully.
-*Design:*
-- Implement centralized error-handling middleware.
-- Add deterministic retry logic with exponential backoff for transient errors (rate limits, network drops).
-- Define fallback states for fatal errors to ensure the system fails safely and notifies the Overseer.
-
-## 4. Conclusion
-The MVP successfully demonstrates the project's potential but is too architecturally fragile for immediate production use. By executing the phased refactoring outlined above, we will systematically resolve the current limitations and establish a robust V2 foundation.
+### 4.4. Error Boundary and Retry Wrapper
+*   **Requirement:** Prevent transient API/LLM failures from crashing the Overseer process.
+*   **Design:**
+    *   Implement an exponential backoff retry wrapper around all calls to `ILLMProvider` and `IGitHubProvider`.
+    *   Add a centralized logging module to capture standard output, warnings, and error stacks.
