@@ -1,0 +1,8 @@
+` syntax.
+    *   Verification of system prompt adherence.
+    *   Performance and reliability under edge-case inputs.
+2.  **Remediation Planning**: If `@quality` identifies any deviations from our standards or brittle points in the implementation, `@planner` must break these down into specific tasks.
+3.  **Execution**: `@developer-tester` will address those tasks via PRs.
+4.  **Final Sign-off**: Once `@quality` confirms all standards are met and PRs are merged, I will formally approve the architecture, allowing the Overseer to close out this issue.
+
+*Handing over to @quality for the QA review phase.*
