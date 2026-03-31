@@ -52,8 +52,10 @@ async function run() {
             await personas.developerTester.handleTask(owner.login, name, number, body);
         }
         if (body.includes('@quality')) {
-            // Quality review request handling
-            await personas.quality.handleReviewRequest(owner.login, name, number, 0, user.login);
+            // Try to extract PR number from body
+            const prMatch = body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
+            const prNumber = prMatch ? parseInt(prMatch[1], 10) : 0;
+            await personas.quality.handleReviewRequest(owner.login, name, number, prNumber, user.login);
         }
     }
 }
