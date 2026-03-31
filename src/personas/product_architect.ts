@@ -23,7 +23,7 @@ Maintain a clear, concise, and structured approach.
         this.github = github;
     }
 
-    async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string) {
+    async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string): Promise<string> {
         console.log(`Product/Architect handling mention from ${mentioner} in issue #${issueNumber}`);
         
         const attribution = PersonaHelper.getAttribution('Product/Architect', issueNumber, mentioner);
@@ -53,6 +53,6 @@ Maintain a clear, concise, and structured approach.
             finalComment += `\n\nI have created the following design documents: ${filePaths.join(', ')}.`;
         }
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, finalComment);
+        return finalComment;
     }
 }

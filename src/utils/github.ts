@@ -130,6 +130,29 @@ export class GitHubService {
         });
     }
 
+    async listIssueComments(owner: string, repo: string, issueNumber: number) {
+        return this.octokit.rest.issues.listComments({
+            owner,
+            repo,
+            issue_number: issueNumber,
+        });
+    }
+
+    async getFullIssueContext(owner: string, repo: string, issueNumber: number): Promise<string> {
+        const issue = await this.getIssue(owner, repo, issueNumber);
+        const comments = await this.listIssueComments(owner, repo, issueNumber);
+        
+        let context = `ISSUE TITLE: ${issue.data.title}\n`;
+        context += `ISSUE BODY:\n${issue.data.body || 'No body provided.'}\n\n`;
+        context += `--- COMMENTS ---\n`;
+        
+        for (const comment of comments.data) {
+            context += `COMMENT BY @${comment.user?.login}:\n${comment.body}\n\n`;
+        }
+        
+        return context;
+    }
+
     async createPullRequest(owner: string, repo: string, title: string, body: string, head: string, base: string = 'main') {
         return this.octokit.rest.pulls.create({
             owner,

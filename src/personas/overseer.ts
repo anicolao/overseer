@@ -32,11 +32,11 @@ Current Personas available:
         this.github = github;
     }
 
-    async handleNewIssue(owner: string, repo: string, issueNumber: number, title: string, body: string) {
+    async handleNewIssue(owner: string, repo: string, issueNumber: number, title: string, body: string): Promise<string> {
         console.log(`Overseer handling new issue #${issueNumber}: ${title}`);
         
         if (await PersonaHelper.isLimitReached(this.github, owner, repo, issueNumber, 'Overseer', '@overseer', body)) {
-            return;
+            return '';
         }
 
         const attribution = PersonaHelper.getAttribution('Overseer', issueNumber);
@@ -49,21 +49,19 @@ Current Personas available:
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
-        // Dispatcher will handle setting the next active-persona based on 'Next step:'
+        return attribution + response;
     }
 
-    async handleComment(owner: string, repo: string, issueNumber: number, commenter: string, body: string) {
+    async handleComment(owner: string, repo: string, issueNumber: number, commenter: string, body: string): Promise<string> {
         console.log(`Overseer handling comment from ${commenter} on issue #${issueNumber}`);
         
         if (await PersonaHelper.isLimitReached(this.github, owner, repo, issueNumber, 'Overseer', '@overseer', body)) {
-            return;
+            return '';
         }
 
         const attribution = PersonaHelper.getAttribution('Overseer', issueNumber, commenter);
-        const issue = await this.github.getIssue(owner, repo, issueNumber);
-        const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nNew comment from ${commenter}:\n${body}`;
-        const userMessage = "A persona or human has commented and mentioned you. Please respond accordingly to keep the workflow moving.";
+        const context = await this.github.getFullIssueContext(owner, repo, issueNumber);
+        const userMessage = "The issue has been updated. Please review the full context and decide the next step.";
 
         const response = await this.gemini.promptPersona(
             OverseerPersona.SYSTEM_INSTRUCTION,
@@ -71,6 +69,6 @@ Current Personas available:
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
+        return attribution + response;
     }
 }
