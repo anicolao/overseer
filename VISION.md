@@ -1,21 +1,21 @@
 # Vision: Overseer
 
-Overseer is the evolution of the Morpheum project, shifting the paradigm from a Matrix-centric communication model to a fully integrated GitHub-native ecosystem. Our goal is to build a system where AI agents can collaborate almost completely autonomously to deliver high-quality, well-designed, and well-tested code across a variety of projects.
+Overseer is a standalone project dedicated to building a fully integrated GitHub-native ecosystem where AI agents collaborate autonomously to deliver high-quality, well-designed, and well-tested code across a variety of projects.
 
 ## Core Philosophy
 
-1. **GitHub-Native Execution:** Every interaction, from task assignment to code review, happens within the GitHub ecosystem. GitHub Issues, Pull Requests, and Actions are the primary mediums of communication and execution.
-2. **Autonomous Collaboration:** Agents are not just tools; they are autonomous entities with distinct personas and roles. They can break down tasks, hand them off to other agents, and collaborate to achieve complex goals.
-3. **Transparency and Traceability:** By using GitHub's native features, every step of the development process is logged and visible. Humans can intervene at any time, but the system is designed to minimize the need for manual oversight.
-4. **Agent Personas:** The system employs LLMs with specialized personas (e.g., Architect, Developer, Tester, Security Auditor). These personas interact with each other via GitHub Issues and PRs, just like a human team would.
-5. **The Central Overseer:** A high-level persona responsible for high-level decision-making, task prioritization, and determining when human input is critically required.
+1. **GitHub-Native Ecosystem:** Every interaction, from task assignment to code review, happens within the GitHub platform using Issues, Pull Requests, Discussions, and Projects.
+2. **Autonomous Collaboration:** Agents are autonomous entities with distinct personas and roles. They can break down tasks, hand them off to other agents, and collaborate to achieve complex goals, essentially operating as a virtual engineering team.
+3. **Multimodal and Real-Time:** Leveraging Gemini's native multimodal capabilities (text, audio, video) and Live API, agents can communicate with each other and humans through multiple channels, including real-time voice and low-latency interactions.
+4. **Human-on-the-Loop:** Humans provide high-level guidance and approval. The system is designed to proactively reach out to humans for critical decisions via mobile integration, including "calls" and text follow-ups.
+5. **Agent Personas as GitHub Apps:** Each persona (e.g., Overseer, Architect, Developer) is implemented as a distinct GitHub App, allowing them to be mentioned, assigned tasks, and have unique attribution within the platform.
 
 ## The End State
 
-Imagine a single "Overseer" repository that acts as the command center. This repository contains references to all active tasks across any number of other repositories. When a new goal is defined (via an Issue in the Overseer repo), the Overseer agent:
-1. Analyzes the goal.
-2. Breaks it down into sub-tasks.
-3. Assigns these sub-tasks to specialized agents by creating issues in the relevant repositories.
-4. Monitors progress, facilitates communication between agents, and ensures the final result meets the high standards of the project.
+A single "Overseer" project acts as the command center, aggregating activity across multiple repositories using a GitHub Project (v2). When a goal is defined, the Overseer agent:
+1. Decomposes the goal into sub-tasks.
+2. Assigns these sub-tasks to specialized agent personas by mentioning them in issues or creating new tasks in the relevant repositories.
+3. Monitors progress across the entire ecosystem, facilitating communication between agents and ensuring structural and architectural integrity.
+4. Proactively "calls" or messages the human operator when a critical design choice or approval is required, handling voice interactions via Gemini's Live API and bridge architectures like CallKit or Twilio.
 
-Human developers are "on the loop" rather than "in the loop," providing guidance and approval only when the Overseer determines it's necessary.
+Human developers are "on the loop," providing high-level oversight and interacting with the system as a collaborative partner rather than a manual operator.
