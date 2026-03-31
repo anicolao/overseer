@@ -1,5 +1,5 @@
 {
-  description: "Overseer - Autonomous Agent Coordination System";
+  description = "Overseer - Autonomous Agent Coordination System";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
