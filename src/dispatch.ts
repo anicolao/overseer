@@ -39,29 +39,43 @@ async function run() {
         const { number } = eventData.issue;
         const { body, user } = eventData.comment;
 
-        // Ignore comments posted by bots using the attribution pattern
-        if (body.startsWith('I am the ') && body.includes('and I am responding to')) {
-            console.log(`Ignoring bot-generated comment on issue #${number}`);
-            return;
-        }
-
         if (body.includes('@overseer')) {
-            await personas.overseer.handleComment(owner.login, name, number, user.login, body);
+            if (body.startsWith('I am the Overseer,')) {
+                console.log('Overseer ignoring its own comment');
+            } else {
+                await personas.overseer.handleComment(owner.login, name, number, user.login, body);
+            }
         }
         if (body.includes('@product-architect')) {
-            await personas.productArchitect.handleMention(owner.login, name, number, user.login, body);
+            if (body.startsWith('I am the Product/Architect,')) {
+                console.log('Product/Architect ignoring its own comment');
+            } else {
+                await personas.productArchitect.handleMention(owner.login, name, number, user.login, body);
+            }
         }
         if (body.includes('@planner')) {
-            await personas.planner.handleMention(owner.login, name, number, user.login, body);
+            if (body.startsWith('I am the Planner,')) {
+                console.log('Planner ignoring its own comment');
+            } else {
+                await personas.planner.handleMention(owner.login, name, number, user.login, body);
+            }
         }
         if (body.includes('@developer-tester')) {
-            await personas.developerTester.handleTask(owner.login, name, number, body);
+            if (body.startsWith('I am the Developer/Tester,')) {
+                console.log('Developer/Tester ignoring its own comment');
+            } else {
+                await personas.developerTester.handleTask(owner.login, name, number, body);
+            }
         }
         if (body.includes('@quality')) {
-            // Try to extract PR number from body
-            const prMatch = body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
-            const prNumber = prMatch ? parseInt(prMatch[1], 10) : 0;
-            await personas.quality.handleReviewRequest(owner.login, name, number, prNumber, user.login);
+            if (body.startsWith('I am the Quality,')) {
+                console.log('Quality ignoring its own comment');
+            } else {
+                // Try to extract PR number from body
+                const prMatch = body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
+                const prNumber = prMatch ? parseInt(prMatch[1], 10) : 0;
+                await personas.quality.handleReviewRequest(owner.login, name, number, prNumber, user.login);
+            }
         }
     }
 }
