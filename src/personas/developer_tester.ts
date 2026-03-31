@@ -1,5 +1,6 @@
 import { GeminiService } from '../utils/gemini.js';
 import { GitHubService } from '../utils/github.js';
+import { PersonaHelper } from '../utils/persona_helper.js';
 
 export class DeveloperTesterPersona {
     private gemini: GeminiService;
@@ -30,6 +31,11 @@ export class NewFeature { ... }
     async handleTask(owner: string, repo: string, issueNumber: number, taskDescription: string) {
         console.log(`Developer/Tester handling task for issue #${issueNumber}: ${taskDescription}`);
         
+        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
+            this.github, owner, repo, issueNumber, 'Developer/Tester', '@developer-tester', undefined, taskDescription
+        );
+        if (!shouldContinue) return;
+
         const context = `Task Description: ${taskDescription}`;
         const userMessage = "A new task has been assigned to you. Please implement the requested changes.";
 
@@ -60,9 +66,9 @@ export class NewFeature { ... }
 
         if (filePaths.length > 0) {
             const pr = await this.github.createPullRequest(owner, repo, `Resolve issue #${issueNumber}`, `Automated PR by Developer/Tester for issue #${issueNumber}`, branchName);
-            await this.github.addCommentToIssue(owner, repo, issueNumber, `I have implemented the following files: ${filePaths.join(', ')}.\n\nA PR has been created: #${pr.data.number} (${pr.data.html_url})\n\n${response}`);
+            await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + `I have implemented the following files: ${filePaths.join(', ')}.\n\nA PR has been created: #${pr.data.number} (${pr.data.html_url})\n\n${response}`);
         } else {
-            await this.github.addCommentToIssue(owner, repo, issueNumber, response);
+            await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
         }
 
         await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:implementation-ready', 'persona:developer-tester']);

@@ -1,5 +1,6 @@
 import { GeminiService } from '../utils/gemini.js';
 import { GitHubService } from '../utils/github.js';
+import { PersonaHelper } from '../utils/persona_helper.js';
 
 export class QualityPersona {
     private gemini: GeminiService;
@@ -30,6 +31,11 @@ Maintain a professional, critical but constructive, and high-quality-oriented ap
     async handleReviewRequest(owner: string, repo: string, issueNumber: number, prNumber: number, developer: string) {
         console.log(`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`);
         
+        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
+            this.github, owner, repo, issueNumber, 'Quality', '@quality', developer, `Review request for PR #${prNumber}`
+        );
+        if (!shouldContinue) return;
+
         let context = `Issue Number: ${issueNumber}\nDeveloper: ${developer}\n`;
         
         try {
@@ -62,7 +68,7 @@ Maintain a professional, critical but constructive, and high-quality-oriented ap
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, response);
+        await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
         await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:reviewing', 'persona:quality']);
     }
 }

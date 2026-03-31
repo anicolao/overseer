@@ -1,5 +1,6 @@
 import { GeminiService } from '../utils/gemini.js';
 import { GitHubService } from '../utils/github.js';
+import { PersonaHelper } from '../utils/persona_helper.js';
 
 export class ProductArchitectPersona {
     private gemini: GeminiService;
@@ -31,6 +32,11 @@ Example:
     async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string) {
         console.log(`Product/Architect mentioned by ${mentioner} in issue #${issueNumber}`);
         
+        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
+            this.github, owner, repo, issueNumber, 'Product/Architect', '@product-architect', mentioner, body
+        );
+        if (!shouldContinue) return;
+
         const issue = await this.github.getIssue(owner, repo, issueNumber);
         const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nLatest mention body:\n${body}`;
         const userMessage = "Define the requirements and design, and specify the file path to save them.";
@@ -53,9 +59,9 @@ Example:
         }
 
         if (filePaths.length > 0) {
-            await this.github.addCommentToIssue(owner, repo, issueNumber, `I have created the following design documents: ${filePaths.join(', ')}.\n\n${response}`);
+            await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + `I have created the following design documents: ${filePaths.join(', ')}.\n\n${response}`);
         } else {
-            await this.github.addCommentToIssue(owner, repo, issueNumber, response);
+            await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
         }
 
         await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:design-ready', 'persona:product-architect']);
