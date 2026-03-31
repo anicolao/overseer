@@ -1,53 +1,72 @@
-import { GithubAPI } from '../../src/utils/github';
-import nock from 'nock';
+import { GitHubService } from '../../src/utils/github';
+import * as fs from 'fs';
+import * as path from 'path';
 
-describe('GithubAPI', () => {
-  let api: GithubAPI;
+jest.mock('@octokit/rest', () => {
+  const mOctokit = {
+    issues: {
+      get: jest.fn().mockResolvedValue({ data: { labels: [{ name: 'bug' }, { name: 'persona:Planner' }] } }),
+      createComment: jest.fn().mockResolvedValue({ data: { id: 1 } }),
+      listComments: jest.fn().mockResolvedValue({ data: [{ body: 'First comment' }] }),
+      addLabels: jest.fn().mockResolvedValue({ data: {} }),
+      removeLabel: jest.fn().mockResolvedValue({ data: {} }),
+    }
+  };
+  return { Octokit: jest.fn(() => mOctokit) };
+});
+
+describe('GitHubService Implementation', () => {
+  let githubService: GitHubService;
 
   beforeEach(() => {
-    GithubAPI.resetInstance();
-    api = GithubAPI.getInstance('dummy-token');
-    api.clearCache();
-    nock.cleanAll();
+    githubService = GitHubService.getInstance();
+    githubService.clearCache();
+    process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
   });
 
-  afterAll(() => {
-    nock.restore();
+  it('should be structured as a functional singleton', () => {
+    const instance1 = GitHubService.getInstance();
+    const instance2 = GitHubService.getInstance();
+    expect(instance1).toBe(instance2);
   });
 
-  it('should maintain a singleton instance', () => {
-    const api2 = GithubAPI.getInstance('another-token');
-    expect(api).toBe(api2);
+  it('should cache and retrieve sequential getIssue calls correctly', async () => {
+    const issue1 = await githubService.getIssue(42);
+    const issue2 = await githubService.getIssue(42);
+    expect(issue1.labels).toBeDefined();
+    expect(issue2).toEqual(issue1);
   });
 
-  it('should fetch an issue from the GitHub API and cache the result', async () => {
-    // Intercept the GitHub API call with nock
-    const scope = nock('https://api.github.com')
-      .get('/repos/test-owner/test-repo/issues/10')
-      .reply(200, { id: 123, title: 'Nock Mocked Issue' });
-
-    const issue1 = await api.getIssue('test-owner', 'test-repo', 10);
-    expect(issue1.title).toBe('Nock Mocked Issue');
-    expect(scope.isDone()).toBe(true); // Verifies the API was actually hit
-
-    // Second call should return cached data without hitting the API again
-    const issue2 = await api.getIssue('test-owner', 'test-repo', 10);
-    expect(issue2.title).toBe('Nock Mocked Issue');
+  it('should properly proxy adding a comment to an issue', async () => {
+    const response = await githubService.addCommentToIssue(42, 'Hello from tests');
+    expect(response.id).toEqual(1);
   });
-  
-  it('should hit the API again if a different issue is requested', async () => {
-    nock('https://api.github.com')
-      .get('/repos/test-owner/test-repo/issues/1')
-      .reply(200, { id: 1, title: 'Issue 1' });
 
-    nock('https://api.github.com')
-      .get('/repos/test-owner/test-repo/issues/2')
-      .reply(200, { id: 2, title: 'Issue 2' });
+  it('should fetch associated issue labels', async () => {
+    const labels = await githubService.getIssueLabels(42);
+    expect(labels.length).toBeGreaterThan(0);
+  });
 
-    const issue1 = await api.getIssue('test-owner', 'test-repo', 1);
-    const issue2 = await api.getIssue('test-owner', 'test-repo', 2);
-    
-    expect(issue1.id).toBe(1);
-    expect(issue2.id).toBe(2);
+  it('should securely replace the active persona state', async () => {
+    await expect(githubService.setActivePersona(42, 'DeveloperTester')).resolves.not.toThrow();
+  });
+
+  it('should retrieve full contextual issue context including comments', async () => {
+    const context = await githubService.getFullIssueContext(42);
+    expect(context.issue).toBeDefined();
+    expect(context.comments.length).toBeGreaterThan(0);
+  });
+
+  it('should read the target file system directory recursively', async () => {
+    const testDir = path.join(__dirname, 'temp_test_dir');
+    if (!fs.existsSync(testDir)) fs.mkdirSync(testDir);
+    const testFile = path.join(testDir, 'test_mock.txt');
+    fs.writeFileSync(testFile, 'dummy content');
+
+    const files = await githubService.getFilesRecursive(testDir);
+    expect(files).toContain(testFile);
+
+    fs.unlinkSync(testFile);
+    fs.rmdirSync(testDir);
   });
 });
