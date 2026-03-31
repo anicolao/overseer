@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
-import { GeminiService } from './utils/gemini';
-import { GitHubService } from './utils/github';
-import { OverseerPersona } from './personas/overseer';
-import { ProductArchitectPersona } from './personas/product_architect';
-import { PlannerPersona } from './personas/planner';
-import { DeveloperTesterPersona } from './personas/developer_tester';
-import { QualityPersona } from './personas/quality';
+import { GeminiService } from './utils/gemini.js';
+import { GitHubService } from './utils/github.js';
+import { OverseerPersona } from './personas/overseer.js';
+import { ProductArchitectPersona } from './personas/product_architect.js';
+import { PlannerPersona } from './personas/planner.js';
+import { DeveloperTesterPersona } from './personas/developer_tester.js';
+import { QualityPersona } from './personas/quality.js';
 import * as crypto from 'crypto';
 
 // Initialize services (using env variables)

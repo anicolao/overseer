@@ -1,11 +1,11 @@
 import * as fs from 'fs';
-import { GeminiService } from './utils/gemini';
-import { GitHubService } from './utils/github';
-import { OverseerPersona } from './personas/overseer';
-import { ProductArchitectPersona } from './personas/product_architect';
-import { PlannerPersona } from './personas/planner';
-import { DeveloperTesterPersona } from './personas/developer_tester';
-import { QualityPersona } from './personas/quality';
+import { GeminiService } from './utils/gemini.js';
+import { GitHubService } from './utils/github.js';
+import { OverseerPersona } from './personas/overseer.js';
+import { ProductArchitectPersona } from './personas/product_architect.js';
+import { PlannerPersona } from './personas/planner.js';
+import { DeveloperTesterPersona } from './personas/developer_tester.js';
+import { QualityPersona } from './personas/quality.js';
 
 async function run() {
     const eventPath = process.env.GITHUB_EVENT_PATH;
@@ -48,7 +48,13 @@ async function run() {
         if (body.includes('@planner')) {
             await personas.planner.handleMention(owner.login, name, number, user.login, body);
         }
-        // ... routing for Developer/Tester and Quality ...
+        if (body.includes('@developer-tester')) {
+            await personas.developerTester.handleTask(owner.login, name, number, body);
+        }
+        if (body.includes('@quality')) {
+            // Quality review request handling
+            await personas.quality.handleReviewRequest(owner.login, name, number, 0, user.login);
+        }
     }
 }
 

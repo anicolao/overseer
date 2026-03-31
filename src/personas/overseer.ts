@@ -1,5 +1,5 @@
-import { GeminiService } from '../utils/gemini';
-import { GitHubService } from '../utils/github';
+import { GeminiService } from '../utils/gemini.js';
+import { GitHubService } from '../utils/github.js';
 
 export class OverseerPersona {
     private gemini: GeminiService;
