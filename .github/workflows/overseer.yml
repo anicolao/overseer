@@ -27,4 +27,4 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.OVERSEER_TOKEN || secrets.GITHUB_TOKEN }}
-        run: npx ts-node --esm src/dispatch.ts
+        run: npx tsx src/dispatch.ts
