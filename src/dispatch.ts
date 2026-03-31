@@ -73,13 +73,7 @@ async function run() {
     } else if (eventName === 'issue_comment' && eventData.action === 'created') {
         const body = eventData.comment.body;
 
-        // 1. Bot Protection: Ignore only if the bot is the one who posted the comment
-        if (sender === botUser) {
-            console.log('Ignoring comment from bot user');
-            return;
-        }
-
-        // 2. Identify target persona
+        // 1. Identify target persona
         let targetedPersona: string | null = null;
         for (const [handle, key] of Object.entries(handleMap)) {
             if (body.includes(handle)) {
@@ -93,17 +87,17 @@ async function run() {
             return;
         }
 
-        // 3. Authorization Check
-        // Allow human to override or set active persona if none is set
-        const isHuman = sender !== botUser;
-        const isAuthorized = isHuman || (targetedPersona === activePersona);
+        // 2. Authorization Check
+        // Allow overseer to be triggered if active persona is null (quiescent) or explicitly overseer
+        const isAuthorized = (targetedPersona === activePersona) || 
+                             (targetedPersona === 'overseer' && activePersona === null);
 
         if (!isAuthorized) {
             console.log(`Unauthorized trigger: ${targetedPersona} is not the active persona (${activePersona})`);
             return;
         }
 
-        // 4. Execution
+        // 3. Execution
         console.log(`Executing persona: ${targetedPersona}`);
         try {
             if (targetedPersona === 'overseer') {
@@ -120,7 +114,7 @@ async function run() {
                 await personas.quality.handleReviewRequest(owner, repo, issueNumber, prNumber, sender);
             }
 
-            // 5. Finalize Token (Handoff)
+            // 4. Finalize Token (Handoff)
             await finalizeToken(github, owner, repo, issueNumber, targetedPersona);
         } catch (error) {
             console.error(`Error during persona execution:`, error);
