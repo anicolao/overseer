@@ -41,13 +41,19 @@ Example:
             context
         );
 
-        // Parse file output
-        const fileMatch = response.match(/\[FILE:(.+?)\]([\s\S]+?)\[\/FILE\]/);
-        if (fileMatch) {
-            const filePath = fileMatch[1];
-            const content = fileMatch[2].trim();
+        // Parse multiple files if present
+        const fileRegex = /\[FILE:(.+?)\]([\s\S]+?)\[\/FILE\]/g;
+        let match;
+        let filePaths = [];
+        while ((match = fileRegex.exec(response)) !== null) {
+            const filePath = match[1];
+            const content = match[2].trim();
+            filePaths.push(filePath);
             await this.github.createOrUpdateFile(owner, repo, filePath, `docs: architect design for #${issueNumber}`, content);
-            await this.github.addCommentToIssue(owner, repo, issueNumber, `I have created the design at ${filePath}.\n\n${response}`);
+        }
+
+        if (filePaths.length > 0) {
+            await this.github.addCommentToIssue(owner, repo, issueNumber, `I have created the following design documents: ${filePaths.join(', ')}.\n\n${response}`);
         } else {
             await this.github.addCommentToIssue(owner, repo, issueNumber, response);
         }
