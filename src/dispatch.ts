@@ -1,41 +1,42 @@
-import { Dispatcher } from './utils/dispatcher';
+import * as fs from 'fs';
+import { Dispatcher } from './core/dispatcher';
 
-export interface DispatchEvent {
-  event: string;
-  payload: any;
-}
+export const personaStateMachine = {
+  getNextPersona(currentPersona: string): string {
+    const sequence = ['Planner', 'DeveloperTester', 'Quality', 'Overseer'];
+    const idx = sequence.indexOf(currentPersona);
+    if (idx !== -1 && idx < sequence.length - 1) {
+      return sequence[idx + 1];
+    }
+    return sequence[0];
+  }
+};
 
-export const globalDispatcher = new Dispatcher();
+export async function run() {
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  const eventName = process.env.GITHUB_EVENT_NAME;
 
-// Register the standard state machine / persona flow
-globalDispatcher.register('issues', async (payload: any) => {
-  // Label management and persona state machine routing
-  const labels = payload.issue?.labels || [];
-  const isActivePersona = labels.some((l: any) => l.name === 'active-persona');
-
-  if (!isActivePersona) {
-    console.log('Not an active persona, ignoring.');
-    return;
+  if (!eventPath || !eventName) {
+    console.error('Missing GITHUB_EVENT_PATH or GITHUB_EVENT_NAME');
+    process.exit(1);
   }
 
-  // State machine routing based on payload action
-  console.log('Processing active persona state machine for issue:', payload.issue?.number);
-  
-  if (payload.action === 'opened') {
-    await handleIssueOpened(payload);
-  } else if (payload.action === 'created' && payload.comment) {
-    await handleIssueComment(payload);
+  try {
+    const payload = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
+    const dispatcher = new Dispatcher();
+    
+    // Core GitHub Action handlers can be registered here
+    dispatcher.register('issues', async (eventPayload: any) => {
+      console.log('Handled issues event internally via Action');
+    });
+
+    await dispatcher.dispatch(eventName, payload);
+  } catch (error) {
+    console.error('Error in dispatch:', error);
+    process.exit(1);
   }
-});
-
-async function handleIssueOpened(payload: any) {
-  console.log('Handling opened issue inside state machine.');
 }
 
-async function handleIssueComment(payload: any) {
-  console.log('Handling issue comment inside state machine.');
-}
-
-export async function handleDispatch(event: string, payload: any): Promise<void> {
-  await globalDispatcher.dispatch({ event, payload });
+if (require.main === module) {
+  run();
 }
