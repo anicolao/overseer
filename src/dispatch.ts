@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import { GeminiService } from './utils/gemini.js';
 import { GitHubService } from './utils/github.js';
+import { ShellService } from './utils/shell.js';
 import { OverseerPersona } from './personas/overseer.js';
 import { ProductArchitectPersona } from './personas/product_architect.js';
 import { PlannerPersona } from './personas/planner.js';
@@ -19,6 +20,7 @@ async function run() {
 
     const gemini = new GeminiService(geminiApiKey);
     const github = new GitHubService(githubToken);
+    const shell = new ShellService();
 
     const personas = {
         overseer: new OverseerPersona(gemini, github),
@@ -157,7 +159,13 @@ async function run() {
     }
 
     if (responseContent && executedPersona) {
-        // Atomic Transition: Determine next persona, set label, THEN post comment
+        // 4. Shell Execution: Parse and run any [RUN] blocks in the response
+        const shellOutput = await shell.executeAllBlocks(responseContent);
+        if (shellOutput) {
+            responseContent += "\n\n### Shell Execution Results\n" + shellOutput;
+        }
+
+        // 5. Atomic Transition: Determine next persona, set label, THEN post comment
         let nextPersona: string | null = null;
 
         if (executedPersona !== 'overseer') {
