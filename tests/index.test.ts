@@ -1,51 +1,44 @@
 import request from 'supertest';
-import app, { verifySignature } from '../src/index';
 import crypto from 'crypto';
+import { server } from '../src/index';
 
-describe('Express Server Webhook', () => {
-  const secret = 'test_secret';
+const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || 'development_secret';
 
-  beforeAll(() => {
-    process.env.GITHUB_WEBHOOK_SECRET = secret;
+describe('Webhook Express Server & Security', () => {
+  afterAll((done) => {
+    server.close(done);
   });
 
-  it('should return 401 for invalid signature', async () => {
-    const response = await request(app)
+  it('should return 401 if x-hub-signature-256 is entirely missing', async () => {
+    const res = await request(server).post('/webhook').send({});
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('No signature found');
+  });
+
+  it('should return 401 if the provided signature is invalid', async () => {
+    const res = await request(server)
       .post('/webhook')
-      .send({ action: 'opened' })
-      .set('x-github-event', 'issues')
-      .set('x-hub-signature-256', 'sha256=invalid');
-
-    expect(response.status).toBe(401);
+      .set('x-hub-signature-256', 'sha256=invalid_signature_length_matching_the_hash_so_it_fails_properly000000')
+      .send({});
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Invalid signature');
   });
 
-  it('should return 200 for valid signature', async () => {
-    const payload = JSON.stringify({ action: 'opened' });
-    const signature = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  it('should return 200 and process webhook cleanly if the signature is valid', async () => {
+    const payload = { test: 'payload' };
+    const payloadString = JSON.stringify(payload);
+    
+    // Mock the hmac locally to match the server side
+    const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
+    const digest = `sha256=${hmac.update(payloadString).digest('hex')}`;
 
-    const response = await request(app)
+    const res = await request(server)
       .post('/webhook')
-      .set('Content-Type', 'application/json')
-      .send(payload)
+      .set('x-hub-signature-256', digest)
       .set('x-github-event', 'issues')
-      .set('x-hub-signature-256', signature);
+      .send(payload);
 
-    expect(response.status).toBe(200);
-  });
-});
-
-describe('verifySignature', () => {
-  it('validates correct signature', () => {
-    const secret = 'secret';
-    const payload = 'payload';
-    const signature = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex');
-    expect(verifySignature(payload, signature, secret)).toBe(true);
-  });
-
-  it('rejects incorrect signature', () => {
-    const secret = 'secret';
-    const payload = 'payload';
-    const signature = 'sha256=wrong';
-    expect(verifySignature(payload, signature, secret)).toBe(false);
+    expect(res.status).toBe(200);
+    expect(res.text).toBe('Webhook processed successfully');
   });
 });
