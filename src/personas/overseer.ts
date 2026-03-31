@@ -51,7 +51,18 @@ Current Personas available:
     }
 
     async handleComment(owner: string, repo: string, issueNumber: number, commenter: string, body: string) {
-        // Handle logic for responding to other agents or the human
         console.log(`Overseer handling comment from ${commenter} on issue #${issueNumber}`);
+        
+        const issue = await this.github.getIssue(owner, repo, issueNumber);
+        const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nNew comment from ${commenter}:\n${body}`;
+        const userMessage = "A persona or human has commented and mentioned you. Please respond accordingly to keep the workflow moving.";
+
+        const response = await this.gemini.promptPersona(
+            OverseerPersona.SYSTEM_INSTRUCTION,
+            userMessage,
+            context
+        );
+
+        await this.github.addCommentToIssue(owner, repo, issueNumber, response);
     }
 }
