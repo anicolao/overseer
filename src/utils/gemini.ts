@@ -12,9 +12,9 @@ export class GeminiService {
 
     constructor(apiKey: string) {
         this.genAI = new GoogleGenerativeAI(apiKey);
-        // Using Gemini 3.0 Pro Preview as requested
+        // Using Gemini 3.1 Pro Preview as requested (migrating from deprecated 3.0)
         this.model = this.genAI.getGenerativeModel({ 
-            model: "gemini-3.0-pro-preview" 
+            model: "gemini-3.1-pro-preview" 
         });
     }
 
