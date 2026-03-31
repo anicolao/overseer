@@ -9,10 +9,10 @@ Overseer leverages the full capabilities of the GitHub platform (Issues, PRs, Pr
 ## Key Features
 
 - **GitHub-Native Orchestration:** Uses GitHub as the primary communication and state management layer.
-- **Autonomous Agent Personas:** Specialized agents (Architect, Developer, Tester) collaborate through mentions and task hand-offs.
+- **Autonomous Agent Personas:** Specialized agents (Overseer, Product, Architect, UX Design, Planning, Developer, Tester, Quality) collaborate through mentions and task hand-offs.
 - **Unified Global View:** Aggregates activity across multiple repositories using a single GitHub Project (v2).
-- **Multimodal and Real-Time:** Integrates Gemini's Live API for low-latency voice and multimodal interactions.
-- **Proactive Mobile Integration:** Capable of "calling" humans on their mobile devices for critical decisions, with automatic follow-up for declined or missed calls.
+- **Real-Time Voice & Multimodal Interaction:** Integrates Gemini's Live API for low-latency conversations with the Overseer persona to understand system state and provide direction.
+- **Structured Development Workflow:** A rigorous process from vision and product definition to design, planning, and execution.
 
 ## Documentation
 
