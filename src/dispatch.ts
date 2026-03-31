@@ -73,13 +73,7 @@ async function run() {
     } else if (eventName === 'issue_comment' && eventData.action === 'created') {
         const body = eventData.comment.body;
 
-        // 1. Bot Protection: Ignore if the bot posted the comment AND it's our attribution pattern
-        if (sender === botUser && body.startsWith('I am the ') && body.includes('and I am responding to')) {
-            console.log('Ignoring bot-generated comment');
-            return;
-        }
-
-        // 2. Identify target persona from mentions
+        // 1. Identify target persona from mentions
         let targetedPersona: string | null = null;
         for (const [handle, key] of Object.entries(handleMap)) {
             if (body.includes(handle)) {
@@ -88,7 +82,7 @@ async function run() {
             }
         }
 
-        // 3. State Machine Logic
+        // 2. State Machine Logic
         let shouldExecute = false;
 
         if (activePersona === 'overseer') {
@@ -106,6 +100,24 @@ async function run() {
             if (targetedPersona === 'overseer') {
                 shouldExecute = true;
                 executedPersona = 'overseer';
+            }
+        }
+
+        // 3. Persona-Specific Bot Protection: 
+        // Only ignore if the bot POSTED the comment AND it's that persona's OWN attribution.
+        // This allows Overseer to trigger Architect, Architect to trigger Overseer, etc.
+        if (shouldExecute && executedPersona && sender === botUser) {
+            const personaNameMap: Record<string, string> = {
+                'overseer': 'Overseer',
+                'product-architect': 'Product/Architect',
+                'planner': 'Planner',
+                'developer-tester': 'Developer/Tester',
+                'quality': 'Quality'
+            };
+            const currentPersonaName = personaNameMap[executedPersona];
+            if (body.startsWith(`I am the ${currentPersonaName},`)) {
+                console.log(`Ignoring bot-generated comment from ${executedPersona} to prevent self-loop`);
+                return;
             }
         }
 
