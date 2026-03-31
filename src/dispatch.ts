@@ -28,53 +28,149 @@ async function run() {
         quality: new QualityPersona(gemini, github),
     };
 
-    console.log(`Processing GitHub event: ${eventName}`);
+    const sender = eventData.sender?.login;
+    const botUser = "anicolao"; // The identity used by OVERSEER_TOKEN
+
+    console.log(`Received GitHub event: ${eventName} from ${sender}`);
+
+    // Get issue context
+    let issueNumber: number;
+    let owner: string;
+    let repo: string;
+
+    if (eventName === 'issues') {
+        issueNumber = eventData.issue.number;
+        owner = eventData.repository.owner.login;
+        repo = eventData.repository.name;
+    } else if (eventName === 'issue_comment') {
+        issueNumber = eventData.issue.number;
+        owner = eventData.repository.owner.login;
+        repo = eventData.repository.name;
+    } else {
+        console.log(`Ignoring event type: ${eventName}`);
+        return;
+    }
+
+    const labels = await github.getIssueLabels(owner, repo, issueNumber);
+    const activePersonaLabel = labels.find(l => l.startsWith('active-persona:'));
+    const activePersona = activePersonaLabel ? activePersonaLabel.split(':')[1] : null;
+
+    console.log(`Active persona: ${activePersona}`);
+
+    // Mapping of handles to persona internal keys
+    const handleMap: Record<string, string> = {
+        '@overseer': 'overseer',
+        '@product-architect': 'product-architect',
+        '@planner': 'planner',
+        '@developer-tester': 'developer-tester',
+        '@quality': 'quality'
+    };
 
     if (eventName === 'issues' && eventData.action === 'opened') {
-        const { owner, name } = eventData.repository;
-        const { number, title, body } = eventData.issue;
-        await personas.overseer.handleNewIssue(owner.login, name, number, title, body || '');
+        // Human opening an issue triggers Overseer
+        await personas.overseer.handleNewIssue(owner, repo, issueNumber, eventData.issue.title, eventData.issue.body || '');
+        await finalizeToken(github, owner, repo, issueNumber, 'overseer');
     } else if (eventName === 'issue_comment' && eventData.action === 'created') {
-        const { owner, name } = eventData.repository;
-        const { number } = eventData.issue;
-        const { body, user } = eventData.comment;
+        const body = eventData.comment.body;
 
-        if (body.includes('@overseer')) {
-            if (body.startsWith('I am the Overseer,')) {
-                console.log('Overseer ignoring its own comment');
-            } else {
-                await personas.overseer.handleComment(owner.login, name, number, user.login, body);
+        // 1. Bot Protection: Ignore only if the bot is the one who posted the comment
+        if (sender === botUser) {
+            console.log('Ignoring comment from bot user');
+            return;
+        }
+
+        // 2. Identify target persona
+        let targetedPersona: string | null = null;
+        for (const [handle, key] of Object.entries(handleMap)) {
+            if (body.includes(handle)) {
+                targetedPersona = key;
+                break;
             }
         }
-        if (body.includes('@product-architect')) {
-            if (body.startsWith('I am the Product/Architect,')) {
-                console.log('Product/Architect ignoring its own comment');
-            } else {
-                await personas.productArchitect.handleMention(owner.login, name, number, user.login, body);
-            }
+
+        if (!targetedPersona) {
+            console.log('No persona mentioned in comment');
+            return;
         }
-        if (body.includes('@planner')) {
-            if (body.startsWith('I am the Planner,')) {
-                console.log('Planner ignoring its own comment');
-            } else {
-                await personas.planner.handleMention(owner.login, name, number, user.login, body);
-            }
+
+        // 3. Authorization Check
+        // Allow human to override or set active persona if none is set
+        const isHuman = sender !== botUser;
+        const isAuthorized = isHuman || (targetedPersona === activePersona);
+
+        if (!isAuthorized) {
+            console.log(`Unauthorized trigger: ${targetedPersona} is not the active persona (${activePersona})`);
+            return;
         }
-        if (body.includes('@developer-tester')) {
-            if (body.startsWith('I am the Developer/Tester,')) {
-                console.log('Developer/Tester ignoring its own comment');
-            } else {
-                await personas.developerTester.handleTask(owner.login, name, number, body);
-            }
-        }
-        if (body.includes('@quality')) {
-            if (body.startsWith('I am the Quality,')) {
-                console.log('Quality ignoring its own comment');
-            } else {
-                // Try to extract PR number from body
+
+        // 4. Execution
+        console.log(`Executing persona: ${targetedPersona}`);
+        try {
+            if (targetedPersona === 'overseer') {
+                await personas.overseer.handleComment(owner, repo, issueNumber, sender, body);
+            } else if (targetedPersona === 'product-architect') {
+                await personas.productArchitect.handleMention(owner, repo, issueNumber, sender, body);
+            } else if (targetedPersona === 'planner') {
+                await personas.planner.handleMention(owner, repo, issueNumber, sender, body);
+            } else if (targetedPersona === 'developer-tester') {
+                await personas.developerTester.handleTask(owner, repo, issueNumber, body);
+            } else if (targetedPersona === 'quality') {
                 const prMatch = body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
                 const prNumber = prMatch ? parseInt(prMatch[1], 10) : 0;
-                await personas.quality.handleReviewRequest(owner.login, name, number, prNumber, user.login);
+                await personas.quality.handleReviewRequest(owner, repo, issueNumber, prNumber, sender);
+            }
+
+            // 5. Finalize Token (Handoff)
+            await finalizeToken(github, owner, repo, issueNumber, targetedPersona);
+        } catch (error) {
+            console.error(`Error during persona execution:`, error);
+        }
+    }
+}
+
+async function finalizeToken(github: GitHubService, owner: string, repo: string, issueNumber: number, currentPersona: string) {
+    if (currentPersona !== 'overseer') {
+        // Specialized agents always return to overseer
+        console.log(`Agent ${currentPersona} finished. Returning token to overseer.`);
+        await github.setActivePersona(owner, repo, issueNumber, 'overseer');
+    } else {
+        // Overseer decides the next step. Parse the last comment.
+        const { data: comments } = await (github as any).octokit.rest.issues.listComments({
+            owner,
+            repo,
+            issue_number: issueNumber,
+            per_page: 1,
+            sort: 'created',
+            direction: 'desc'
+        });
+
+        if (comments.length > 0) {
+            const lastComment = comments[0].body || '';
+            const nextStepMatch = lastComment.match(/Next step: (@[a-z-]+) to take action/i);
+            
+            if (nextStepMatch) {
+                const nextHandle = nextStepMatch[1].toLowerCase();
+                const handleMap: Record<string, string> = {
+                    '@overseer': 'overseer',
+                    '@product-architect': 'product-architect',
+                    '@planner': 'planner',
+                    '@developer-tester': 'developer-tester',
+                    '@quality': 'quality'
+                };
+                const nextPersona = handleMap[nextHandle];
+                if (nextPersona) {
+                    console.log(`Overseer delegated to ${nextPersona}. Setting token.`);
+                    await github.setActivePersona(owner, repo, issueNumber, nextPersona);
+                } else {
+                    console.log(`Overseer mentioned unknown persona ${nextHandle}. Clearing token.`);
+                    await github.setActivePersona(owner, repo, issueNumber, null);
+                }
+            } else if (lastComment.includes('Next step: human review required')) {
+                console.log('Overseer requested human review. Clearing token.');
+                await github.setActivePersona(owner, repo, issueNumber, null);
+            } else {
+                console.log('No explicit next step found in Overseer output. Clearing token.');
+                await github.setActivePersona(owner, repo, issueNumber, null);
             }
         }
     }

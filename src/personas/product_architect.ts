@@ -15,13 +15,7 @@ When tasked by the Overseer, you must:
 3.  Specify the exact file path where this design should be saved in the repo.
 4.  Use the format: [FILE:path/to/file.md]...content...[/FILE] to indicate the file contents.
 
-Example:
-[FILE:docs/feature-x.md]
-# Feature X Requirements
-...
-[/FILE]
-
-@mention the Overseer once you have provided the design.
+Maintain a clear, concise, and structured approach.
     `;
 
     constructor(gemini: GeminiService, github: GitHubService) {
@@ -30,13 +24,9 @@ Example:
     }
 
     async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string) {
-        console.log(`Product/Architect mentioned by ${mentioner} in issue #${issueNumber}`);
+        console.log(`Product/Architect handling mention from ${mentioner} in issue #${issueNumber}`);
         
-        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
-            this.github, owner, repo, issueNumber, 'Product/Architect', '@product-architect', mentioner, body
-        );
-        if (!shouldContinue) return;
-
+        const attribution = PersonaHelper.getAttribution('Product/Architect', issueNumber, mentioner);
         const issue = await this.github.getIssue(owner, repo, issueNumber);
         const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nLatest mention body:\n${body}`;
         const userMessage = "Define the requirements and design, and specify the file path to save them.";
@@ -58,12 +48,11 @@ Example:
             await this.github.createOrUpdateFile(owner, repo, filePath, `docs: architect design for #${issueNumber}`, content);
         }
 
+        let finalComment = attribution + response;
         if (filePaths.length > 0) {
-            await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + `I have created the following design documents: ${filePaths.join(', ')}.\n\n${response}`);
-        } else {
-            await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
+            finalComment += `\n\nI have created the following design documents: ${filePaths.join(', ')}.`;
         }
 
-        await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:design-ready', 'persona:product-architect']);
+        await this.github.addCommentToIssue(owner, repo, issueNumber, finalComment);
     }
 }

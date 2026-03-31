@@ -105,6 +105,31 @@ export class GitHubService {
         return issue.comments;
     }
 
+    async getIssueLabels(owner: string, repo: string, issueNumber: number): Promise<string[]> {
+        const { data: issue } = await this.octokit.rest.issues.get({
+            owner,
+            repo,
+            issue_number: issueNumber,
+        });
+        return issue.labels.map((l: any) => typeof l === 'string' ? l : l.name);
+    }
+
+    async setActivePersona(owner: string, repo: string, issueNumber: number, persona: string | null) {
+        const currentLabels = await this.getIssueLabels(owner, repo, issueNumber);
+        const filteredLabels = currentLabels.filter(label => !label.startsWith('active-persona:'));
+        
+        if (persona) {
+            filteredLabels.push(`active-persona:${persona}`);
+        }
+
+        return this.octokit.rest.issues.setLabels({
+            owner,
+            repo,
+            issue_number: issueNumber,
+            labels: filteredLabels,
+        });
+    }
+
     async createPullRequest(owner: string, repo: string, title: string, body: string, head: string, base: string = 'main') {
         return this.octokit.rest.pulls.create({
             owner,
