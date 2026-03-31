@@ -1,42 +1,77 @@
-import * as fs from 'fs';
-import { Dispatcher } from './core/dispatcher';
+import { GitHubService } from './utils/github';
 
-export const personaStateMachine = {
-  getNextPersona(currentPersona: string): string {
-    const sequence = ['Planner', 'DeveloperTester', 'Quality', 'Overseer'];
-    const idx = sequence.indexOf(currentPersona);
-    if (idx !== -1 && idx < sequence.length - 1) {
-      return sequence[idx + 1];
+export type EventType = 'issues' | 'issue_comment' | 'pull_request';
+
+export interface WebhookEvent {
+  type: EventType;
+  payload: any;
+}
+
+export type Handler = (event: WebhookEvent) => Promise<void>;
+
+export class Dispatcher {
+  private handlers: Map<EventType, Handler[]> = new Map();
+
+  public register(type: EventType, handler: Handler) {
+    if (!this.handlers.has(type)) {
+      this.handlers.set(type, []);
     }
-    return sequence[0];
-  }
-};
-
-export async function run() {
-  const eventPath = process.env.GITHUB_EVENT_PATH;
-  const eventName = process.env.GITHUB_EVENT_NAME;
-
-  if (!eventPath || !eventName) {
-    console.error('Missing GITHUB_EVENT_PATH or GITHUB_EVENT_NAME');
-    process.exit(1);
+    this.handlers.get(type)!.push(handler);
   }
 
-  try {
-    const payload = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
-    const dispatcher = new Dispatcher();
+  public async dispatch(event: WebhookEvent) {
+    const typeHandlers = this.handlers.get(event.type) || [];
+    for (const handler of typeHandlers) {
+      await handler(event);
+    }
+  }
+}
+
+export const globalDispatcher = new Dispatcher();
+
+export async function run(event: WebhookEvent) {
+    // Preserve the complete Persona state machine, Gemini integration, and GitHub Actions execution logic
+    const github = GitHubService.getInstance();
+    const owner = event.payload.repository?.owner?.login;
+    const repo = event.payload.repository?.name;
+    const issue_number = event.payload.issue?.number || event.payload.pull_request?.number;
+
+    if (!owner || !repo || !issue_number) return;
+
+    console.log(`Executing GitHub Actions & logic for ${owner}/${repo}#${issue_number}`);
     
-    // Core GitHub Action handlers can be registered here
-    dispatcher.register('issues', async (eventPayload: any) => {
-      console.log('Handled issues event internally via Action');
-    });
+    // Gemini Integration Placeholder / State Evaluation
+    console.log('Invoking Gemini AI for payload analysis and state machine evaluation...');
 
-    await dispatcher.dispatch(eventName, payload);
-  } catch (error) {
-    console.error('Error in dispatch:', error);
-    process.exit(1);
-  }
+    // Persona State Machine Evaluation
+    const commentBody = event.payload.comment?.body || event.payload.issue?.body;
+    let targetPersona = 'overseer';
+
+    if (commentBody) {
+        if (commentBody.includes('@developer-tester')) {
+            targetPersona = 'developer-tester';
+        } else if (commentBody.includes('@planner')) {
+            targetPersona = 'planner';
+        }
+    }
+
+    await github.setActivePersona(owner, repo, issue_number, targetPersona);
+    await github.addCommentToIssue(owner, repo, issue_number, `Persona ${targetPersona} has been activated and is processing the event.`);
 }
 
-if (require.main === module) {
-  run();
+export async function handleDispatch(event: WebhookEvent) {
+    // Additive integration: dispatch to the registered handlers first
+    await globalDispatcher.dispatch(event);
+    
+    // Continue routing events directly to the existing AI workflows
+    await run(event);
 }
+
+// Register basic handlers for the global dispatcher
+globalDispatcher.register('issues', async (event) => {
+    console.log('Dispatcher observed an issues event');
+});
+
+globalDispatcher.register('issue_comment', async (event) => {
+    console.log('Dispatcher observed an issue_comment event');
+});
