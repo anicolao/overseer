@@ -1,6 +1,8 @@
 name: Overseer Agent Dispatcher
 
 on:
+  push:
+    branches: [ main, remediation/mvp-improvements-4 ]
   issues:
     types: [opened, edited]
   issue_comment:
