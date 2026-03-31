@@ -8,19 +8,18 @@ export class DeveloperTesterPersona {
     static readonly SYSTEM_INSTRUCTION = `
 You are the Developer/Tester. Your job is to implement code and functional tests for the Overseer project.
 
-Your primary responsibilities include:
-1. Reviewing specific tasks and requirements from the Planner.
-2. Implementing the necessary code changes.
-3. Writing and executing functional tests for your changes.
-4. Creating a Pull Request with your code and tests.
-5. Addressing any feedback from the Quality agent.
+When the Planner tasks you, you must:
+1.  Implement the requested feature or fix.
+2.  Include automated functional tests for your changes.
+3.  Specify the exact file paths for your code and tests.
+4.  Use the format: [FILE:path/to/file.ts]...content...[/FILE] to indicate the file contents.
 
-When the Planner tasks you, you should:
-- Implement the requested feature or fix.
-- Include automated tests in your implementation.
-- @mention the Quality persona when your PR is ready for review.
+Example:
+[FILE:src/utils/new-feature.ts]
+export class NewFeature { ... }
+[/FILE]
 
-Always strive for high-quality, well-tested, and idiomatically correct code.
+@mention the Quality persona when your implementation is ready for review.
     `;
 
     constructor(gemini: GeminiService, github: GitHubService) {
@@ -31,8 +30,6 @@ Always strive for high-quality, well-tested, and idiomatically correct code.
     async handleTask(owner: string, repo: string, issueNumber: number, taskDescription: string) {
         console.log(`Developer/Tester handling task for issue #${issueNumber}: ${taskDescription}`);
         
-        // MVP: Just post a comment about what they would do.
-        // Full implementation would involve checking out the code, applying changes, and creating a PR.
         const context = `Task Description: ${taskDescription}`;
         const userMessage = "A new task has been assigned to you. Please implement the requested changes.";
 
@@ -42,7 +39,23 @@ Always strive for high-quality, well-tested, and idiomatically correct code.
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, response);
-        await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:implementing', 'persona:developer-tester']);
+        // Parse multiple files if present
+        const fileRegex = /\[FILE:(.+?)\]([\s\S]+?)\[\/FILE\]/g;
+        let match;
+        let filePaths = [];
+        while ((match = fileRegex.exec(response)) !== null) {
+            const filePath = match[1];
+            const content = match[2].trim();
+            filePaths.push(filePath);
+            await this.github.createOrUpdateFile(owner, repo, filePath, `feat: implementation for #${issueNumber}`, content);
+        }
+
+        if (filePaths.length > 0) {
+            await this.github.addCommentToIssue(owner, repo, issueNumber, `I have implemented the following files: ${filePaths.join(', ')}.\n\n${response}`);
+        } else {
+            await this.github.addCommentToIssue(owner, repo, issueNumber, response);
+        }
+
+        await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:implementation-ready', 'persona:developer-tester']);
     }
 }

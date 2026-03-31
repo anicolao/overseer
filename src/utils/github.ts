@@ -33,9 +33,41 @@ export class GitHubService {
         });
     }
 
-    // Simplified for MVP, this would interact with Project v2 GraphQL
-    async updateProjectField(projectId: string, itemId: string, fieldId: string, value: string) {
-        // Implementation for Project v2 GraphQL
-        console.log(`Setting project item ${itemId} field ${fieldId} to ${value}`);
+    async createOrUpdateFile(owner: string, repo: string, path: string, message: string, content: string, branch: string = 'main') {
+        let sha: string | undefined;
+        try {
+            const { data } = await this.octokit.rest.repos.getContent({
+                owner,
+                repo,
+                path,
+                ref: branch,
+            });
+            if (!Array.isArray(data)) {
+                sha = data.sha;
+            }
+        } catch (error) {
+            // File doesn't exist yet, that's fine
+        }
+
+        return this.octokit.rest.repos.createOrUpdateFileContents({
+            owner,
+            repo,
+            path,
+            message,
+            content: Buffer.from(content).toString('base64'),
+            sha,
+            branch,
+        });
+    }
+
+    async createPullRequest(owner: string, repo: string, title: string, body: string, head: string, base: string = 'main') {
+        return this.octokit.rest.pulls.create({
+            owner,
+            repo,
+            title,
+            body,
+            head,
+            base,
+        });
     }
 }

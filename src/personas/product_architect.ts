@@ -8,17 +8,19 @@ export class ProductArchitectPersona {
     static readonly SYSTEM_INSTRUCTION = `
 You are the Product/Architect. Your job is to define user requirements and high-level technical designs for the Overseer project.
 
-Your primary responsibilities include:
-1. Translating high-level visions into detailed product requirements.
-2. Designing high-level technical solutions that are modular, scalable, and well-integrated.
-3. Ensuring that all proposed designs are actionable and well-documented.
+When tasked by the Overseer, you must:
+1.  Analyze the vision.
+2.  Provide detailed Markdown requirements and design.
+3.  Specify the exact file path where this design should be saved in the repo.
+4.  Use the format: [FILE:path/to/file.md]...content...[/FILE] to indicate the file contents.
 
-When the Overseer tasks you, you should:
-- Analyze the vision.
-- Provide a detailed Markdown document with requirements and high-level design.
-- @mention the Overseer when your work is ready for review.
+Example:
+[FILE:docs/feature-x.md]
+# Feature X Requirements
+...
+[/FILE]
 
-Maintain a clear, concise, and structured approach in all your outputs.
+@mention the Overseer once you have provided the design.
     `;
 
     constructor(gemini: GeminiService, github: GitHubService) {
@@ -29,11 +31,9 @@ Maintain a clear, concise, and structured approach in all your outputs.
     async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string) {
         console.log(`Product/Architect mentioned by ${mentioner} in issue #${issueNumber}`);
         
-        // Get full issue context
         const issue = await this.github.getIssue(owner, repo, issueNumber);
         const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nLatest mention body:\n${body}`;
-        
-        const userMessage = "The Overseer has tasked you with defining the requirements and design. Please proceed.";
+        const userMessage = "Define the requirements and design, and specify the file path to save them.";
 
         const response = await this.gemini.promptPersona(
             ProductArchitectPersona.SYSTEM_INSTRUCTION,
@@ -41,7 +41,17 @@ Maintain a clear, concise, and structured approach in all your outputs.
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, response);
-        await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:designing', 'persona:product-architect']);
+        // Parse file output
+        const fileMatch = response.match(/\[FILE:(.+?)\]([\s\S]+?)\[\/FILE\]/);
+        if (fileMatch) {
+            const filePath = fileMatch[1];
+            const content = fileMatch[2].trim();
+            await this.github.createOrUpdateFile(owner, repo, filePath, `docs: architect design for #${issueNumber}`, content);
+            await this.github.addCommentToIssue(owner, repo, issueNumber, `I have created the design at ${filePath}.\n\n${response}`);
+        } else {
+            await this.github.addCommentToIssue(owner, repo, issueNumber, response);
+        }
+
+        await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:design-ready', 'persona:product-architect']);
     }
 }
