@@ -39,6 +39,12 @@ async function run() {
         const { number } = eventData.issue;
         const { body, user } = eventData.comment;
 
+        // Ignore comments posted by bots using the attribution pattern
+        if (body.startsWith('I am the ') && body.includes('and I am responding to')) {
+            console.log(`Ignoring bot-generated comment on issue #${number}`);
+            return;
+        }
+
         if (body.includes('@overseer')) {
             await personas.overseer.handleComment(owner.login, name, number, user.login, body);
         }
