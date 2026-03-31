@@ -1,53 +1,46 @@
-# MVP Remediation 2: Atomic State & Implicit Handoff
+# MVP Remediation 2: Context-Aware Execution
 
-Attempt #3 demonstrated that a decentralized mention system creates race conditions and breaks the chain of execution. This plan refines the token model to ensure atomic transitions and empowers the Overseer to act as a truly stateful orchestrator.
+Following Attempt #5, a critical "disagreement loop" between the **Developer/Tester** and **Quality** personas has been identified. This loop prevents the system from making progress on complex tasks.
 
-## 1. Identified Issues in Attempt #3
+## 1. Identified Issues
 
-### A. The Comment/Label Race Condition
-Agents post comments *inside* their logic, triggering new workflows before the Dispatcher can update the `active-persona` label. This results in the next run failing the authorization check.
+### A. Developer "Context Blindness"
+The `DeveloperTesterPersona` currently only receives the high-level `taskDescription` as context. It has **no visibility** into:
+1.  The existing codebase (it cannot read the files it is refactoring).
+2.  The full issue history (it cannot see previous Quality feedback or Architect designs).
+As a result, it "hallucinates" a new, generic version of the project, accidentally deleting all core AI and orchestration logic every time it tries to refactor.
 
-### B. Mention-Dependent Triggers
-The system currently relies on explicit `@mentions` to trigger workflows. If an agent forgets to mention the Overseer, or if a persona is mentioned in a quiescent state without the token, the loop breaks or triggers incorrectly.
+### B. Destructive File Overwrites
+Because the Developer doesn't see the current code, its `[FILE:...]` outputs are wholesale replacements of entire files based on a narrow interpretation of the task.
 
-### C. Fragmentation of Context
-Personas currently only see the latest comment or a partial issue body, leading to a loss of state over long-running tasks.
+### C. Quality Feedback Loop
+The `Quality` persona is now correctly identifying these regressions (thanks to PR #22), but because the Developer still lacks context in the next iteration, it simply repeats the destructive behavior, leading to an infinite cycle of "Rejected -> Fix it -> Rejected".
 
-## 2. Proposed Structural Improvements
+## 2. Proposed Improvements
 
-### 1. Atomic Transitions (Label-then-Comment)
-Personas will no longer post to GitHub. They will return their response string to the Dispatcher.
-- The Dispatcher **updates the label first** (`active-persona: next`).
-- The Dispatcher **posts the comment second**.
-- This ensures the persistent state in GitHub is correct before the next workflow run begins.
+### 1. Full Context for Developers
+Refactor `DeveloperTesterPersona` to receive the same `getFullIssueContext` and `getFilesRecursive` data as the Quality persona.
+- The Developer will be able to read the actual code it is asked to modify.
+- The Developer will see the specific "Changes Requested" from Quality in the issue history.
 
-### 2. State-Driven Dispatching (Implicit Handoff)
-The Dispatcher will use the `active-persona` label as the primary source of truth, rather than just mentions:
-- **If `active-persona` is a specialized agent** (e.g., `architect`): Trigger that agent only if they are explicitly mentioned (by a human or the Overseer). After they run, the token automatically reverts to `overseer`.
-- **If `active-persona` is `overseer`**: The Overseer **always** runs on every new comment, regardless of mentions. It reviews the entire issue history to decide the next step.
-- **If `active-persona` is `none`**: The issue is quiescent. The Overseer only triggers if explicitly @mentioned by a human.
+### 2. Guarded System Prompts
+Update the `DeveloperTester` system instructions to explicitly prioritize:
+- **Preservation:** "Do not remove existing functionality unless explicitly instructed."
+- **Integration:** "Integrate new patterns into the existing architecture rather than replacing it."
 
-### 3. Full Issue Context
-When the Overseer is activated, it will fetch and read the **entire issue history** (title, body, and all comments) to ensure it has the full context of previous agent outputs and human feedback before delegating.
-
-### 4. Simplified Delegation Suffix
-The Overseer will use the mandatory suffix: `Next step: @persona to take action`.
-- The Dispatcher parses this to set the label.
-- **Safety Rule:** If the Overseer specifies `@overseer` or fails to specify a valid persona, the Dispatcher will set the token to `none` and log a comment detailing the dispatch error. This prevents infinite self-processing loops.
-- If the Overseer specifies human review, the token is cleared (`none`).
+### 3. Smart File Context
+Modify the Dispatcher or Persona to automatically include the content of any file the persona is likely to touch (based on previous mentions or task names).
 
 ## 3. Technical Tasks
 
-1.  **Refactor Personas:** Update all `handle*` methods to return `Promise<string>`.
-2.  **Dispatcher Overhaul:**
-    *   Implement the "Label-then-Comment" sequence.
-    *   Implement the state machine logic:
-        - `overseer` label -> Run Overseer (Full Context).
-        - `agent` label -> Run Agent (if mentioned).
-        - `none` label -> Run Overseer (if mentioned).
-3.  **GitHub Service:** Add `getFullIssueContext(owner, repo, issueNumber)` to aggregate all text.
+1.  **Refactor `DeveloperTesterPersona.handleTask`:**
+    *   Fetch full issue context.
+    *   Fetch relevant repository files (recursive `src` fetch).
+2.  **Harden System Instructions:**
+    *   Add "Preservation of existing logic" as a core directive for Developers.
+    *   Instruct Developers to use comment history to understand implementation gaps.
 
 ## 4. Success Criteria
-- Reliable transitions without race conditions.
-- No reliance on bots mentioning each other in text.
-- The Overseer correctly pauses for human input and resumes only when prompted.
+- The Developer successfully refactors code *without* deleting the Gemini integration or Persona classes.
+- Quality approves a PR after 1-2 iterations of feedback.
+- The system demonstrates "memory" of previous errors identified by Quality.
