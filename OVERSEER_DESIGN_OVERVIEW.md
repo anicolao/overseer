@@ -1,47 +1,45 @@
 # Overseer Design Overview
 
-Overseer is a GitHub-native agent coordination system that leverages the full breadth of the GitHub platform, Gemini's multimodal Live API, and mobile integration to orchestrate a distributed team of AI agent personas.
+Overseer is a GitHub-native agent coordination system that leverages the full breadth of the GitHub platform and Gemini's multimodal Live API to orchestrate a distributed team of specialized agent personas.
 
 ## Architectural Components
 
 ### 1. Unified Command Center (GitHub Project v2)
-Overseer uses a single GitHub "Project" (v2) to aggregate Issues and Pull Requests across all associated repositories.
-- **Aggregation:** Provides a central view of the entire ecosystem's state.
-- **Custom Fields:** Uses fields like `Priority`, `Complexity`, and `Status` as machine-readable state for agents.
-- **Webhooks:** Triggers based on project item changes allow agents to react to metadata updates.
+Overseer uses a single GitHub "Project" (v2) to aggregate activity across all associated repositories.
+- **Aggregation:** A central view of the entire ecosystem's state, using machine-readable metadata.
+- **Custom Fields:** Uses fields like `Priority`, `Complexity`, and `Status` as input for agents.
 
 ### 2. Persona-based GitHub Apps
-Each agent persona (Overseer, Architect, Developer, Tester) is implemented as a standalone GitHub App.
-- **Attribution:** Actions are clearly attributed to `overseer[bot]`, `architect[bot]`, etc.
-- **Mentions:** Humans or other agents can @mention a specific persona to hand off a task or request feedback.
-- **Permission Scoping:** Each persona has precise, least-privilege access to the repositories they manage.
+Each persona is implemented as a standalone GitHub App, providing:
+- **Unique Attribution:** Clear visibility into which agent performed an action.
+- **Mentions and Hand-offs:** Enabling inter-agent communication via standard @mentions.
 
-### 3. Agent Execution Logic (Backend Services)
-Agent brains are implemented in Python or Node.js, often hosted as Cloud Functions or long-running services.
-- **Event-Driven:** Triggered by GitHub webhooks (`issues`, `issue_comment`, `pull_request`, `projects_v2_item`).
-- **Signature Verification:** All incoming webhooks are validated using `X-Hub-Signature-256`.
+### 3. Agent Brains (Backend Services)
+Agent logic is implemented in Python or Node.js, responding to GitHub webhooks.
+- **Security:** Webhook signature verification (`X-Hub-Signature-256`) is mandatory.
 
-### 4. Gemini Multimodal and Live API
-Overseer utilizes Gemini's natively multimodal capabilities.
-- **Static Analysis:** Uses the Files API to process images, diagrams, and audio files for design reviews and bug reports.
-- **Real-Time Voice (Live API):** Employs a stateful WebSocket connection (16kHz 16-bit Linear PCM) for low-latency voice interactions between humans and agents.
+### 4. Interactive Oversight with Gemini Live API
+- **Live API Integration:** Humans can initiate real-time conversations with the **Overseer** persona via a stateful WebSocket connection to discuss system state or provide direction.
+- **Multimodal Support:** Agents can process and discuss text, code, images, and other assets natively.
 
-### 5. Outbound Mobile Integration ("Calls")
-To ensure human-on-the-loop oversight, Overseer can proactively contact humans on their mobile devices.
-- **Telephony Bridge (Twilio):** Initiates outbound calls, streaming audio between Gemini Live API and the mobile network via WebSockets.
-- **iOS App Integration:** Uses **CallKit** and **PushKit** (VoIP Pushes) for a native "Incoming Call" experience.
-- **Decline Handling:** If a call is declined or missed, the system automatically sends a follow-up SMS or Push Notification with a link to re-engage via text or a web interface.
+## Persona Roles and Responsibilities
 
-## Key Personas
+- **The Overseer:** Central orchestrator, high-level task manager, and primary human-to-agent interface.
+- **Product:** Defines and maintains user requirements and product scope.
+- **Architect:** Designs system-wide technical architecture and ensures consistency.
+- **UX Design:** Defines user experience, UI components, and visual interfaces.
+- **Planning:** Breaks down high-level design from the **Architect** into actionable, bite-sized tasks.
+- **Developer:** Implements features and fixes code, following the plan.
+- **Tester:** Writes and executes tests to functional requirements.
+- **Quality:** Checks the work of developers and testers to ensure it is correct and meets standards.
 
-- **The Overseer:** The central orchestrator. Monitors the global project state, decomposes goals, and manages agent hand-offs.
-- **The Architect:** Responsible for system design, documentation, and architectural reviews.
-- **The Developer:** Implements features and fixes, creating Pull Requests for review.
-- **The Tester:** Focuses on functional verification, automated test generation, and PR validation.
+## Collaborative Workflow
 
-## Implementation Details
+The system operates through a series of structured hand-offs:
 
-- **GitHub Platform:** REST/GraphQL APIs for platform interactions; GitHub Actions for isolated CI/CD and script execution.
-- **Security:** Strict webhook signature verification and scoped GitHub App tokens.
-- **Reliability:** Staggered schedules for cron-based Actions to avoid GitHub's top-of-the-hour congestion.
-- **Tech Stack:** Python (google-genai SDK), Node.js for backend logic, and Swift for iOS-native components.
+1. **Vision to Requirements:** The **Overseer** tasks the **Product** persona with defining requirements. The **Overseer** reviews and iterates until satisfied.
+2. **Human Approval:** The user reviews and approves the vision and scope plans.
+3. **Design & Plan:** The **Overseer** triggers the **Architect** for high-level design.
+4. **Task Breakdown:** The **Planner** breaks the design into steps.
+5. **Alignment Cycle:** The **Overseer**, **Architect**, and **Planner** iterate until they all agree the plan is actionable.
+6. **Iteration & Delivery:** The **Planner** coordinates the **Developer**, **Tester**, **UX Design**, **Product**, and **Quality** roles to iterate on the MVP, producing artifacts for review.
