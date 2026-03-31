@@ -1,48 +1,47 @@
-# MVP Design: Overseer Self-Bootstrapping
+# MVP Design: Overseer Self-Bootstrapping (Simplified)
 
-The goal of the Overseer MVP is to reach a state of "self-hosting" as quickly as possible. This means Overseer should be able to manage its own development tasks, design its own features, and implement them through its own persona-based workflow.
+The goal of the Overseer MVP is to reach a state of "self-hosting" as quickly as possible. This means Overseer should be able to manage its own development tasks and implement features through its own persona-based workflow.
 
 ## Core Objective
-Implement a functional "loop" where a human can provide a high-level goal for the Overseer project itself, and the system can autonomously drive that goal to a Pull Request through its internal personas.
+Implement a functional "loop" where a human provides a high-level vision in a GitHub Issue, and the system autonomously drives that vision to a Pull Request through a coordinated team of AI personas.
 
 ## Minimum Necessary Infrastructure
 
-1. **The Overseer Hub:**
-   - A single backend service (Node.js/FastAPI) to receive GitHub webhooks.
-   - Support for multiple GitHub App identities (one for each persona).
-   - Integration with Gemini (Multimodal & Live API for the Overseer persona).
+1. **The Overseer Hub (Backend):**
+   - **Google Cloud Functions (2nd Gen):** Hosting the webhook endpoints. Leveraging the generous free tier (2M invocations/month, 5GB egress).
+   - **Language:** TypeScript/Node.js.
+   - **GitHub Integration:** Using `@octokit/rest` for all platform interactions.
+   - **AI Integration:** Direct calls to Gemini 1.5 Pro (via `google-genai` SDK) for persona "brains."
 
 2. **GitHub Project v2 Configuration:**
-   - A project board to aggregate issues and PRs.
-   - Custom fields for `Persona`, `Phase` (Requirements, Design, Plan, Execution, Quality), and `Actionable` (Yes/No).
+   - A single project board to aggregate issues and PRs across the ecosystem.
+   - Essential Custom Fields:
+     - `Persona`: (Overseer, Product, Architect, Planner, Developer, Quality)
+     - `Actionable`: (Yes/No) - A flag set by the Planner and reviewed by Overseer/Architect.
 
-3. **Core Persona Logic (MVP):**
-   - **Overseer:** Orchestrator, reviews output from Product, Architect, and Planner.
-   - **Product:** Translates vision into requirements.
-   - **Architect:** Designs technical changes.
-   - **Planning:** Breaks down designs into specific, bite-sized issues.
-   - **Developer:** Implements changes and creates PRs.
-   - **Quality:** Verifies the work of the Developer and Tester (MVP can combine Tester/Quality).
+3. **Core Personas (MVP):**
+   - **Overseer:** The orchestrator. Reviews high-level output and manages the hand-off between Definition, Design, and Execution.
+   - **Product/Architect:** (Combined for MVP) Translates vision into requirements and high-level technical design.
+   - **Planner:** Breaks down the design into small, actionable GitHub Issues.
+   - **Developer/Tester:** (Combined for MVP) Implements code and includes basic tests in the PR.
+   - **Quality:** Performs code review and verifies the implementation against the original requirements.
 
-## MVP Workflow: The "Self-Dev" Loop
+## MVP Workflow: The "Surgical" Loop
 
-1. **Vision:** A human creates an issue in the Overseer repo with a vision for an Overseer feature.
-2. **Product Phase:** Overseer mentions **Product** to define requirements. Overseer reviews and approves.
-3. **Design Phase:** Overseer mentions **Architect** for high-level design.
-4. **Planning Phase:** Overseer mentions **Planner** to break the design into actionable tasks.
-5. **Alignment:** Overseer, Architect, and Planner iterate (via Issue comments) until the plan is marked `Actionable: Yes`.
-6. **Execution:** Planner mentions **Developer** to implement the first task. Developer opens a PR.
-7. **Quality:** Planner mentions **Quality** to review the PR. Once approved, it is ready for human merge.
+1. **Vision:** Human creates an Issue in the `overseer` repo.
+2. **Definition & Design:** Overseer tasks **Product/Architect** to define requirements and a technical approach. Overseer reviews.
+3. **Planning:** Overseer tasks **Planner** to create sub-tasks (as new Issues).
+4. **Alignment:** Overseer, Product/Architect, and Planner iterate in comments until the plan is marked `Actionable: Yes`.
+5. **Execution:** **Developer** implements a task and opens a PR.
+6. **Verification:** **Quality** reviews the PR. Once approved, it waits for human merge.
 
-## Success Metrics for MVP
+## Success Metrics
 
-- The Overseer system successfully implements one minor feature or fix for itself (e.g., adding a new label or updating a prompt).
-- The "Vision -> Product -> Design -> Plan -> Execute" flow completes with only high-level human approval.
-- A human can discuss the current state with the Overseer persona via the Gemini Live API.
+- Overseer successfully implements a small change to its own codebase (e.g., adding a new label or updating a persona's prompt).
+- The entire flow (Vision -> PR) completes with only one points of human intervention (Initial Approval of the Plan).
+- The system remains within the free tiers of Google Cloud and GitHub.
 
-## Technical Stack Selection
+## Deployment Strategy
 
-- **Backend:** Node.js/TypeScript (using Octokit for GitHub interaction).
-- **AI:** Gemini 1.5 Pro (Multimodal) and Gemini Live API.
-- **Hosting:** Vercel/Cloudflare Workers (for webhook handling) or a long-running instance for the Live API bridge.
-- **Identity:** GitHub App per persona.
+- **GitHub Apps:** One App with multiple "Persona" installations or a single App that switches context based on the task. (MVP will likely start with a single App for simplicity, using labels/metadata to denote the active persona).
+- **Environment:** Secrets managed via GitHub Actions/Google Secret Manager.
