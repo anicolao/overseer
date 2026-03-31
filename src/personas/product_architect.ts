@@ -41,16 +41,34 @@ Maintain a clear, concise, and structured approach.
         const fileRegex = /\[FILE:(.+?)\]([\s\S]+?)\[\/FILE\]/g;
         let match;
         let filePaths = [];
+        
+        const branchName = `bot/architect-design-${issueNumber}`;
+        let branchCreated = false;
+
         while ((match = fileRegex.exec(response)) !== null) {
+            if (!branchCreated) {
+                try {
+                    await this.github.createBranch(owner, repo, branchName);
+                } catch (e) {
+                    console.log(`Branch ${branchName} already exists or could not be created.`);
+                }
+                branchCreated = true;
+            }
             const filePath = match[1];
             const content = match[2].trim();
             filePaths.push(filePath);
-            await this.github.createOrUpdateFile(owner, repo, filePath, `docs: architect design for #${issueNumber}`, content);
+            await this.github.createOrUpdateFile(owner, repo, filePath, `docs: architect design for #${issueNumber}`, content, branchName);
         }
 
         let finalComment = attribution + response;
         if (filePaths.length > 0) {
-            finalComment += `\n\nI have created the following design documents: ${filePaths.join(', ')}.`;
+            try {
+                const pr = await this.github.createPullRequest(owner, repo, `Architect Design: issue #${issueNumber}`, `Automated PR by Product/Architect for issue #${issueNumber}`, branchName);
+                finalComment += `\n\nA new design PR has been created: #${pr.data.number} (${pr.data.html_url})`;
+            } catch (e) {
+                finalComment += `\n\nExisting design PR for branch ${branchName} has been updated with new changes.`;
+            }
+            finalComment += `\n\nI have created/updated the following design documents: ${filePaths.join(', ')}.`;
         }
 
         return finalComment;
