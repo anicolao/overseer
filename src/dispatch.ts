@@ -1,32 +1,41 @@
-import { Dispatcher, DispatchEvent } from './core/dispatcher';
+import { Dispatcher } from './utils/dispatcher';
 
-// Singleton dispatcher for the application
-export const globalDispatcher = new Dispatcher();
-
-/**
- * Handle incoming webhooks, preserving the original routing logic 
- * by acting as an event translator for our internal state machine.
- */
-export async function handleWebhook(eventType: string, payload: any): Promise<void> {
-    const event: DispatchEvent = {
-        type: eventType,
-        payload: payload
-    };
-
-    console.log(`[Dispatch] Routing webhook event: ${eventType}`);
-    
-    // Pass the payload through the generic dispatcher to any registered personas/state machines
-    await globalDispatcher.dispatch(event);
+export interface DispatchEvent {
+  event: string;
+  payload: any;
 }
 
-// Example Registration: Preserving the core issue routing logic
-globalDispatcher.register('issues', async (event) => {
-    // Core state machine logic executes here
-    if (event.payload.action === 'opened') {
-        console.log(`[State Machine] Triggering triage for issue #${event.payload.issue.number}`);
-    }
+export const globalDispatcher = new Dispatcher();
+
+// Register the standard state machine / persona flow
+globalDispatcher.register('issues', async (payload: any) => {
+  // Label management and persona state machine routing
+  const labels = payload.issue?.labels || [];
+  const isActivePersona = labels.some((l: any) => l.name === 'active-persona');
+
+  if (!isActivePersona) {
+    console.log('Not an active persona, ignoring.');
+    return;
+  }
+
+  // State machine routing based on payload action
+  console.log('Processing active persona state machine for issue:', payload.issue?.number);
+  
+  if (payload.action === 'opened') {
+    await handleIssueOpened(payload);
+  } else if (payload.action === 'created' && payload.comment) {
+    await handleIssueComment(payload);
+  }
 });
 
-globalDispatcher.register('issue_comment', async (event) => {
-    console.log(`[State Machine] Processing comment on issue #${event.payload.issue.number}`);
-});
+async function handleIssueOpened(payload: any) {
+  console.log('Handling opened issue inside state machine.');
+}
+
+async function handleIssueComment(payload: any) {
+  console.log('Handling issue comment inside state machine.');
+}
+
+export async function handleDispatch(event: string, payload: any): Promise<void> {
+  await globalDispatcher.dispatch({ event, payload });
+}
