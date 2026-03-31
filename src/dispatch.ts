@@ -73,13 +73,32 @@ async function run() {
     } else if (eventName === 'issue_comment' && eventData.action === 'created') {
         const body = eventData.comment.body;
 
-        // 1. Identify target persona from mentions
+        // 1. Identify target persona
         let targetedPersona: string | null = null;
-        for (const [handle, key] of Object.entries(handleMap)) {
-            if (body.includes(handle)) {
-                targetedPersona = key;
-                break;
+
+        // Prioritize the standardized suffix
+        const nextStepMatch = body.match(/Next step: (@[a-z-]+) to take action/i);
+        if (nextStepMatch) {
+            targetedPersona = handleMap[nextStepMatch[1].toLowerCase()] || null;
+        }
+
+        // If no suffix, look for the LAST mention in the body (usually the intended handoff)
+        if (!targetedPersona) {
+            const mentions = body.match(/@[a-z-]+/gi);
+            if (mentions) {
+                for (let i = mentions.length - 1; i >= 0; i--) {
+                    const handle = mentions[i].toLowerCase();
+                    if (handleMap[handle]) {
+                        targetedPersona = handleMap[handle];
+                        break;
+                    }
+                }
             }
+        }
+
+        if (!targetedPersona) {
+            console.log('No persona identified in comment');
+            return;
         }
 
         // 2. State Machine Logic
@@ -90,13 +109,13 @@ async function run() {
             shouldExecute = true;
             executedPersona = 'overseer';
         } else if (activePersona !== null) {
-            // Specialized agent runs only if mentioned
+            // Specialized agent runs only if it was the one intended
             if (targetedPersona === activePersona) {
                 shouldExecute = true;
                 executedPersona = activePersona;
             }
         } else {
-            // Quiescent state: only Overseer runs if mentioned
+            // Quiescent state: only Overseer runs if explicitly mentioned
             if (targetedPersona === 'overseer') {
                 shouldExecute = true;
                 executedPersona = 'overseer';
@@ -105,7 +124,6 @@ async function run() {
 
         // 3. Persona-Specific Bot Protection: 
         // Only ignore if the bot POSTED the comment AND it's that persona's OWN attribution.
-        // This allows Overseer to trigger Architect, Architect to trigger Overseer, etc.
         if (shouldExecute && executedPersona && sender === botUser) {
             const personaNameMap: Record<string, string> = {
                 'overseer': 'Overseer',
