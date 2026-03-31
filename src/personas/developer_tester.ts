@@ -9,7 +9,7 @@ export class DeveloperTesterPersona {
     static readonly SYSTEM_INSTRUCTION = `
 You are the Developer/Tester. Your job is to implement code and functional tests for the Overseer project.
 
-When the Planner tasks you, you must:
+When the Planner or Overseer tasks you, you must:
 1.  Implement the requested feature or fix.
 2.  Include automated functional tests for your changes.
 3.  Specify the exact file paths for your code and tests.
@@ -20,7 +20,7 @@ Example:
 export class NewFeature { ... }
 [/FILE]
 
-@mention the Quality persona when your implementation is ready for review.
+Always strive for high-quality, well-tested, and idiomatically correct code.
     `;
 
     constructor(gemini: GeminiService, github: GitHubService) {
@@ -31,11 +31,7 @@ export class NewFeature { ... }
     async handleTask(owner: string, repo: string, issueNumber: number, taskDescription: string) {
         console.log(`Developer/Tester handling task for issue #${issueNumber}: ${taskDescription}`);
         
-        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
-            this.github, owner, repo, issueNumber, 'Developer/Tester', '@developer-tester', undefined, taskDescription
-        );
-        if (!shouldContinue) return;
-
+        const attribution = PersonaHelper.getAttribution('Developer/Tester', issueNumber);
         const context = `Task Description: ${taskDescription}`;
         const userMessage = "A new task has been assigned to you. Please implement the requested changes.";
 
@@ -50,12 +46,17 @@ export class NewFeature { ... }
         let match;
         let filePaths = [];
         
-        const branchName = `bot/issue-${issueNumber}-${Date.now()}`;
+        const branchName = `bot/issue-${issueNumber}`;
         let branchCreated = false;
 
         while ((match = fileRegex.exec(response)) !== null) {
             if (!branchCreated) {
-                await this.github.createBranch(owner, repo, branchName);
+                try {
+                    await this.github.createBranch(owner, repo, branchName);
+                } catch (e) {
+                    // Branch might already exist, which is fine for update
+                    console.log(`Branch ${branchName} already exists or could not be created.`);
+                }
                 branchCreated = true;
             }
             const filePath = match[1];
@@ -64,13 +65,18 @@ export class NewFeature { ... }
             await this.github.createOrUpdateFile(owner, repo, filePath, `feat: implementation for #${issueNumber}`, content, branchName);
         }
 
+        let finalComment = attribution + response;
         if (filePaths.length > 0) {
-            const pr = await this.github.createPullRequest(owner, repo, `Resolve issue #${issueNumber}`, `Automated PR by Developer/Tester for issue #${issueNumber}`, branchName);
-            await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + `I have implemented the following files: ${filePaths.join(', ')}.\n\nA PR has been created: #${pr.data.number} (${pr.data.html_url})\n\n${response}`);
-        } else {
-            await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
+            try {
+                const pr = await this.github.createPullRequest(owner, repo, `Resolve issue #${issueNumber}`, `Automated PR by Developer/Tester for issue #${issueNumber}`, branchName);
+                finalComment += `\n\nA new PR has been created: #${pr.data.number} (${pr.data.html_url})`;
+            } catch (e) {
+                // PR might already exist
+                finalComment += `\n\nExisting PR for branch ${branchName} has been updated with new changes.`;
+            }
+            finalComment += `\n\nI have implemented the following files: ${filePaths.join(', ')}.`;
         }
 
-        await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:implementation-ready', 'persona:developer-tester']);
+        await this.github.addCommentToIssue(owner, repo, issueNumber, finalComment);
     }
 }

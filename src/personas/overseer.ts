@@ -10,18 +10,15 @@ export class OverseerPersona {
 You are the Overseer. Your job is to orchestrate a team of AI agent personas to deliver well-designed and well-tested code on GitHub.
 
 Your primary responsibilities include:
-1. Analyzing high-level visions and tasking the Product/Architect persona (via @product-architect) to define requirements and technical design.
-2. Reviewing the requirements and design, ensuring they align with user intent.
-3. Once the design is ready, tasking the Planner (via @planner) to break the design into actionable tasks.
-4. Coordinating design-level agreement between yourself, the Architect, and the Planner before marking a plan as actionable.
-5. Monitoring the progress of Developers, Testers, and Quality agents.
-6. Proactively reaching out to the human user for high-level approvals or when critical decisions are required.
+1. Analyzing high-level visions and tasking personas.
+2. Reviewing work and coordinating design-level agreement.
+3. Monitoring progress and communicating with the human user.
 
 Communication Protocol:
 - Always coordinate via @mentions on GitHub Issues.
 - Maintain a professional, senior-engineering tone.
-- Be proactive and clear in your instructions to other personas.
-- Ensure that the workflow follows the sequence: Vision -> Product/Architect -> Planner -> Execution.
+- YOU MUST end every output with the following exact phrase to delegate the next step: "Next step: @persona to take action" (e.g., "Next step: @planner to take action").
+- If you are waiting for a human or the task is finished, end with: "Next step: human review required".
 
 Current Personas available:
 - @product-architect: Requirements and High-level Design.
@@ -38,11 +35,11 @@ Current Personas available:
     async handleNewIssue(owner: string, repo: string, issueNumber: number, title: string, body: string) {
         console.log(`Overseer handling new issue #${issueNumber}: ${title}`);
         
-        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
-            this.github, owner, repo, issueNumber, 'Overseer', '@overseer'
-        );
-        if (!shouldContinue) return;
+        if (await PersonaHelper.isLimitReached(this.github, owner, repo, issueNumber, 'Overseer', '@overseer', body)) {
+            return;
+        }
 
+        const attribution = PersonaHelper.getAttribution('Overseer', issueNumber);
         const context = `Issue Title: ${title}\nIssue Body: ${body}`;
         const userMessage = "A new vision has been proposed. Please analyze and initiate the next step.";
 
@@ -53,17 +50,17 @@ Current Personas available:
         );
 
         await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
-        await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:orchestrating', 'persona:overseer']);
+        // Dispatcher will handle setting the next active-persona based on 'Next step:'
     }
 
     async handleComment(owner: string, repo: string, issueNumber: number, commenter: string, body: string) {
         console.log(`Overseer handling comment from ${commenter} on issue #${issueNumber}`);
         
-        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
-            this.github, owner, repo, issueNumber, 'Overseer', '@overseer', commenter, body
-        );
-        if (!shouldContinue) return;
+        if (await PersonaHelper.isLimitReached(this.github, owner, repo, issueNumber, 'Overseer', '@overseer', body)) {
+            return;
+        }
 
+        const attribution = PersonaHelper.getAttribution('Overseer', issueNumber, commenter);
         const issue = await this.github.getIssue(owner, repo, issueNumber);
         const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nNew comment from ${commenter}:\n${body}`;
         const userMessage = "A persona or human has commented and mentioned you. Please respond accordingly to keep the workflow moving.";

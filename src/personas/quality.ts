@@ -15,11 +15,6 @@ Your primary responsibilities include:
 3. Providing constructive feedback to the developer.
 4. Marking the work as approved once it meets the project's high standards.
 
-When the Developer/Tester tasks you, you should:
-- Review the code changes and tests in the PR.
-- Verify them against the original requirements from the Product/Architect.
-- @mention the Overseer once your review is complete and the PR is ready for merging.
-
 Maintain a professional, critical but constructive, and high-quality-oriented approach.
     `;
 
@@ -31,11 +26,7 @@ Maintain a professional, critical but constructive, and high-quality-oriented ap
     async handleReviewRequest(owner: string, repo: string, issueNumber: number, prNumber: number, developer: string) {
         console.log(`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`);
         
-        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
-            this.github, owner, repo, issueNumber, 'Quality', '@quality', developer, `Review request for PR #${prNumber}`
-        );
-        if (!shouldContinue) return;
-
+        const attribution = PersonaHelper.getAttribution('Quality', issueNumber, developer);
         let context = `Issue Number: ${issueNumber}\nDeveloper: ${developer}\n`;
         
         try {
@@ -69,6 +60,5 @@ Maintain a professional, critical but constructive, and high-quality-oriented ap
         );
 
         await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
-        await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:reviewing', 'persona:quality']);
     }
 }
