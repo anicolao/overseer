@@ -60,6 +60,42 @@ export class GitHubService {
         });
     }
 
+    async createBranch(owner: string, repo: string, branchName: string, baseBranch: string = 'main') {
+        const baseRef = await this.octokit.rest.git.getRef({
+            owner,
+            repo,
+            ref: `heads/${baseBranch}`,
+        });
+        
+        return this.octokit.rest.git.createRef({
+            owner,
+            repo,
+            ref: `refs/heads/${branchName}`,
+            sha: baseRef.data.object.sha,
+        });
+    }
+
+    async getFileContent(owner: string, repo: string, path: string, ref: string = 'main'): Promise<string> {
+        const { data } = await this.octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path,
+            ref,
+        });
+        if ('content' in data && typeof data.content === 'string') {
+            return Buffer.from(data.content, 'base64').toString('utf8');
+        }
+        throw new Error(`Path ${path} is not a file or has no content`);
+    }
+
+    async getPullRequestFiles(owner: string, repo: string, pullNumber: number) {
+        return this.octokit.rest.pulls.listFiles({
+            owner,
+            repo,
+            pull_number: pullNumber,
+        });
+    }
+
     async createPullRequest(owner: string, repo: string, title: string, body: string, head: string, base: string = 'main') {
         return this.octokit.rest.pulls.create({
             owner,
