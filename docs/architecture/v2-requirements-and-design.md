@@ -1,58 +1,62 @@
-# Overseer V2: MVP Review and Architecture Design
+# Overseer Project: MVP Review & V2 Architecture Design
 
-## 1. MVP Review and Suitability Analysis
-The current MVP successfully demonstrates the core loop of the Overseer concept—coordinating AI personas to accomplish specific repository management tasks. It proves the viability of the agent-based orchestration model. 
+## 1. MVP Suitability Analysis
+The current MVP implementation successfully proves the core orchestration concept: distinct agents can collaborate, pass messages, and complete multi-step workflows. However, it is **not suitable for production** in its current state due to three critical structural limitations:
+1. **State Volatility:** The system lacks persistent memory. Agent states and conversation histories are lost between execution runs, preventing long-running or asynchronous tasks.
+2. **Context Exhaustion:** The current context management appends messages indefinitely. This guarantees context window exhaustion (token limits) during extended workflows, leading to API rejections or degraded LLM performance.
+3. **API Fragility:** Direct, unmanaged calls to LLM endpoints make the system vulnerable to transient network errors, rate limits (HTTP 429), and service downtimes.
 
-**Suitability for Production:** **NOT SUITABLE (yet)**
-While functional as a proof-of-concept, the MVP baseline exhibits several architectural limitations that must be addressed before it can be considered production-ready or capable of handling complex, long-running issues:
-*   **State Volatility:** The current implementation relies heavily on volatile in-memory state. If the process crashes, all context and progress are lost.
-*   **Context Window Exhaustion:** As tasks grow in complexity, the conversation history grows linearly. There is currently no mechanism to prevent the context window from exceeding the LLM's maximum token limit.
-*   **API Fragility:** Direct, unmanaged calls to the LLM and GitHub APIs are brittle. Rate limits, network timeouts, or transient API errors will currently crash the system.
-
-**Next Steps:** We must transition to a V2 architecture focused on stability, state management, and fault tolerance before adding new functional features.
+**Next Steps:** To reach production readiness, we must implement a robust V2 architecture that remedies these issues through State Management, Context Compaction, and API Resilience (Circuit Breaking).
 
 ---
 
-## 2. V2 User Requirements
-
-To address the MVP's limitations, the following core capabilities (Epics) are required:
+## 2. V2 Product Requirements
 
 ### Epic 1: Agent State Manager
-*   **REQ-1.1:** The system must persist the current state of the orchestrator and all active sub-agents to disk (or a database) after every state transition.
-*   **REQ-1.2:** The system must be able to resume operations from the last known good state in the event of a fatal crash or restart.
+* **Req 1.1:** The system must persist the state of all active agents, including tasks, internal variables, and metadata.
+* **Req 1.2:** State must be recoverable across process restarts.
+* **Req 1.3:** The persistence layer should be lightweight (e.g., SQLite or local JSON storage) for V2, with abstract interfaces to allow future migration to cloud databases.
 
 ### Epic 2: Context Compactor
-*   **REQ-2.1:** The system must monitor the token count of the current context window for every agent.
-*   **REQ-2.2:** When the context window approaches 80% of the maximum allowed tokens, the system must automatically summarize or truncate older context while preserving the system prompt and the most recent N interactions.
+* **Req 2.1:** The system must monitor the token count of the active context window for each agent.
+* **Req 2.2:** Upon reaching a predefined threshold (e.g., 80% of the model's limit), the system must trigger a compaction routine.
+* **Req 2.3:** Compaction should preserve system instructions and recent messages, while summarizing older conversational history into a dense "memory block".
 
-### Epic 3: Circuit Breaker
-*   **REQ-3.1:** All external API calls (LLM providers, GitHub API) must be routed through a fault-tolerant wrapper.
-*   **REQ-3.2:** The system must gracefully handle HTTP 429 (Rate Limit) and 5xx (Server Error) responses with exponential backoff and retry mechanisms.
+### Epic 3: Circuit Breaker & Retry Resilience
+* **Req 3.1:** All external LLM API calls must be wrapped in a resilience layer.
+* **Req 3.2:** The system must implement exponential backoff for transient errors (e.g., 429 Rate Limit, 503 Service Unavailable).
+* **Req 3.3:** A circuit breaker must trip after a configurable number of consecutive failures, halting execution gracefully rather than crash-looping.
 
 ---
 
 ## 3. High-Level Technical Design
 
-### 3.1 Finite State Machine (FSM) for State Management
-*   **Concept:** Implement a strict FSM for the Overseer and worker agents. Valid states include `IDLE`, `PLANNING`, `EXECUTING`, `WAITING_FOR_REVIEW`, and `COMPLETED`.
-*   **Persistence:** State transitions will emit events that are appended to a local SQLite database or a write-ahead JSON-lines log (`agent_state.log`). 
-*   **Hydration:** On startup, the system will read the log, replay the events, and reconstruct the FSMs to their exact previous state.
+### 3.1 Architecture Components
+* **`StateManager` Class:** 
+  * Exposes `save_state(agent_id, state_dict)` and `load_state(agent_id)`.
+  * Utilizes an adapter pattern (`StorageAdapter`) to allow switching between `FileStorageAdapter` and `SQLiteStorageAdapter`.
+* **`ContextCompactor` Module:**
+  * Implements a middleware pattern that intercepts messages before they hit the LLM.
+  * Uses a fast, local tokenizer (e.g., `tiktoken`) to estimate context size.
+  * If threshold exceeded, dispatches a background LLM call using a `summarization_prompt` to condense history.
+* **`ResilienceLayer` Decorators:**
+  * Introduces `@retry(backoff=exponential, max_attempts=3)` decorators on all network-bound API methods.
+  * Introduces a `CircuitBreaker` class that tracks failure states (`CLOSED`, `OPEN`, `HALF_OPEN`) per external endpoint.
 
-### 3.2 Sliding Window Compactor
-*   **Algorithm:** Implement a sliding window context manager. The conversation history array will be partitioned into: `[System Prompt] + [Summarized History] + [Recent Active Window]`.
-*   **Trigger:** A middleware token counter (using `tiktoken` or equivalent) will run before every LLM API invocation. If `total_tokens > MAX_TOKENS * 0.8`, the oldest messages in the `Recent Active Window` are extracted, sent to a cheaper/faster LLM model for summarization, and appended to the `Summarized History`.
+### 3.2 Data Models
+**State Record:**
+```json
+{
+  "agent_id": "string",
+  "current_status": "idle | busy | waiting",
+  "assigned_tasks": ["task_id_1"],
+  "memory_summary": "string",
+  "last_updated": "timestamp"
+}
+```
 
-### 3.3 API Circuit Breaker Pattern
-*   **Pattern:** Implement a standard software Circuit Breaker (States: `CLOSED`, `OPEN`, `HALF-OPEN`).
-*   **Behavior:** 
-    *   Normal operation (`CLOSED`). 
-    *   If failures cross a threshold (e.g., 3 consecutive timeouts), the circuit opens (`OPEN`), immediately failing fast without making network requests, and entering a sleep/backoff phase.
-    *   After the backoff, it enters `HALF-OPEN` to test the API with a single request. If successful, it closes again.
-
----
-
-## 4. Non-Functional Constraints & Quality Standards
-To ensure this implementation meets our enterprise-grade goals, the following constraints must be enforced during development:
-1.  **Testability:** 100% of the State Manager, Compactor, and Circuit Breaker logic must be unit-testable using dependency injection and mock API bounds. No live API calls during unit tests.
-2.  **Observability:** Implement structured JSON logging (`info`, `warn`, `error`, `debug`) for all state transitions and circuit breaker events to allow for seamless debugging.
-3.  **Performance:** The token counting and FSM state transition mechanisms must execute in `<50ms` to avoid adding latency to the agent loop.
+### 3.3 System Flow
+1. **Init:** Agent wakes up and requests its state from `StateManager`.
+2. **Execute:** Agent formulates a response. `ContextCompactor` intercepts to ensure payload is within token limits.
+3. **Network:** Request passes through `ResilienceLayer`. If LLM API fails, exponential backoff retries the request. If circuit trips, agent state is saved as `waiting_on_api` and execution suspends safely.
+4. **Finalize:** Response is received, internal state is updated, and `StateManager` persists the new state.
