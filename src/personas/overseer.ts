@@ -1,5 +1,6 @@
 import { GeminiService } from '../utils/gemini.js';
 import { GitHubService } from '../utils/github.js';
+import { PersonaHelper } from '../utils/persona_helper.js';
 
 export class OverseerPersona {
     private gemini: GeminiService;
@@ -37,6 +38,11 @@ Current Personas available:
     async handleNewIssue(owner: string, repo: string, issueNumber: number, title: string, body: string) {
         console.log(`Overseer handling new issue #${issueNumber}: ${title}`);
         
+        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
+            this.github, owner, repo, issueNumber, 'Overseer', '@overseer'
+        );
+        if (!shouldContinue) return;
+
         const context = `Issue Title: ${title}\nIssue Body: ${body}`;
         const userMessage = "A new vision has been proposed. Please analyze and initiate the next step.";
 
@@ -46,13 +52,18 @@ Current Personas available:
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, response);
+        await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
         await this.github.updateIssueLabels(owner, repo, issueNumber, ['status:orchestrating', 'persona:overseer']);
     }
 
     async handleComment(owner: string, repo: string, issueNumber: number, commenter: string, body: string) {
         console.log(`Overseer handling comment from ${commenter} on issue #${issueNumber}`);
         
+        const { shouldContinue, attribution } = await PersonaHelper.checkLimitAndGetAttribution(
+            this.github, owner, repo, issueNumber, 'Overseer', '@overseer', commenter, body
+        );
+        if (!shouldContinue) return;
+
         const issue = await this.github.getIssue(owner, repo, issueNumber);
         const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nNew comment from ${commenter}:\n${body}`;
         const userMessage = "A persona or human has commented and mentioned you. Please respond accordingly to keep the workflow moving.";
@@ -63,6 +74,6 @@ Current Personas available:
             context
         );
 
-        await this.github.addCommentToIssue(owner, repo, issueNumber, response);
+        await this.github.addCommentToIssue(owner, repo, issueNumber, attribution + response);
     }
 }

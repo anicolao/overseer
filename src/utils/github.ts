@@ -96,6 +96,15 @@ export class GitHubService {
         });
     }
 
+    async getIssueCommentCount(owner: string, repo: string, issueNumber: number): Promise<number> {
+        const { data: issue } = await this.octokit.rest.issues.get({
+            owner,
+            repo,
+            issue_number: issueNumber,
+        });
+        return issue.comments;
+    }
+
     async createPullRequest(owner: string, repo: string, title: string, body: string, head: string, base: string = 'main') {
         return this.octokit.rest.pulls.create({
             owner,
