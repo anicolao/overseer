@@ -282,15 +282,15 @@ async function run() {
 					}
 					return null;
 				});
-				} catch (error) {
-					console.error(`Persona failed: ${executedPersona}`, error);
-					await runWithTraceContext(traceContext, async () => {
-						logTrace("dispatcher.persona.error", {
-							error:
-								error instanceof Error ? error.stack || error.message : error,
-						});
+			} catch (error) {
+				console.error(`Persona failed: ${executedPersona}`, error);
+				await runWithTraceContext(traceContext, async () => {
+					logTrace("dispatcher.persona.error", {
+						error:
+							error instanceof Error ? error.stack || error.message : error,
 					});
-					iterationResult = {
+				});
+				iterationResult = {
 					finalResponse: `ERROR: Execution failed. Details: ${error instanceof Error ? error.message : String(error)}`,
 					log: `CRITICAL ERROR: ${error}`,
 				};
