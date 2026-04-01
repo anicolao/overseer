@@ -8,7 +8,8 @@
     "build": "tsc",
     "prepare": "husky",
     "lint": "biome check src/",
-    "format": "biome format --write src/"
+    "format": "biome format --write src/",
+    "trace:conversation": "tsx src/scripts/extract_trace_conversation.ts"
   },
   "repository": {
     "type": "git",
