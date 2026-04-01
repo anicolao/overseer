@@ -171,7 +171,7 @@ export function installFetchInstrumentation() {
 		if (isGeminiRequest) {
 			logTrace("fetch.begin", {
 				fetchCallId,
-				url,
+				url: redactUrl(url),
 				method,
 				hasAbortSignal: Boolean(init?.signal),
 				signalAborted: init?.signal?.aborted || false,
@@ -183,7 +183,7 @@ export function installFetchInstrumentation() {
 			if (isGeminiRequest) {
 				logTrace("fetch.response", {
 					fetchCallId,
-					url,
+					url: redactUrl(url),
 					method,
 					durationMs: Date.now() - startedAt,
 					status: response.status,
@@ -202,7 +202,7 @@ export function installFetchInstrumentation() {
 			if (isGeminiRequest) {
 				logTrace("fetch.error", {
 					fetchCallId,
-					url,
+					url: redactUrl(url),
 					method,
 					durationMs: Date.now() - startedAt,
 					error: serializeError(error),
@@ -211,6 +211,31 @@ export function installFetchInstrumentation() {
 			throw error;
 		}
 	}) as typeof fetch;
+}
+
+function redactUrl(urlStr: string): string {
+	try {
+		const url = new URL(urlStr);
+		const params = new URLSearchParams(url.search);
+		let changed = false;
+		for (const [key] of Array.from(params.entries())) {
+			if (
+				key.toLowerCase().includes("key") ||
+				key.toLowerCase().includes("token") ||
+				key.toLowerCase().includes("secret")
+			) {
+				params.set(key, "***");
+				changed = true;
+			}
+		}
+		if (changed) {
+			url.search = params.toString();
+			return url.toString();
+		}
+		return urlStr;
+	} catch {
+		return urlStr.replace(/(key|token|secret)=([^&]+)/gi, "$1=***");
+	}
 }
 
 function resolveUrl(input: RequestInfo | URL): string {
