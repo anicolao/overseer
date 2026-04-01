@@ -7,7 +7,7 @@ import { ProductArchitectPersona } from './personas/product_architect.js';
 import { PlannerPersona } from './personas/planner.js';
 import { DeveloperTesterPersona } from './personas/developer_tester.js';
 import { QualityPersona } from './personas/quality.js';
-import { IterationResult } from './utils/agent_runner.js';
+import type { IterationResult } from './utils/agent_runner.js';
 import { ShellService } from './utils/shell.js';
 
 async function run() {
