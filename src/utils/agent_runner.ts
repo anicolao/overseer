@@ -36,7 +36,9 @@ export class AgentRunner {
 		logTrace("agent.loop.start", {
 			maxIterations,
 			systemInstruction: textStats(systemInstruction),
+			systemInstructionRaw: systemInstruction,
 			initialMessage: textStats(initialMessage),
+			initialMessageRaw: initialMessage,
 		});
 		const chat = gemini.startChat(systemInstruction);
 		let currentMessage = initialMessage;
@@ -49,6 +51,7 @@ export class AgentRunner {
 			logTrace("agent.iteration.begin", {
 				iteration,
 				input: textStats(currentMessage),
+				inputRaw: currentMessage,
 			});
 
 			const sendStartedAt = Date.now();
@@ -58,6 +61,7 @@ export class AgentRunner {
 				iteration,
 				durationMs: Date.now() - sendStartedAt,
 				response: textStats(responseText),
+				responseRaw: responseText,
 				responseIsEmpty: responseText.trim().length === 0,
 			});
 
@@ -84,6 +88,7 @@ export class AgentRunner {
 				nextStep: parsedResponse.protocol.next_step,
 				actionCount: parsedResponse.protocol.actions.length,
 				finalResponse: textStats(parsedResponse.protocol.final_response || ""),
+				finalResponseRaw: parsedResponse.protocol.final_response || "",
 			});
 			this.log(`PROTOCOL RESPONSE: ${parsedResponse.rawJson}\n`);
 
