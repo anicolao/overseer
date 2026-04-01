@@ -26,6 +26,7 @@ Overseer should move in that direction.
 - Reduce accidental prompt drift between personas.
 - Make it easy to see exactly which files define a persona.
 - Keep routing, persistence, and execution behavior in code.
+- Make the GitHub issue/comment text the canonical dynamic task packet.
 - Preserve the existing persona set and current workflow behavior during migration.
 
 ## Non-Goals
@@ -150,56 +151,108 @@ Proposed runtime split:
 - `src/bots/bot_registry.ts`
   - resolves bot id -> loaded config + compiled prompt
 - existing persona classes
-  - keep task-specific entrypoints and initial-message construction
+  - keep task-specific entrypoints only where behavior genuinely differs
   - stop owning long `SYSTEM_INSTRUCTION` strings
 
 In other words:
 
-- code decides what task a persona receives
+- code decides which persona receives a task
 - data decides who the persona is and what baseline instructions it has
 
 ## Dispatcher Changes
 
-The dispatcher should stop instantiating personas with hardcoded prompt strings.
+The dispatcher should stop instantiating personas with hardcoded prompt strings, and it should stop synthesizing persona-specific task messages.
 
 Instead:
 
 1. Load `bots.json` once at startup.
 2. Compile persona prompts from markdown.
-3. Pass the compiled prompt into the persona implementation.
+3. Select the persona based on routing/state.
+4. Pass the triggering GitHub issue/comment body directly as the dynamic task input.
 
-The persona classes should become thinner. For example, `DeveloperTesterPersona` should still own:
+The effective prompt for a run should be:
 
-- task-specific initial message construction
+- static persona prompt from markdown files
+- plus the triggering GitHub message body
+
+There may still be a minimal generic wrapper added by code for transport purposes, but it should be the same for every persona and should not contain persona-specific task shaping.
+
+The persona classes should become thinner. For example, `DeveloperTesterPersona` may still own:
+
 - persistence hook wiring
 - max iteration budget
+- any strictly persona-specific runtime behavior
 
-But it should no longer own the large role prompt inline.
+But it should no longer own:
+
+- a large inline role prompt
+- a custom initial-message template
+- task shaping logic that duplicates Overseer delegation content
+
+## Dynamic Task Model
+
+The GitHub issue/comment text should be the canonical source of dynamic task information.
+
+That means:
+
+- Overseer must put the real task packet into its delegation comment
+- the delegated persona receives that comment body directly
+- the dispatcher does not reinterpret that task into a second developer-specific prompt
+
+For example, if Overseer delegates to `@developer-tester`, the issue comment should contain:
+
+- task id
+- branch expectation
+- files to read first
+- plan file path
+- concise task summary
+- any constraints or guardrails
+
+Then the Developer/Tester runtime should simply consume:
+
+- compiled persona prompt
+- plus that comment body
+
+This makes the system easier to reason about because the answer to "what did we tell the bot?" becomes:
+
+- the prompt files listed in `bots.json`
+- the exact GitHub comment that delegated the task
+
+There is no hidden second layer of task rewriting in code.
+
+## Delegation Contract
+
+Overseer delegation comments become more important in this design. They are no longer just human-readable summaries; they are the machine-consumed task payload for the next bot.
+
+So Overseer should be responsible for producing a structured delegation comment format that includes the necessary fields for the target persona.
+
+For `@developer-tester`, that likely means a comment block containing:
+
+- task id
+- plan file
+- files to read
+- task summary
+- branch expectation
+
+The same principle should apply to other personas: the dynamic assignment belongs in the issue comment, not in a persona-specific TypeScript template.
 
 ## Context Refactor
 
-This refactor should also narrow what is sent in the initial task message.
+This refactor should also narrow what is sent as dynamic input.
 
 Current pattern:
 
 - large mixed context dumps
 - repeated historical comments
 - prompt content and task content blurred together
+- code-generated task wrappers that partially restate the assignment
 
 Target pattern:
 
 - persona prompt supplies durable standing instructions
-- initial message supplies the current assignment only
+- delegation comment supplies the current assignment
 - referenced files supply deeper context
-
-For example, the Developer/Tester initial message should mainly contain:
-
-- the directed task block
-- issue branch target
-- explicit files to read first
-- any plan file path or task id
-
-It should not include a large unstructured issue transcript unless that transcript is the task.
+- no large unstructured issue transcript unless the transcript itself is the task
 
 ## Why Prompt Files Matter
 
@@ -215,7 +268,7 @@ It also makes it easier to answer "what did we tell this bot?" because the answe
 
 - bot config entry
 - ordered prompt file list
-- task-specific initial message
+- exact delegation or triggering comment
 
 ## Observability Requirements
 
@@ -225,7 +278,8 @@ The refactor should log:
 - selected provider/model
 - ordered prompt file list
 - final concatenated prompt hash
-- task-specific initial message hash
+- triggering comment hash
+- triggering comment source URL
 
 Optionally, the trace artifact can also record the exact prompt file paths used for a run.
 
@@ -249,18 +303,20 @@ That prevents silent fallback to the wrong persona prompt.
 - Add prompt markdown files
 - Add config loader and prompt loader
 - Keep existing persona classes, but inject loaded prompts into them
+- Pass the triggering issue/comment body through directly as the dynamic task input
 - Keep behavior unchanged
 
 ### Phase 2
 
 - Remove inline `SYSTEM_INSTRUCTION` strings from persona classes
 - Centralize repeated rules into shared prompt markdown
-- Keep only task-specific initial-message construction in code
+- Remove persona-specific initial-message construction from code
+- Make Overseer delegation comments the canonical task packet
 
 ### Phase 3
 
 - Tighten task messages so personas receive less generic issue context
-- Ensure Overseer handoffs reference files and task ids instead of prose summaries
+- Ensure Overseer handoffs use a structured delegation format with referenced files and task ids
 - Add tests asserting prompt file composition per persona
 
 ## Open Questions
@@ -268,6 +324,7 @@ That prevents silent fallback to the wrong persona prompt.
 - Whether `bots.json` should also own per-persona iteration limits.
 - Whether `bots.json` should allow provider-specific options beyond provider/model.
 - Whether `prompt_files` should allow optional includes based on runtime context, or remain strictly static.
+- Whether the generic dispatcher wrapper should include issue metadata fields in plain text, or whether the raw comment body alone is sufficient.
 
 ## Recommendation
 
@@ -276,6 +333,7 @@ Proceed with the refactor in the smallest useful slice:
 1. introduce `bots.json`
 2. move persona prompts into markdown files
 3. load and inject prompts at runtime
-4. leave the dispatcher state machine and persona task wiring alone
+4. pass the triggering comment body directly to the selected persona
+5. leave the dispatcher state machine and execution mechanics alone
 
-That gets the prompt surface under control first. Once prompt identity and composition are visible and stable, we can then simplify the task-message context separately without mixing both changes together.
+That gets the prompt surface and task packet model under control first. Once prompt identity and delegation content are both explicit and reviewable, the remaining behavior problems should be much easier to debug.
