@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 
@@ -58,6 +59,8 @@ interface SessionState {
 	iterations: Map<number, IterationState>;
 	lastIteration?: number;
 }
+
+let glowInstalled: boolean | undefined;
 
 function usage(): never {
 	console.error(
@@ -150,6 +153,52 @@ function formatBlock(label: string, value?: string) {
 	console.log("");
 }
 
+function hasGlow(): boolean {
+	if (glowInstalled !== undefined) {
+		return glowInstalled;
+	}
+
+	const result = spawnSync("glow", ["--version"], {
+		encoding: "utf8",
+		stdio: "ignore",
+	});
+	glowInstalled = result.status === 0;
+	return glowInstalled;
+}
+
+function inferCodeFenceLanguage(value: string): string {
+	const trimmed = value.trim();
+	if (
+		(trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+		(trimmed.startsWith("[") && trimmed.endsWith("]"))
+	) {
+		return "json";
+	}
+
+	return "text";
+}
+
+function renderMarkdownBlock(markdown: string) {
+	if (hasGlow()) {
+		const rendered = spawnSync("glow", ["-"], {
+			input: markdown,
+			encoding: "utf8",
+		});
+		if (rendered.status === 0) {
+			process.stdout.write(rendered.stdout);
+			if (!rendered.stdout.endsWith("\n")) {
+				process.stdout.write("\n");
+			}
+			return;
+		}
+	}
+
+	process.stdout.write(markdown);
+	if (!markdown.endsWith("\n")) {
+		process.stdout.write("\n");
+	}
+}
+
 function printDirectionalBlock(
 	label: string,
 	value: string | undefined,
@@ -162,7 +211,9 @@ function printDirectionalBlock(
 	console.log(marker.repeat(80));
 	console.log(label);
 	console.log(marker.repeat(80));
-	console.log(value);
+	renderMarkdownBlock(
+		`\`\`\`${inferCodeFenceLanguage(value)}\n${value}\n\`\`\`\n`,
+	);
 	console.log("");
 	return true;
 }
