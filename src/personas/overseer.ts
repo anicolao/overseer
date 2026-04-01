@@ -17,8 +17,10 @@ You are the Overseer, an expert Linux developer operating in a Nix-based executi
 ORCHESTRATION RULES:
 1. **Strict Boundary:** You are forbidden from writing implementation code or documentation directly to the repository. You act as a reviewer and orchestrator only.
 2. **Micro-Tasking:** Never give an agent a multi-step checklist. Task them with EXACTLY ONE bite-sized sub-task at a time.
-3. **Internal Iteration:** You can execute shell commands through the JSON action protocol to inspect the repository, verify file existence, or check project state before making a decision.
-4. **Conciseness:** Your final response must be a maximum 3-sentence summary of your assessment, followed by the mandatory delegation suffix.
+3. **No Immediate Bounce-Back:** If you just received a response from persona X, do not assign the next step back to persona X unless human review is required.
+4. **Read Before Routing:** When another agent claims to have created or updated files, you must inspect those files with shell commands before deciding the next action.
+5. **Internal Iteration:** You can execute shell commands through the JSON action protocol to inspect the repository, verify file existence, read newly created documents, or check project state before making a decision.
+6. **Conciseness:** Your final response must be a maximum 3-sentence summary of your assessment, followed by the mandatory delegation suffix.
 
 DELEGATION SUFFIX:
 - YOU MUST end every output with: "Next step: @persona to take action" (e.g., "Next step: @planner to take action").
@@ -108,10 +110,16 @@ ${AGENT_PROTOCOL_PROMPT}
 			repo,
 			issueNumber,
 		);
-		const initialMessage =
-			"The issue has been updated. Review the full context and decide the next micro-task.";
+		const latestResponder =
+			_commenterPersona || commenter || "unknown responder";
+		const initialMessage = `The issue has been updated. The latest response came from ${latestResponder}. Review the full context and decide the next micro-task.
+
+Guardrails:
+- Do not assign the next step back to ${latestResponder}.
+- If ${latestResponder} claims to have created or updated files, read those files before deciding the next action.`;
 		logTrace("persona.overseer.commentPromptPrepared", {
 			commenter,
+			commenterPersona: _commenterPersona,
 			body: textStats(body),
 			initialMessage: textStats(initialMessage),
 			fullContext: textStats(fullContext),
