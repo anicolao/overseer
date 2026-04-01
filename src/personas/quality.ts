@@ -32,42 +32,27 @@ Maintain a professional, critical but constructive, and high-quality-oriented ap
         console.log(`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`);
 
         const attribution = PersonaHelper.getAttribution('Quality', issueNumber, developer);
-        let context = `Issue Number: ${issueNumber}\nDeveloper: ${developer}\n`;
+        let context = await this.github.getFullIssueContext(owner, repo, issueNumber);
+        context += `\nDeveloper: ${developer}\n`;
 
         try {
-            // 1. Review specific PR if provided
+            // 1. Review specific PR metadata if provided
             if (prNumber > 0) {
                 const files = await this.github.getPullRequestFiles(owner, repo, prNumber);
-                context += `\nPull Request #${prNumber} Files:\n`;
+                context += `\nPull Request #${prNumber} changed the following files:\n`;
                 for (const file of files.data) {
-                    context += `\n--- File: ${file.filename} ---\n`;
-                    if (file.status !== 'removed') {
-                        try {
-                            const content = await this.github.getFileContent(owner, repo, file.filename, file.contents_url.split('ref=')[1] || 'main');
-                            context += content + '\n';
-                        } catch (e) {
-                            context += `(Could not fetch content: ${e instanceof Error ? e.message : String(e)})\n`;
-                        }
-                    }
+                    context += `- ${file.filename} (${file.status})\n`;
                 }
+                context += "\nUse [RUN: cat <file>] to review specific file contents from the PR.";
             } 
             
-            // 2. Always inspect the latest repository state for overall quality
-            context += "\n\n--- CURRENT REPOSITORY STATE (Source Files) ---\n";
-            const repoFiles = await this.github.getFilesRecursive(owner, repo, 'src');
-            for (const file of repoFiles) {
-                // Filter for source files to keep context manageable
-                if (file.path.endsWith('.ts') || file.path.endsWith('.js') || file.path.endsWith('.md')) {
-                    context += `\n--- File: ${file.path} ---\n`;
-                    context += file.content + '\n';
-                }
-            }
+            context += "\n\n--- ENVIRONMENT ---\nYou are in a Nix-based VM. Use [RUN: ls -R] or [RUN: find src] to explore the repository state.";
 
         } catch (error) {
-            context += `\nError gathering repository context: ${error instanceof Error ? error.message : String(error)}`;
+            context += `\nError gathering PR context: ${error instanceof Error ? error.message : String(error)}`;
         }
 
-        const userMessage = "A quality review has been requested. Please review the implementation and the overall repository state provided in the context above against the project requirements and engineering standards.";
+        const userMessage = "A quality review has been requested. Please review the implementation provided in the context and explore the repository as needed to ensure it meets project standards.";
 
         const response = await this.gemini.promptPersona(
             QualityPersona.SYSTEM_INSTRUCTION,

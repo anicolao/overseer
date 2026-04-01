@@ -33,9 +33,8 @@ Maintain a clear, concise, and structured approach.
         console.log(`Product/Architect handling mention from ${mentioner} in issue #${issueNumber}`);
         
         const attribution = PersonaHelper.getAttribution('Product/Architect', issueNumber, mentioner);
-        const issue = await this.github.getIssue(owner, repo, issueNumber);
-        const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nLatest mention body:\n${body}`;
-        const userMessage = "Define the requirements and design, and specify the file path to save them.";
+        const context = await this.github.getFullIssueContext(owner, repo, issueNumber);
+        const userMessage = "Define the requirements and design, and specify the file path to save them. Use [RUN:command] to explore if needed.";
 
         const response = await this.gemini.promptPersona(
             ProductArchitectPersona.SYSTEM_INSTRUCTION,
