@@ -58,7 +58,10 @@ export class ShellService {
 			actionCount: actions.length,
 			actions: actions.map((action) => ({
 				type: action.type,
-				command: textStats(action.command),
+				command:
+					action.type === "run_shell"
+						? textStats(action.command)
+						: textStats("persist_work"),
 			})),
 		});
 

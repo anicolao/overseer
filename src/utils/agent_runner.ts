@@ -5,12 +5,17 @@ import {
 	parseAgentProtocolResponse,
 } from "./agent_protocol.js";
 import type { GeminiService } from "./gemini.js";
+import type { PersistWorkResult } from "./persistence.js";
 import { ShellService } from "./shell.js";
 import { logTrace, textStats } from "./trace.js";
 
 export interface IterationResult {
 	finalResponse: string;
 	log: string;
+}
+
+export interface AgentRunnerOptions {
+	persistWork?: () => Promise<PersistWorkResult>;
 }
 
 export class AgentRunner {
@@ -26,6 +31,7 @@ export class AgentRunner {
 		systemInstruction: string,
 		initialMessage: string,
 		maxIterations: number = 50,
+		options: AgentRunnerOptions = {},
 	): Promise<IterationResult> {
 		logTrace("agent.loop.start", {
 			maxIterations,
@@ -88,16 +94,17 @@ export class AgentRunner {
 				};
 			}
 
-			const shellOutput = await this.shell.executeActions(
-				parsedResponse.protocol.actions,
+			const actionOutput = await this.executeAction(
+				parsedResponse.protocol.actions[0],
+				options,
 			);
-			logTrace("agent.iteration.shell", {
+			logTrace("agent.iteration.action", {
 				iteration,
-				hadShellOutput: Boolean(shellOutput),
-				shellOutput: textStats(shellOutput),
+				actionType: parsedResponse.protocol.actions[0]?.type,
+				actionOutput: textStats(actionOutput),
 			});
-			this.log(`SHELL OUTPUT: ${shellOutput}\n`);
-			currentMessage = buildContinuationMessage(shellOutput);
+			this.log(`ACTION OUTPUT: ${actionOutput}\n`);
+			currentMessage = buildContinuationMessage(actionOutput);
 		}
 
 		logTrace("agent.loop.maxIterationsReached", {
@@ -112,5 +119,36 @@ export class AgentRunner {
 	private log(text: string) {
 		this.sessionLog += text;
 		console.log(text);
+	}
+
+	private async executeAction(
+		action:
+			| ParsedAgentProtocolResponse["protocol"]["actions"][number]
+			| undefined,
+		options: AgentRunnerOptions,
+	): Promise<string> {
+		if (!action) {
+			return "ERROR: No action was supplied.";
+		}
+
+		if (action.type === "run_shell") {
+			return this.shell.executeActions([action]);
+		}
+
+		if (!options.persistWork) {
+			return JSON.stringify(
+				{
+					ok: false,
+					error_code: "persist_not_available",
+					message:
+						'persist_work is not available for this persona. Use "run_shell" instead.',
+				},
+				null,
+				2,
+			);
+		}
+
+		const result = await options.persistWork();
+		return JSON.stringify(result, null, 2);
 	}
 }
