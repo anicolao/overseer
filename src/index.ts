@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { GeminiService } from './utils/gemini.js';
 import { GitHubService } from './utils/github.js';
 import { OverseerPersona } from './personas/overseer.js';

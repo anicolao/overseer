@@ -1,7 +1,8 @@
 import { GeminiService } from '../utils/gemini.js';
 import { GitHubService } from '../utils/github.js';
 import { PersonaHelper } from '../utils/persona_helper.js';
-import { AgentRunner, IterationResult } from '../utils/agent_runner.js';
+import { AgentRunner } from '../utils/agent_runner.js';
+import type { IterationResult } from '../utils/agent_runner.js';
 
 export class DeveloperTesterPersona {
     private gemini: GeminiService;
