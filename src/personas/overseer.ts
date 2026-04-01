@@ -30,9 +30,6 @@ Task ID: <task identifier or "none">
 Plan File: <repo path or "none">
 Files To Read: <comma-separated repo paths or "none">
 Task Summary: <single actionable sentence>
-Acceptance Criteria:
-- <criterion 1>
-- <criterion 2>
 
 DELEGATION SUFFIX:
 - YOU MUST end every output with: "Next step: @persona to take action" (e.g., "Next step: @planner to take action").
