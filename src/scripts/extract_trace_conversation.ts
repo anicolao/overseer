@@ -154,21 +154,34 @@ function printDirectionalBlock(
 	label: string,
 	value: string | undefined,
 	marker: string,
-) {
+): boolean {
+	if (!value) {
+		return false;
+	}
+
 	console.log(marker.repeat(80));
 	console.log(label);
 	console.log(marker.repeat(80));
-	if (!value) {
-		console.log("<unavailable>");
-		console.log("");
-		return;
-	}
-
 	console.log(value);
 	console.log("");
+	return true;
 }
 
 function printSession(session: SessionState, llmOnly: boolean) {
+	const iterations = [...session.iterations.values()].sort(
+		(left, right) => left.number - right.number,
+	);
+	const hasTraffic =
+		Boolean(session.systemInstruction) ||
+		Boolean(session.initialMessage) ||
+		iterations.some(
+			(iteration) => Boolean(iteration.input) || Boolean(iteration.response),
+		);
+
+	if (llmOnly && !hasTraffic) {
+		return;
+	}
+
 	console.log("=".repeat(80));
 	console.log(`Trace ID: ${session.traceId}`);
 	console.log(`Persona: ${session.persona || "<unknown>"}`);
@@ -182,21 +195,26 @@ function printSession(session: SessionState, llmOnly: boolean) {
 	}
 	console.log("");
 
-	printDirectionalBlock(
+	const printedSystem = printDirectionalBlock(
 		"OUTBOUND TO LLM: SYSTEM INSTRUCTION",
 		session.systemInstruction,
 		">",
 	);
-	printDirectionalBlock(
+	const printedInitial = printDirectionalBlock(
 		"OUTBOUND TO LLM: INITIAL MESSAGE",
 		session.initialMessage,
 		">",
 	);
-
-	const iterations = [...session.iterations.values()].sort(
-		(left, right) => left.number - right.number,
-	);
+	if ((printedSystem || printedInitial) && iterations.length > 0) {
+		console.log("");
+	}
 	for (const iteration of iterations) {
+		const printedRequest = Boolean(iteration.input);
+		const printedResponse = Boolean(iteration.response);
+		if (!printedRequest && !printedResponse && llmOnly) {
+			continue;
+		}
+
 		console.log("-".repeat(80));
 		console.log(`Iteration ${iteration.number}`);
 		console.log("");
