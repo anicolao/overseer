@@ -12,6 +12,20 @@
         pkgs = import nixpkgs { inherit system; };
       in
       {
+        packages.default = pkgs.buildNpmPackage {
+          pname = "overseer";
+          version = "1.0.0";
+          src = ./.;
+          npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+          buildPhase = ''
+            npm run build
+          '';
+          installPhase = ''
+            mkdir -p $out/bin
+            cp -r dist/* $out/bin/ 2>/dev/null || cp -r . $out/bin/
+          '';
+        };
+
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             nodejs_20
