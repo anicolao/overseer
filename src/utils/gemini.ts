@@ -33,6 +33,16 @@ export interface GeminiChatSession {
 	): Promise<GeminiChatResult>;
 }
 
+function serializeContentForTrace(
+	content: string | Array<string | Part>,
+): string {
+	if (typeof content === "string") {
+		return content;
+	}
+
+	return JSON.stringify(content, null, 2);
+}
+
 export class GeminiService {
 	private genAI: GoogleGenerativeAI;
 	private model: GenerativeModel;
@@ -72,9 +82,13 @@ export class GeminiService {
 		logTrace("gemini.promptPersona.prepare", {
 			model: this.modelName,
 			systemInstruction: textStats(systemInstruction),
+			systemInstructionRaw: systemInstruction,
 			userMessage: textStats(userMessage),
+			userMessageRaw: userMessage,
 			context: textStats(context || "No additional context provided."),
+			contextRaw: context || "No additional context provided.",
 			fullPrompt: textStats(fullPrompt),
+			fullPromptRaw: fullPrompt,
 			requestTimeoutMs: this.requestTimeoutMs,
 		});
 		while (retries < maxRetries) {
@@ -97,6 +111,7 @@ export class GeminiService {
 					attempt,
 					durationMs: Date.now() - startedAt,
 					responseText: textStats(responseText),
+					responseTextRaw: responseText,
 					usageMetadata: response.usageMetadata,
 					promptFeedback: response.promptFeedback,
 				});
@@ -123,7 +138,9 @@ export class GeminiService {
 		logTrace("gemini.startChat", {
 			model: this.modelName,
 			systemInstruction: textStats(systemInstruction),
+			systemInstructionRaw: systemInstruction,
 			historyItems: history.length,
+			historyRaw: history,
 			requestTimeoutMs: this.requestTimeoutMs,
 			responseMimeType: "application/json",
 			responseProtocolVersion: AGENT_PROTOCOL_VERSION,
@@ -145,6 +162,7 @@ export class GeminiService {
 				let retries = 0;
 				const maxRetries = 3;
 				const contentSummary = describeContent(content);
+				const contentRaw = serializeContentForTrace(content);
 
 				while (retries < maxRetries) {
 					const attempt = retries + 1;
@@ -154,6 +172,7 @@ export class GeminiService {
 						attempt,
 						maxRetries,
 						content: contentSummary,
+						contentRaw,
 						requestTimeoutMs: this.requestTimeoutMs,
 						streaming: true,
 					});
@@ -192,7 +211,9 @@ export class GeminiService {
 							chunkCount,
 							firstChunkDelayMs,
 							responseText: textStats(responseText),
+							responseTextRaw: responseText,
 							streamedText: textStats(streamedText),
+							streamedTextRaw: streamedText,
 							candidateCount: response.candidates?.length ?? 0,
 							usageMetadata: response.usageMetadata,
 							promptFeedback: response.promptFeedback,
