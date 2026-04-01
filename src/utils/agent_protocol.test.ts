@@ -42,11 +42,27 @@ I will comply.
 {
   "version": "${AGENT_PROTOCOL_VERSION}",
   "next_step": "Review shell output.",
-  "actions": [{"type": "run_shell", "command": "cat package.json"}],
+ "actions": [{"type": "run_shell", "command": "cat package.json"}],
   "task_status": "in_progress"
 }`);
 
-		expect(parsed.protocol.actions[0]?.command).toBe("cat package.json");
+		expect(parsed.protocol.actions[0]).toEqual({
+			type: "run_shell",
+			command: "cat package.json",
+		});
+	});
+
+	it("parses persist_work actions", () => {
+		const parsed = parseAgentProtocolResponse(
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				next_step: "Persist the prepared plan.",
+				actions: [{ type: "persist_work" }],
+				task_status: "in_progress",
+			}),
+		);
+
+		expect(parsed.protocol.actions).toEqual([{ type: "persist_work" }]);
 	});
 
 	it("rejects done responses without final_response", () => {

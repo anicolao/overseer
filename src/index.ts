@@ -7,6 +7,7 @@ import { ProductArchitectPersona } from "./personas/product_architect.js";
 import { QualityPersona } from "./personas/quality.js";
 import { GeminiService } from "./utils/gemini.js";
 import { GitHubService } from "./utils/github.js";
+import { PersistenceService } from "./utils/persistence.js";
 
 // Initialize services (using env variables)
 const geminiApiKey = process.env.GEMINI_API_KEY || "";
@@ -15,12 +16,13 @@ const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "";
 
 const gemini = new GeminiService(geminiApiKey);
 const github = new GitHubService(githubToken);
+const persistence = new PersistenceService();
 
 const personas = {
 	overseer: new OverseerPersona(gemini, github),
-	productArchitect: new ProductArchitectPersona(gemini, github),
-	planner: new PlannerPersona(gemini, github),
-	developerTester: new DeveloperTesterPersona(gemini, github),
+	productArchitect: new ProductArchitectPersona(gemini, github, persistence),
+	planner: new PlannerPersona(gemini, github, persistence),
+	developerTester: new DeveloperTesterPersona(gemini, github, persistence),
 	quality: new QualityPersona(gemini, github),
 };
 

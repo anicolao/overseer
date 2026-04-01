@@ -7,7 +7,11 @@ export interface RunShellAction {
 	command: string;
 }
 
-export type AgentAction = RunShellAction;
+export interface PersistWorkAction {
+	type: "persist_work";
+}
+
+export type AgentAction = RunShellAction | PersistWorkAction;
 
 export interface AgentProtocolResponse {
 	version: typeof AGENT_PROTOCOL_VERSION;
@@ -28,7 +32,9 @@ RESPONSE PROTOCOL:
 - Return exactly one JSON object and nothing else.
 - Use \`"version": "${AGENT_PROTOCOL_VERSION}"\`.
 - Always include \`next_step\`, \`actions\`, and \`task_status\`.
-- If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and exactly one action: \`{"type":"run_shell","command":"..."}\`.
+- If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and exactly one action.
+- Use \`{"type":"run_shell","command":"..."}\` for repository inspection, file edits, and verification commands.
+- Use \`{"type":"persist_work"}\` only when your persona is authorized to publish repo changes and you want the dispatcher-owned persistence mechanism to commit and push your work.
 - If the task is complete, respond with \`"task_status": "done"\`, \`"actions": []\`, and \`final_response\` containing the concise human-facing summary that should be posted back to GitHub.
 - Do not use \`[RUN:command]\`, markdown fences, or prose outside the JSON object.
 `;
@@ -46,10 +52,10 @@ export function buildProtocolRepairMessage(
 	].join("\n\n");
 }
 
-export function buildContinuationMessage(shellOutput: string): string {
+export function buildContinuationMessage(actionOutput: string): string {
 	return [
-		"SHELL OUTPUT:",
-		shellOutput,
+		"ACTION OUTPUT:",
+		actionOutput,
 		"",
 		`Continue the task using protocol "${AGENT_PROTOCOL_VERSION}".`,
 		"Return exactly one JSON object.",
@@ -237,14 +243,26 @@ function parseAction(value: unknown, index: number): AgentAction {
 	}
 
 	const record = value as Record<string, unknown>;
-	if (record.type !== "run_shell") {
-		throw new Error(`actions[${index}].type must be "run_shell"`);
+	const type = requireNonEmptyString(record.type, `actions[${index}].type`);
+	if (type === "run_shell") {
+		return {
+			type: "run_shell",
+			command: requireNonEmptyString(
+				record.command,
+				`actions[${index}].command`,
+			),
+		};
 	}
 
-	return {
-		type: "run_shell",
-		command: requireNonEmptyString(record.command, `actions[${index}].command`),
-	};
+	if (type === "persist_work") {
+		return {
+			type: "persist_work",
+		};
+	}
+
+	throw new Error(
+		`actions[${index}].type must be "run_shell" or "persist_work"`,
+	);
 }
 
 function parseOptionalPlan(value: unknown): string[] | undefined {

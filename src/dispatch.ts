@@ -7,8 +7,8 @@ import { QualityPersona } from "./personas/quality.js";
 import type { IterationResult } from "./utils/agent_runner.js";
 import { GeminiService } from "./utils/gemini.js";
 import { GitHubService } from "./utils/github.js";
+import { PersistenceService } from "./utils/persistence.js";
 import { getAttribution } from "./utils/persona_helper.js";
-import { ShellService } from "./utils/shell.js";
 import { truncate } from "./utils/text.js";
 import {
 	logTrace,
@@ -30,13 +30,13 @@ async function run() {
 
 	const gemini = new GeminiService(geminiApiKey);
 	const github = new GitHubService(githubToken);
-	const shell = new ShellService();
+	const persistence = new PersistenceService();
 
 	const personas = {
 		overseer: new OverseerPersona(gemini, github),
-		productArchitect: new ProductArchitectPersona(gemini, github),
-		planner: new PlannerPersona(gemini, github),
-		developerTester: new DeveloperTesterPersona(gemini, github),
+		productArchitect: new ProductArchitectPersona(gemini, github, persistence),
+		planner: new PlannerPersona(gemini, github, persistence),
+		developerTester: new DeveloperTesterPersona(gemini, github, persistence),
 		quality: new QualityPersona(gemini, github),
 	};
 
@@ -69,6 +69,12 @@ async function run() {
 		console.log(`Ignoring event type: ${eventName}`);
 		return;
 	}
+
+	const branchState = await persistence.ensureIssueBranch(issueNumber);
+	logTrace("dispatcher.issueBranch.ready", {
+		branchName: branchState.branchName,
+		created: branchState.created,
+	});
 
 	const labels = await github.getIssueLabels(owner, repo, issueNumber);
 	const activePersonaLabel = labels.find((l) =>
@@ -324,7 +330,6 @@ async function run() {
 			});
 			await finalizeRun(
 				github,
-				shell,
 				owner,
 				repo,
 				issueNumber,
@@ -342,7 +347,6 @@ async function run() {
 
 async function finalizeRun(
 	github: GitHubService,
-	shell: ShellService,
 	owner: string,
 	repo: string,
 	issueNumber: number,
@@ -358,25 +362,7 @@ async function finalizeRun(
 	const logPath = `session_${persona}_${Date.now()}.log`;
 	fs.writeFileSync(logPath, result.log);
 
-	// 2. Automated Persistence
-	if (["developer-tester", "product-architect", "planner"].includes(persona)) {
-		console.log(
-			`Specialized agent ${persona} finished. Attempting automated persistence...`,
-		);
-		const branchName = `bot/issue-${issueNumber}`;
-		await shell.executeCommand('git config --global user.name "Overseer Bot"');
-		await shell.executeCommand(
-			'git config --global user.email "overseer-bot@users.noreply.github.com"',
-		);
-		await shell.executeCommand(
-			`git add . && git commit -m "Auto-commit: ${persona} work for #${issueNumber}" || echo "No changes to commit"`,
-		);
-		await shell.executeCommand(
-			`git push origin HEAD:${branchName} || echo "No changes to push"`,
-		);
-	}
-
-	// 3. Determine Next Persona
+	// 2. Determine Next Persona
 	let nextPersona: string | null = null;
 	if (persona !== "overseer") {
 		nextPersona = "overseer";
@@ -388,10 +374,10 @@ async function finalizeRun(
 		}
 	}
 
-	// 4. Update State
+	// 3. Update State
 	await github.setActivePersona(owner, repo, issueNumber, nextPersona);
 
-	// 5. Build Final Response with Hardcoded Attribution
+	// 4. Build Final Response with Hardcoded Attribution
 	const runId = process.env.GITHUB_RUN_ID;
 	const artifactLink = runId
 		? `\n\n[View Full Execution Log](https://github.com/${owner}/${repo}/actions/runs/${runId})`

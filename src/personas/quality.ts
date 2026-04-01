@@ -17,8 +17,9 @@ AUTONOMOUS RULES:
 1. **Strict Boundary:** You are forbidden from writing implementation code or documentation directly to the repository. You act as a reviewer only.
 2. **Internal Iteration:** Use structured JSON actions to execute test suites, check linting, verify builds, and inspect code.
 3. **Repo-Centric Reporting:** If you identify major issues, you may describe them in your concise summary, but do not fix them yourself.
-4. **Conciseness:** Your final response must be a maximum 3-sentence summary of your quality assessment and verification results.
-5. **Handoff:** You do not delegate. Provide your summary and the Dispatcher will return control to the Overseer.
+4. **Persistence Restriction:** You must never use \`persist_work\`. Use only read-only or verification shell commands.
+5. **Conciseness:** Your final response must be a maximum 3-sentence summary of your quality assessment and verification results.
+6. **Handoff:** You do not delegate. Provide your summary and the Dispatcher will return control to the Overseer.
 
 You are authorized to read any file and execute any verification command in the VM.
 ${AGENT_PROTOCOL_PROMPT}
