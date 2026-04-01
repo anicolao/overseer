@@ -25,35 +25,8 @@ export interface PersistWorkResult {
 	details?: Record<string, string | string[] | number | boolean>;
 }
 
-export function parsePorcelainPaths(statusOutput: string): string[] {
-	const entries = statusOutput.split("\0").filter(Boolean);
-	const paths: string[] = [];
-
-	for (let index = 0; index < entries.length; index++) {
-		const entry = entries[index];
-		if (!entry || entry.length < 4) {
-			continue;
-		}
-
-		const status = entry.slice(0, 2);
-		const path = entry.slice(3);
-		if (!path) {
-			continue;
-		}
-
-		if (status.includes("R") || status.includes("C")) {
-			const renamedPath = entries[index + 1];
-			if (renamedPath) {
-				paths.push(renamedPath);
-				index++;
-				continue;
-			}
-		}
-
-		paths.push(path);
-	}
-
-	return Array.from(new Set(paths));
+export function parseNullDelimitedPaths(output: string): string[] {
+	return Array.from(new Set(output.split("\0").filter(Boolean)));
 }
 
 export class PersistenceService {
@@ -145,7 +118,19 @@ export class PersistenceService {
 		}
 
 		const aheadCount = await this.getAheadCount(branch);
-		const changedFiles = await this.getRelevantChangedPaths();
+
+		try {
+			await this.stageRelevantChanges(branch);
+		} catch (error) {
+			return this.makeErrorResult(
+				branch,
+				"stage_failed",
+				"Failed to stage repository changes for persistence.",
+				error,
+			);
+		}
+
+		const changedFiles = await this.getStagedChangedPaths();
 		if (changedFiles.length === 0 && aheadCount === 0) {
 			return {
 				ok: false,
@@ -190,21 +175,6 @@ export class PersistenceService {
 				changed_files: pushedFiles,
 				message: `Pushed ${aheadCount} existing local commit(s) to ${branch}.`,
 			};
-		}
-
-		try {
-			await this.runGit(["add", "--", ...changedFiles], "persistence.stage", {
-				branch,
-				changedFiles,
-			});
-		} catch (error) {
-			return this.makeErrorResult(
-				branch,
-				"stage_failed",
-				"Failed to stage repository changes for persistence.",
-				error,
-				{ changed_files: changedFiles },
-			);
 		}
 
 		const commitMessage = `${persona}: issue #${issueNumber} persist work`;
@@ -291,15 +261,28 @@ export class PersistenceService {
 		return `bot/issue-${issueNumber}`;
 	}
 
-	private async getRelevantChangedPaths(): Promise<string[]> {
-		const statusResult = await this.runGit(
-			["status", "--porcelain=1", "-z", "--untracked-files=all"],
-			"persistence.status",
+	private async stageRelevantChanges(branch: string): Promise<void> {
+		await this.runGit(
+			[
+				"add",
+				"-A",
+				"--",
+				".",
+				":(glob,exclude).backstop/**",
+				":(glob,exclude)session_*.log",
+			],
+			"persistence.stage",
+			{ branch },
 		);
-		const rawPaths = parsePorcelainPaths(statusResult.stdout);
+	}
 
-		return Array.from(
-			new Set(rawPaths.filter((path) => !this.isIgnoredPath(path))),
+	private async getStagedChangedPaths(): Promise<string[]> {
+		const result = await this.runGit(
+			["diff", "--cached", "--name-only", "-z"],
+			"persistence.stagedChangedPaths",
+		);
+		return parseNullDelimitedPaths(result.stdout).filter(
+			(path) => !this.isIgnoredPath(path),
 		);
 	}
 
@@ -339,15 +322,13 @@ export class PersistenceService {
 		branchName: string,
 	): Promise<string[]> {
 		const result = await this.runGit(
-			["diff", "--name-only", `origin/${branchName}..HEAD`],
+			["diff", "--name-only", "-z", `origin/${branchName}..HEAD`],
 			"persistence.changedFilesAgainstRemote",
 			{ branchName },
 		);
-		return result.stdout
-			.split("\n")
-			.map((line) => line.trim())
-			.filter(Boolean)
-			.filter((path) => !this.isIgnoredPath(path));
+		return parseNullDelimitedPaths(result.stdout).filter(
+			(path) => !this.isIgnoredPath(path),
+		);
 	}
 
 	private classifyPushFailure(stderr: string): string {

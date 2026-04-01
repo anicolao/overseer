@@ -1,25 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { parsePorcelainPaths } from "./persistence.js";
+import { parseNullDelimitedPaths } from "./persistence.js";
 
-describe("parsePorcelainPaths", () => {
-	it("parses added, modified, and untracked entries without status prefixes", () => {
+describe("parseNullDelimitedPaths", () => {
+	it("preserves complete filenames from null-delimited git output", () => {
 		const output =
-			" A flake.lock\0 M package-lock.json\0?? docs/architecture/V2_ARCHITECTURE_DESIGN.md\0";
+			"flake.lock\0package-lock.json\0docs/architecture/V2_ARCHITECTURE_DESIGN.md\0";
 
-		expect(parsePorcelainPaths(output)).toEqual([
+		expect(parseNullDelimitedPaths(output)).toEqual([
 			"flake.lock",
 			"package-lock.json",
 			"docs/architecture/V2_ARCHITECTURE_DESIGN.md",
 		]);
 	});
 
-	it("uses the destination path for renames", () => {
-		const output =
-			"R  docs/old-name.md\0docs/new-name.md\0?? docs/plans/plan.md\0";
+	it("drops empty records and de-duplicates paths", () => {
+		const output = "\0docs/plans/plan.md\0docs/plans/plan.md\0\0";
 
-		expect(parsePorcelainPaths(output)).toEqual([
-			"docs/new-name.md",
-			"docs/plans/plan.md",
-		]);
+		expect(parseNullDelimitedPaths(output)).toEqual(["docs/plans/plan.md"]);
 	});
 });
