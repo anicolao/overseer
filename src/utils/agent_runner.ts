@@ -19,7 +19,7 @@ export class AgentRunner {
         gemini: GeminiService,
         systemInstruction: string,
         initialMessage: string,
-        maxIterations: number = 10
+        maxIterations: number = 50
     ): Promise<IterationResult> {
         const chat = gemini.startChat(systemInstruction);
         let currentMessage = initialMessage;
