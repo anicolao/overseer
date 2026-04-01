@@ -8,11 +8,11 @@ import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
 import type { PersistenceService } from "../utils/persistence.js";
+import { extractDirectedTask } from "../utils/persona_helper.js";
 import { logTrace, textStats } from "../utils/trace.js";
 
 export class DeveloperTesterPersona {
 	private gemini: GeminiService;
-	private github: GitHubService;
 	private persistence: PersistenceService;
 	private runner: AgentRunner;
 
@@ -33,18 +33,17 @@ ${AGENT_PROTOCOL_PROMPT}
 
 	constructor(
 		gemini: GeminiService,
-		github: GitHubService,
+		_github: GitHubService,
 		persistence: PersistenceService,
 	) {
 		this.gemini = gemini;
-		this.github = github;
 		this.persistence = persistence;
 		this.runner = new AgentRunnerClass();
 	}
 
 	async handleTask(
-		owner: string,
-		repo: string,
+		_owner: string,
+		_repo: string,
 		issueNumber: number,
 		taskDescription: string,
 		_commentUrl?: string,
@@ -54,21 +53,16 @@ ${AGENT_PROTOCOL_PROMPT}
 			`Developer/Tester handling task for issue #${issueNumber}: ${taskDescription}`,
 		);
 
-		const fullContext = await this.github.getFullIssueContext(
-			owner,
-			repo,
-			issueNumber,
-		);
-		const initialMessage = `The Overseer has tasked you with implementation: ${taskDescription}
+		const directedTask = extractDirectedTask(taskDescription);
+		const initialMessage = `The Overseer has tasked you with implementation: ${directedTask}
 
 Target persistence branch: bot/issue-${issueNumber}
 
 Please proceed with the Plan-Act-Verify cycle in the repository. Use persist_work when the changes are ready, and do not finish until you verify the remote issue branch contains your intended result.`;
 		logTrace("persona.developerTester.promptPrepared", {
 			taskDescription: textStats(taskDescription),
+			directedTask: textStats(directedTask),
 			initialMessage: textStats(initialMessage),
-			fullContext: textStats(fullContext),
-			combinedInput: textStats(`${initialMessage}\n\nCONTEXT:\n${fullContext}`),
 		});
 
 		const runnerOptions: AgentRunnerOptions = {
@@ -79,7 +73,7 @@ Please proceed with the Plan-Act-Verify cycle in the repository. Use persist_wor
 		return this.runner.runAutonomousLoop(
 			this.gemini,
 			DeveloperTesterPersona.SYSTEM_INSTRUCTION,
-			`${initialMessage}\n\nCONTEXT:\n${fullContext}`,
+			initialMessage,
 			50,
 			runnerOptions,
 		);

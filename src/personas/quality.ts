@@ -3,11 +3,11 @@ import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
+import { extractDirectedTask } from "../utils/persona_helper.js";
 import { logTrace, textStats } from "../utils/trace.js";
 
 export class QualityPersona {
 	private gemini: GeminiService;
-	private github: GitHubService;
 	private runner: AgentRunner;
 
 	static readonly SYSTEM_INSTRUCTION = `
@@ -25,15 +25,14 @@ You are authorized to read any file and execute any verification command in the 
 ${AGENT_PROTOCOL_PROMPT}
 	`;
 
-	constructor(gemini: GeminiService, github: GitHubService) {
+	constructor(gemini: GeminiService, _github: GitHubService) {
 		this.gemini = gemini;
-		this.github = github;
 		this.runner = new AgentRunnerClass();
 	}
 
 	async handleReviewRequest(
-		owner: string,
-		repo: string,
+		_owner: string,
+		_repo: string,
 		issueNumber: number,
 		prNumber: number,
 		developer: string,
@@ -44,24 +43,21 @@ ${AGENT_PROTOCOL_PROMPT}
 			`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`,
 		);
 
-		const fullContext = await this.github.getFullIssueContext(
-			owner,
-			repo,
-			issueNumber,
+		const directedTask = extractDirectedTask(
+			`A quality review has been requested for PR #${prNumber}. Please verify the implementation against project standards using the available tools.`,
 		);
-		const initialMessage = `A quality review has been requested for PR #${prNumber}. Please verify the implementation against project standards using the available tools.`;
+		const initialMessage = directedTask;
 		logTrace("persona.quality.promptPrepared", {
 			developer,
 			prNumber,
+			directedTask: textStats(directedTask),
 			initialMessage: textStats(initialMessage),
-			fullContext: textStats(fullContext),
-			combinedInput: textStats(`${initialMessage}\n\nCONTEXT:\n${fullContext}`),
 		});
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,
 			QualityPersona.SYSTEM_INSTRUCTION,
-			`${initialMessage}\n\nCONTEXT:\n${fullContext}`,
+			initialMessage,
 		);
 	}
 }

@@ -148,6 +148,8 @@ cat >"$artifact_root/metadata.json" <<EOF
 EOF
 
 cat >"$comment_path" <<EOF
+<!-- overseer:persistence-backstop -->
+
 The workflow persistence backstop detected repo changes that were not verified on \`${target_branch}\`.
 
 - Run: ${run_url}
