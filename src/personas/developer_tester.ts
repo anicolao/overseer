@@ -33,8 +33,8 @@ Always strive for high-quality, well-tested, and idiomatically correct code.
         console.log(`Developer/Tester handling task for issue #${issueNumber}: ${taskDescription}`);
         
         const attribution = PersonaHelper.getAttribution('Developer/Tester', issueNumber);
-        const context = `Task Description: ${taskDescription}`;
-        const userMessage = "A new task has been assigned to you. Please implement the requested changes.";
+        const context = await this.github.getFullIssueContext(owner, repo, issueNumber);
+        const userMessage = `A new task has been assigned to you: ${taskDescription}\n\nPlease implement the requested changes. Use [RUN:command] to explore the codebase if needed.`;
 
         const response = await this.gemini.promptPersona(
             DeveloperTesterPersona.SYSTEM_INSTRUCTION,

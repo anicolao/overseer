@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { GeminiService } from './utils/gemini.js';
 import { GitHubService } from './utils/github.js';
 import { ShellService } from './utils/shell.js';
+import { truncate } from './utils/text.js';
 import { OverseerPersona } from './personas/overseer.js';
 import { ProductArchitectPersona } from './personas/product_architect.js';
 import { PlannerPersona } from './personas/planner.js';
@@ -102,7 +103,7 @@ async function run() {
         let shouldExecute = false;
 
         if (activePersona === 'overseer') {
-            // Overseer always runs when it has the token, even without a mention
+            // Overseer always runs when it has the token
             shouldExecute = true;
             executedPersona = 'overseer';
         } else if (activePersona !== null) {
@@ -142,28 +143,42 @@ async function run() {
 
         if (shouldExecute && executedPersona) {
             console.log(`Executing persona: ${executedPersona}`);
-            if (executedPersona === 'overseer') {
-                responseContent = await personas.overseer.handleComment(owner, repo, issueNumber, sender, body);
-            } else if (executedPersona === 'product-architect') {
-                responseContent = await personas.productArchitect.handleMention(owner, repo, issueNumber, sender, body);
-            } else if (executedPersona === 'planner') {
-                responseContent = await personas.planner.handleMention(owner, repo, issueNumber, sender, body);
-            } else if (executedPersona === 'developer-tester') {
-                responseContent = await personas.developerTester.handleTask(owner, repo, issueNumber, body);
-            } else if (executedPersona === 'quality') {
-                const prMatch = body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
-                const prNumber = prMatch ? parseInt(prMatch[1], 10) : 0;
-                responseContent = await personas.quality.handleReviewRequest(owner, repo, issueNumber, prNumber, sender);
+            try {
+                if (executedPersona === 'overseer') {
+                    responseContent = await personas.overseer.handleComment(owner, repo, issueNumber, sender, body);
+                } else if (executedPersona === 'product-architect') {
+                    responseContent = await personas.productArchitect.handleMention(owner, repo, issueNumber, sender, body);
+                } else if (executedPersona === 'planner') {
+                    responseContent = await personas.planner.handleMention(owner, repo, issueNumber, sender, body);
+                } else if (executedPersona === 'developer-tester') {
+                    responseContent = await personas.developerTester.handleTask(owner, repo, issueNumber, body);
+                } else if (executedPersona === 'quality') {
+                    const prMatch = body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
+                    const prNumber = prMatch ? parseInt(prMatch[1], 10) : 0;
+                    responseContent = await personas.quality.handleReviewRequest(owner, repo, issueNumber, prNumber, sender);
+                }
+            } catch (error) {
+                console.error(`Persona logic failed: ${executedPersona}`, error);
+                responseContent = `ERROR: ${executedPersona} failed during execution. Details: ${error instanceof Error ? error.message : String(error)}`;
             }
         }
     }
 
     if (responseContent && executedPersona) {
         // 4. Shell Execution: Parse and run any [RUN] blocks in the response
-        const shellOutput = await shell.executeAllBlocks(responseContent);
-        if (shellOutput) {
-            responseContent += "\n\n### Shell Execution Results\n" + shellOutput;
+        let shellOutput = '';
+        try {
+            shellOutput = await shell.executeAllBlocks(responseContent);
+        } catch (error) {
+            shellOutput = `ERROR during shell execution: ${error instanceof Error ? error.message : String(error)}`;
         }
+
+        if (shellOutput) {
+            responseContent += "\n\n### Shell Execution Results\n" + truncate(shellOutput, 20000);
+        }
+
+        // Final Truncation to fit GitHub limits
+        responseContent = truncate(responseContent, 60000);
 
         // 5. Atomic Transition: Determine next persona, set label, THEN post comment
         let nextPersona: string | null = null;
@@ -200,7 +215,14 @@ async function run() {
 
         console.log(`Setting next active persona: ${nextPersona}`);
         await github.setActivePersona(owner, repo, issueNumber, nextPersona);
-        await github.addCommentToIssue(owner, repo, issueNumber, responseContent);
+        
+        try {
+            await github.addCommentToIssue(owner, repo, issueNumber, responseContent);
+        } catch (error) {
+            console.error("Failed to post comment, attempting a smaller one", error);
+            const fallback = `I am the ${executedPersona}. I finished my task, but my full response was too large to post as a GitHub comment. I have returned control to the hub.\n\nNext step: @overseer to take action`;
+            await github.addCommentToIssue(owner, repo, issueNumber, fallback);
+        }
     }
 }
 

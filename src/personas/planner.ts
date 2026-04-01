@@ -31,9 +31,8 @@ Maintain a highly structured, task-oriented approach. Use clear and descriptive 
         console.log(`Planner handling mention from ${mentioner} in issue #${issueNumber}`);
         
         const attribution = PersonaHelper.getAttribution('Planner', issueNumber, mentioner);
-        const issue = await this.github.getIssue(owner, repo, issueNumber);
-        const context = `Issue: ${issue.data.title}\n\nDescription:\n${issue.data.body}\n\nLatest mention body:\n${body}`;
-        const userMessage = "The design is ready. Please break it down into actionable tasks.";
+        const context = await this.github.getFullIssueContext(owner, repo, issueNumber);
+        const userMessage = "The design is ready. Please break it down into actionable tasks. Use [RUN:command] to explore if needed.";
 
         const response = await this.gemini.promptPersona(
             PlannerPersona.SYSTEM_INSTRUCTION,
