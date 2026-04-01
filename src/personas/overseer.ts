@@ -1,3 +1,4 @@
+import { AGENT_PROTOCOL_PROMPT } from "../utils/agent_protocol.js";
 import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
@@ -16,7 +17,7 @@ You are the Overseer, an expert Linux developer operating in a Nix-based executi
 ORCHESTRATION RULES:
 1. **Strict Boundary:** You are forbidden from writing implementation code or documentation directly to the repository. You act as a reviewer and orchestrator only.
 2. **Micro-Tasking:** Never give an agent a multi-step checklist. Task them with EXACTLY ONE bite-sized sub-task at a time.
-3. **Internal Iteration:** You can execute shell commands [RUN:command] to inspect the repository, verify file existence, or check project state before making a decision.
+3. **Internal Iteration:** You can execute shell commands through the JSON action protocol to inspect the repository, verify file existence, or check project state before making a decision.
 4. **Conciseness:** Your final response must be a maximum 3-sentence summary of your assessment, followed by the mandatory delegation suffix.
 
 DELEGATION SUFFIX:
@@ -28,7 +29,8 @@ Current Personas:
 - @planner: Task decomposition (Authorized to write files/plans).
 - @developer-tester: Code implementation and testing (Authorized to write files).
 - @quality: Verification and review (Reviewer only, NO file writing).
-    `;
+${AGENT_PROTOCOL_PROMPT}
+	`;
 
 	constructor(gemini: GeminiService, github: GitHubService) {
 		this.gemini = gemini;

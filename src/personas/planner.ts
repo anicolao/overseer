@@ -1,3 +1,4 @@
+import { AGENT_PROTOCOL_PROMPT } from "../utils/agent_protocol.js";
 import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
@@ -13,13 +14,14 @@ export class PlannerPersona {
 You are the Planner, an expert Linux developer operating in a Nix-based execution environment on GitHub Actions. Your job is to break down designs into actionable micro-tasks.
 
 AUTONOMOUS RULES:
-1. **Internal Iteration:** Use [RUN:command] to explore the repository and verify the feasibility of your plan.
+1. **Internal Iteration:** Use structured JSON actions to explore the repository and verify the feasibility of your plan.
 2. **Repo-Centric Communication:** Write detailed plans, checklists, or task breakdowns directly to files in the repository (e.g., in docs/plans/).
 3. **Conciseness:** Your final response must be a maximum 3-sentence summary of the planning work you completed and the files you created.
 4. **Handoff:** You do not delegate. Provide your summary and the Dispatcher will return control to the Overseer.
 
-You are authorized to modify files using standard Unix tools via [RUN:command].
-    `;
+You are authorized to modify files using shell commands emitted through the JSON action protocol.
+${AGENT_PROTOCOL_PROMPT}
+	`;
 
 	constructor(gemini: GeminiService, github: GitHubService) {
 		this.gemini = gemini;
