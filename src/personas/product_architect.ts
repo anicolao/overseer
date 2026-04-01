@@ -2,6 +2,7 @@ import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
+import { logTrace, textStats } from "../utils/trace.js";
 
 export class ProductArchitectPersona {
 	private gemini: GeminiService;
@@ -45,6 +46,13 @@ You are authorized to modify files using [RUN:command] (cat, sed, etc.) or stand
 			issueNumber,
 		);
 		const initialMessage = `The Overseer has tasked you with a micro-task: ${body}\n\nPlease proceed with defining the requirements/design in the repository.`;
+		logTrace("persona.productArchitect.promptPrepared", {
+			mentioner,
+			body: textStats(body),
+			initialMessage: textStats(initialMessage),
+			fullContext: textStats(fullContext),
+			combinedInput: textStats(`${initialMessage}\n\nCONTEXT:\n${fullContext}`),
+		});
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,

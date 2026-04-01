@@ -2,6 +2,7 @@ import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
+import { logTrace, textStats } from "../utils/trace.js";
 
 export class QualityPersona {
 	private gemini: GeminiService;
@@ -46,6 +47,13 @@ You are authorized to read any file and execute any verification command in the 
 			issueNumber,
 		);
 		const initialMessage = `A quality review has been requested for PR #${prNumber}. Please verify the implementation against project standards using the available tools.`;
+		logTrace("persona.quality.promptPrepared", {
+			developer,
+			prNumber,
+			initialMessage: textStats(initialMessage),
+			fullContext: textStats(fullContext),
+			combinedInput: textStats(`${initialMessage}\n\nCONTEXT:\n${fullContext}`),
+		});
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,

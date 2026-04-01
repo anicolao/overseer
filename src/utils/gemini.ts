@@ -4,6 +4,13 @@ import {
 	type GenerativeModel,
 	GoogleGenerativeAI,
 } from "@google/generative-ai";
+import {
+	describeContent,
+	installFetchInstrumentation,
+	logTrace,
+	serializeError,
+	textStats,
+} from "./trace.js";
 
 export interface PersonaResponse {
 	content: string;
@@ -14,11 +21,14 @@ export interface PersonaResponse {
 export class GeminiService {
 	private genAI: GoogleGenerativeAI;
 	private model: GenerativeModel;
+	private readonly modelName: string;
 
 	constructor(apiKey: string) {
+		this.modelName = "gemini-3.1-pro-preview";
+		installFetchInstrumentation();
 		this.genAI = new GoogleGenerativeAI(apiKey);
 		this.model = this.genAI.getGenerativeModel({
-			model: "gemini-3.1-pro-preview",
+			model: this.modelName,
 		});
 	}
 
@@ -40,17 +50,42 @@ export class GeminiService {
 
 		let retries = 0;
 		const maxRetries = 3;
+		logTrace("gemini.promptPersona.prepare", {
+			model: this.modelName,
+			systemInstruction: textStats(systemInstruction),
+			userMessage: textStats(userMessage),
+			context: textStats(context || "No additional context provided."),
+			fullPrompt: textStats(fullPrompt),
+		});
 		while (retries < maxRetries) {
+			const attempt = retries + 1;
+			const startedAt = Date.now();
+			logTrace("gemini.promptPersona.begin", {
+				model: this.modelName,
+				attempt,
+				maxRetries,
+			});
 			try {
 				const result = await this.model.generateContent(fullPrompt);
 				const response = await result.response;
-				return response.text();
+				const responseText = response.text();
+				logTrace("gemini.promptPersona.success", {
+					model: this.modelName,
+					attempt,
+					durationMs: Date.now() - startedAt,
+					responseText: textStats(responseText),
+					usageMetadata: response.usageMetadata,
+					promptFeedback: response.promptFeedback,
+				});
+				return responseText;
 			} catch (error) {
 				retries++;
-				console.error(
-					`Gemini promptPersona failed (attempt ${retries}/${maxRetries}):`,
-					error,
-				);
+				logTrace("gemini.promptPersona.error", {
+					model: this.modelName,
+					attempt,
+					durationMs: Date.now() - startedAt,
+					error: serializeError(error),
+				});
 				if (retries === maxRetries) throw error;
 				await new Promise((resolve) => setTimeout(resolve, 2000 * retries));
 			}
@@ -62,6 +97,11 @@ export class GeminiService {
 	 * Starts a stateful chat session for autonomous iteration.
 	 */
 	startChat(systemInstruction: string, history: Content[] = []): ChatSession {
+		logTrace("gemini.startChat", {
+			model: this.modelName,
+			systemInstruction: textStats(systemInstruction),
+			historyItems: history.length,
+		});
 		const chat = this.model.startChat({
 			history,
 			systemInstruction: {
@@ -75,15 +115,36 @@ export class GeminiService {
 		chat.sendMessage = async (content) => {
 			let retries = 0;
 			const maxRetries = 3;
+			const contentSummary = describeContent(content);
 			while (retries < maxRetries) {
+				const attempt = retries + 1;
+				const startedAt = Date.now();
+				logTrace("gemini.sendMessage.begin", {
+					model: this.modelName,
+					attempt,
+					maxRetries,
+					content: contentSummary,
+				});
 				try {
-					return await originalSendMessage(content);
+					const result = await originalSendMessage(content);
+					const response = await result.response;
+					logTrace("gemini.sendMessage.success", {
+						model: this.modelName,
+						attempt,
+						durationMs: Date.now() - startedAt,
+						candidateCount: response.candidates?.length ?? 0,
+						usageMetadata: response.usageMetadata,
+						promptFeedback: response.promptFeedback,
+					});
+					return result;
 				} catch (error) {
 					retries++;
-					console.error(
-						`Gemini sendMessage failed (attempt ${retries}/${maxRetries}):`,
-						error,
-					);
+					logTrace("gemini.sendMessage.error", {
+						model: this.modelName,
+						attempt,
+						durationMs: Date.now() - startedAt,
+						error: serializeError(error),
+					});
 					if (retries === maxRetries) throw error;
 					await new Promise((resolve) => setTimeout(resolve, 2000 * retries));
 				}

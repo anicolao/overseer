@@ -2,6 +2,7 @@ import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
+import { logTrace, textStats } from "../utils/trace.js";
 
 export class DeveloperTesterPersona {
 	private gemini: GeminiService;
@@ -45,6 +46,12 @@ You are authorized to modify any file in the repository using standard Unix tool
 			issueNumber,
 		);
 		const initialMessage = `The Overseer has tasked you with implementation: ${taskDescription}\n\nPlease proceed with the Plan-Act-Verify cycle in the repository.`;
+		logTrace("persona.developerTester.promptPrepared", {
+			taskDescription: textStats(taskDescription),
+			initialMessage: textStats(initialMessage),
+			fullContext: textStats(fullContext),
+			combinedInput: textStats(`${initialMessage}\n\nCONTEXT:\n${fullContext}`),
+		});
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,
