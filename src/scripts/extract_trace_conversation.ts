@@ -63,8 +63,8 @@ function usage(): never {
 	console.error(
 		[
 			"Usage:",
-			"  npm run trace:conversation -- <trace.jsonl> [--trace-id <id>] [--persona <name>]",
-			"  npx tsx src/scripts/extract_trace_conversation.ts <trace.jsonl> [--trace-id <id>] [--persona <name>]",
+			"  npm run trace:conversation -- <trace.jsonl> [--trace-id <id>] [--persona <name>] [--llm-only]",
+			"  npx tsx src/scripts/extract_trace_conversation.ts <trace.jsonl> [--trace-id <id>] [--persona <name>] [--llm-only]",
 		].join("\n"),
 	);
 	process.exit(1);
@@ -78,6 +78,7 @@ function parseArgs(argv: string[]) {
 	let filePath = "";
 	let traceIdFilter: string | undefined;
 	let personaFilter: string | undefined;
+	let llmOnly = false;
 
 	for (let index = 0; index < argv.length; index++) {
 		const value = argv[index];
@@ -87,6 +88,10 @@ function parseArgs(argv: string[]) {
 		}
 		if (value === "--persona") {
 			personaFilter = argv[++index];
+			continue;
+		}
+		if (value === "--llm-only") {
+			llmOnly = true;
 			continue;
 		}
 		if (!filePath) {
@@ -100,7 +105,7 @@ function parseArgs(argv: string[]) {
 		usage();
 	}
 
-	return { filePath, traceIdFilter, personaFilter };
+	return { filePath, traceIdFilter, personaFilter, llmOnly };
 }
 
 function ensureIteration(
@@ -145,7 +150,25 @@ function formatBlock(label: string, value?: string) {
 	console.log("");
 }
 
-function printSession(session: SessionState) {
+function printDirectionalBlock(
+	label: string,
+	value: string | undefined,
+	marker: string,
+) {
+	console.log(marker.repeat(80));
+	console.log(label);
+	console.log(marker.repeat(80));
+	if (!value) {
+		console.log("<unavailable>");
+		console.log("");
+		return;
+	}
+
+	console.log(value);
+	console.log("");
+}
+
+function printSession(session: SessionState, llmOnly: boolean) {
 	console.log("=".repeat(80));
 	console.log(`Trace ID: ${session.traceId}`);
 	console.log(`Persona: ${session.persona || "<unknown>"}`);
@@ -159,8 +182,16 @@ function printSession(session: SessionState) {
 	}
 	console.log("");
 
-	formatBlock("System Instruction", session.systemInstruction);
-	formatBlock("Initial Message", session.initialMessage);
+	printDirectionalBlock(
+		"OUTBOUND TO LLM: SYSTEM INSTRUCTION",
+		session.systemInstruction,
+		">",
+	);
+	printDirectionalBlock(
+		"OUTBOUND TO LLM: INITIAL MESSAGE",
+		session.initialMessage,
+		">",
+	);
 
 	const iterations = [...session.iterations.values()].sort(
 		(left, right) => left.number - right.number,
@@ -169,8 +200,20 @@ function printSession(session: SessionState) {
 		console.log("-".repeat(80));
 		console.log(`Iteration ${iteration.number}`);
 		console.log("");
-		formatBlock("Input", iteration.input);
-		formatBlock("Response", iteration.response);
+		printDirectionalBlock(
+			`OUTBOUND TO LLM: ITERATION ${iteration.number} REQUEST`,
+			iteration.input,
+			">",
+		);
+		printDirectionalBlock(
+			`INBOUND FROM LLM: ITERATION ${iteration.number} RESPONSE`,
+			iteration.response,
+			"<",
+		);
+
+		if (llmOnly) {
+			continue;
+		}
 
 		if (
 			iteration.taskStatus ||
@@ -211,7 +254,7 @@ function printSession(session: SessionState) {
 }
 
 function main() {
-	const { filePath, traceIdFilter, personaFilter } = parseArgs(
+	const { filePath, traceIdFilter, personaFilter, llmOnly } = parseArgs(
 		process.argv.slice(2),
 	);
 	const sessions = new Map<string, SessionState>();
@@ -316,7 +359,7 @@ function main() {
 		if (index > 0) {
 			console.log("");
 		}
-		printSession(session);
+		printSession(session, llmOnly);
 	}
 }
 
