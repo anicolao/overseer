@@ -1,81 +1,38 @@
 import { GeminiService } from '../utils/gemini.js';
 import { GitHubService } from '../utils/github.js';
 import { PersonaHelper } from '../utils/persona_helper.js';
+import { AgentRunner, IterationResult } from '../utils/agent_runner.js';
 
 export class ProductArchitectPersona {
     private gemini: GeminiService;
     private github: GitHubService;
+    private runner: AgentRunner;
 
     static readonly SYSTEM_INSTRUCTION = `
-You are the Product/Architect, an expert Linux developer operating in a Nix-based execution environment on GitHub Actions. Your job is to define user requirements and high-level technical designs for the Overseer project.
+You are the Product/Architect, an expert Linux developer operating in a Nix-based execution environment on GitHub Actions. Your job is to define requirements and high-level technical designs.
 
-Environment & Capabilities:
-- You have full shell access to the repository workspace.
-- You can execute commands using the syntax: [RUN:command]. The output will be provided to you or appended to the issue.
-- You can read and write files directly using standard Unix tools (cat, grep, sed, etc.) or the [FILE] syntax.
-- You can modify 'flake.nix' to install new software dependencies.
+AUTONOMOUS RULES:
+1. **Internal Iteration:** Use [RUN:command] to explore the codebase and verify your design before finalizing.
+2. **Repo-Centric Communication:** Write detailed requirements and architectural documents directly to files in the repository (e.g., in docs/architecture/).
+3. **Conciseness:** Your final response must be a maximum 3-sentence summary of the files you created or updated. DO NOT include the full content of the documents in your final comment.
+4. **Handoff:** You do not delegate. Simply provide your summary and the Dispatcher will return control to the Overseer.
 
-When tasked by the Overseer, you must:
-1.  Analyze the vision.
-2.  Provide detailed Markdown requirements and design.
-3.  Specify the exact file path where this design should be saved in the repo.
-4.  Use the format: [FILE:path/to/file.md]...content...[/FILE] to indicate the file contents.
-
-Maintain a clear, concise, and structured approach.
+You are authorized to modify files using [RUN:command] (cat, sed, etc.) or standard Unix tools.
     `;
 
     constructor(gemini: GeminiService, github: GitHubService) {
         this.gemini = gemini;
         this.github = github;
+        this.runner = new AgentRunner();
     }
 
-    async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string): Promise<string> {
+    async handleMention(owner: string, repo: string, issueNumber: number, mentioner: string, body: string): Promise<IterationResult> {
         console.log(`Product/Architect handling mention from ${mentioner} in issue #${issueNumber}`);
         
         const attribution = PersonaHelper.getAttribution('Product/Architect', issueNumber, mentioner);
-        const context = await this.github.getFullIssueContext(owner, repo, issueNumber);
-        const userMessage = "Define the requirements and design, and specify the file path to save them. Use [RUN:command] to explore if needed.";
+        const fullContext = await this.github.getFullIssueContext(owner, repo, issueNumber);
+        const initialMessage = `${attribution}\nThe Overseer has tasked you with a micro-task: ${body}\n\nPlease proceed with defining the requirements/design in the repository.`;
 
-        const response = await this.gemini.promptPersona(
-            ProductArchitectPersona.SYSTEM_INSTRUCTION,
-            userMessage,
-            context
-        );
-
-        // Parse multiple files if present
-        const fileRegex = /\[FILE:(.+?)\]([\s\S]+?)\[\/FILE\]/g;
-        let match;
-        let filePaths = [];
-        
-        const branchName = `bot/architect-design-${issueNumber}`;
-        let branchCreated = false;
-
-        while ((match = fileRegex.exec(response)) !== null) {
-            if (!branchCreated) {
-                try {
-                    await this.github.createBranch(owner, repo, branchName);
-                } catch (e) {
-                    console.log(`Branch ${branchName} already exists or could not be created.`);
-                }
-                branchCreated = true;
-            }
-            const filePath = match[1];
-            const content = match[2].trim();
-            filePaths.push(filePath);
-            await this.github.createOrUpdateFile(owner, repo, filePath, `docs: architect design for #${issueNumber}`, content, branchName);
-        }
-
-        let finalComment = attribution + response;
-        if (filePaths.length > 0) {
-            try {
-                const pr = await this.github.createPullRequest(owner, repo, `Architect Design: issue #${issueNumber}`, `Automated PR by Product/Architect for issue #${issueNumber}`, branchName);
-                finalComment += `\n\nA new design PR has been created: #${pr.data.number} (${pr.data.html_url})`;
-            } catch (e) {
-                finalComment += `\n\nExisting design PR for branch ${branchName} has been updated with new changes.`;
-            }
-            finalComment += `\n\nI have created/updated the following design documents: ${filePaths.join(', ')}.`;
-        }
-
-        return finalComment;
+        return this.runner.runAutonomousLoop(this.gemini, ProductArchitectPersona.SYSTEM_INSTRUCTION, initialMessage + "\n\nCONTEXT:\n" + fullContext);
     }
 }

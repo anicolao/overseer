@@ -1,83 +1,39 @@
 import { GeminiService } from '../utils/gemini.js';
 import { GitHubService } from '../utils/github.js';
 import { PersonaHelper } from '../utils/persona_helper.js';
+import { AgentRunner, IterationResult } from '../utils/agent_runner.js';
 
 export class DeveloperTesterPersona {
     private gemini: GeminiService;
     private github: GitHubService;
+    private runner: AgentRunner;
 
     static readonly SYSTEM_INSTRUCTION = `
-You are the Developer/Tester, an expert Linux developer operating in a Nix-based execution environment on GitHub Actions. Your job is to implement code and functional tests for the Overseer project.
+You are the Developer/Tester, an expert Linux developer operating in a Nix-based execution environment on GitHub Actions. Your job is to implement code and functional tests.
 
-Environment & Capabilities:
-- You have full shell access to the repository workspace.
-- You can execute commands using the syntax: [RUN:command]. Use this to run tests, build code, and verify your changes.
-- You can read and write files directly using standard Unix tools or the [FILE] syntax.
-- You can modify 'flake.nix' to install new software dependencies.
+AUTONOMOUS RULES:
+1. **Plan-Act-Verify:** Always use [RUN:command] to explore the codebase, apply changes, and then run verification commands (lint, test, build).
+2. **Persistence:** Use standard git commands to commit and push your changes to your working branch.
+3. **Repo-Centric Communication:** Large amounts of technical detail should be in code comments or documentation files.
+4. **Conciseness:** Your final response must be a maximum 3-sentence summary of the changes you implemented and the verification results.
+5. **Handoff:** You do not delegate. Provide your summary and the Dispatcher will return control to the Overseer.
 
-When the Planner or Overseer tasks you, you must:
-1.  Implement the requested feature or fix.
-2.  Include automated functional tests for your changes.
-3.  Specify the exact file paths for your code and tests.
-4.  Use the format: [FILE:path/to/file.ts]...content...[/FILE] to indicate the file contents.
-
-Always strive for high-quality, well-tested, and idiomatically correct code.
+You are authorized to modify any file in the repository using standard Unix tools via [RUN:command].
     `;
 
     constructor(gemini: GeminiService, github: GitHubService) {
         this.gemini = gemini;
         this.github = github;
+        this.runner = new AgentRunner();
     }
 
-    async handleTask(owner: string, repo: string, issueNumber: number, taskDescription: string): Promise<string> {
+    async handleTask(owner: string, repo: string, issueNumber: number, taskDescription: string): Promise<IterationResult> {
         console.log(`Developer/Tester handling task for issue #${issueNumber}: ${taskDescription}`);
         
         const attribution = PersonaHelper.getAttribution('Developer/Tester', issueNumber);
-        const context = await this.github.getFullIssueContext(owner, repo, issueNumber);
-        const userMessage = `A new task has been assigned to you: ${taskDescription}\n\nPlease implement the requested changes. Use [RUN:command] to explore the codebase if needed.`;
+        const fullContext = await this.github.getFullIssueContext(owner, repo, issueNumber);
+        const initialMessage = `${attribution}\nThe Overseer has tasked you with implementation: ${taskDescription}\n\nPlease proceed with the Plan-Act-Verify cycle in the repository.`;
 
-        const response = await this.gemini.promptPersona(
-            DeveloperTesterPersona.SYSTEM_INSTRUCTION,
-            userMessage,
-            context
-        );
-
-        // Parse multiple files if present
-        const fileRegex = /\[FILE:(.+?)\]([\s\S]+?)\[\/FILE\]/g;
-        let match;
-        let filePaths = [];
-        
-        const branchName = `bot/issue-${issueNumber}`;
-        let branchCreated = false;
-
-        while ((match = fileRegex.exec(response)) !== null) {
-            if (!branchCreated) {
-                try {
-                    await this.github.createBranch(owner, repo, branchName);
-                } catch (e) {
-                    // Branch might already exist, which is fine for update
-                    console.log(`Branch ${branchName} already exists or could not be created.`);
-                }
-                branchCreated = true;
-            }
-            const filePath = match[1];
-            const content = match[2].trim();
-            filePaths.push(filePath);
-            await this.github.createOrUpdateFile(owner, repo, filePath, `feat: implementation for #${issueNumber}`, content, branchName);
-        }
-
-        let finalComment = attribution + response;
-        if (filePaths.length > 0) {
-            try {
-                const pr = await this.github.createPullRequest(owner, repo, `Resolve issue #${issueNumber}`, `Automated PR by Developer/Tester for issue #${issueNumber}`, branchName);
-                finalComment += `\n\nA new PR has been created: #${pr.data.number} (${pr.data.html_url})`;
-            } catch (e) {
-                // PR might already exist
-                finalComment += `\n\nExisting PR for branch ${branchName} has been updated with new changes.`;
-            }
-            finalComment += `\n\nI have implemented the following files: ${filePaths.join(', ')}.`;
-        }
-
-        return finalComment;
+        return this.runner.runAutonomousLoop(this.gemini, DeveloperTesterPersona.SYSTEM_INSTRUCTION, initialMessage + "\n\nCONTEXT:\n" + fullContext);
     }
 }

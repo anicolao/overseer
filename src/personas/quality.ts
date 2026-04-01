@@ -1,73 +1,39 @@
 import { GeminiService } from '../utils/gemini.js';
 import { GitHubService } from '../utils/github.js';
 import { PersonaHelper } from '../utils/persona_helper.js';
+import { AgentRunner, IterationResult } from '../utils/agent_runner.js';
 
 export class QualityPersona {
     private gemini: GeminiService;
     private github: GitHubService;
+    private runner: AgentRunner;
 
     static readonly SYSTEM_INSTRUCTION = `
-You are the Quality agent, an expert Linux developer operating in a Nix-based execution environment on GitHub Actions. Your job is to verify and review the work of developers and testers.
+You are the Quality agent, an expert Linux developer operating in a Nix-based execution environment on GitHub Actions. Your job is to verify and review the work of others.
 
-Environment & Capabilities:
-- You have full shell access to the repository workspace.
-- You can execute commands using the syntax: [RUN:command]. Use this to run test suites, check linting, and verify builds.
-- You can read files directly using standard Unix tools or the [FILE] syntax.
+AUTONOMOUS RULES:
+1. **Strict Boundary:** You are forbidden from writing implementation code or documentation directly to the repository. You act as a reviewer only.
+2. **Internal Iteration:** Use [RUN:command] to execute test suites, check linting, verify builds, and inspect code.
+3. **Repo-Centric Reporting:** If you identify major issues, you may describe them in your concise summary, but do not fix them yourself.
+4. **Conciseness:** Your final response must be a maximum 3-sentence summary of your quality assessment and verification results.
+5. **Handoff:** You do not delegate. Provide your summary and the Dispatcher will return control to the Overseer.
 
-Your primary responsibilities include:
-1. Reviewing Pull Requests for code quality, architectural consistency, and adherence to requirements.
-2. Verifying that the functional tests cover the necessary requirements.
-3. Providing constructive feedback to the developer.
-4. Marking the work as approved once it meets the project's high standards.
-
-Maintain a professional, critical but constructive, and high-quality-oriented approach.
+You are authorized to read any file and execute any verification command in the VM.
     `;
 
     constructor(gemini: GeminiService, github: GitHubService) {
         this.gemini = gemini;
         this.github = github;
+        this.runner = new AgentRunner();
     }
 
-    async handleReviewRequest(owner: string, repo: string, issueNumber: number, prNumber: number, developer: string): Promise<string> {
+    async handleReviewRequest(owner: string, repo: string, issueNumber: number, prNumber: number, developer: string): Promise<IterationResult> {
         console.log(`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`);
 
         const attribution = PersonaHelper.getAttribution('Quality', issueNumber, developer);
-        let context = await this.github.getFullIssueContext(owner, repo, issueNumber);
-        context += `\nDeveloper: ${developer}\n`;
+        const fullContext = await this.github.getFullIssueContext(owner, repo, issueNumber);
+        const initialMessage = `${attribution}\nA quality review has been requested for PR #${prNumber}. Please verify the implementation against project standards using the available tools.`;
 
-        try {
-            // 1. Review specific PR metadata if provided
-            if (prNumber > 0) {
-                const files = await this.github.getPullRequestFiles(owner, repo, prNumber);
-                context += `\nPull Request #${prNumber} changed the following files:\n`;
-                for (const file of files.data) {
-                    context += `- ${file.filename} (${file.status})\n`;
-                }
-                context += "\nUse [RUN: cat <file>] to review specific file contents from the PR.";
-            } 
-            
-            context += "\n\n--- CURRENT REPOSITORY STATE (Source Files) ---\n";
-            const repoFiles = await this.github.getFilesRecursive(owner, repo, 'src');
-            for (const file of repoFiles) {
-                // Filter for source files to keep context manageable
-                if (file.path.endsWith('.ts') || file.path.endsWith('.js') || file.path.endsWith('.md')) {
-                    context += `\n--- File: ${file.path} ---\n`;
-                    context += file.content + '\n';
-                }
-            }
-
-        } catch (error) {
-            context += `\nError gathering repository context: ${error instanceof Error ? error.message : String(error)}`;
-        }
-
-        const userMessage = "A quality review has been requested. Please review the implementation and the overall repository state provided in the context above against the project requirements and engineering standards.";
-
-        const response = await this.gemini.promptPersona(
-            QualityPersona.SYSTEM_INSTRUCTION,
-            userMessage,
-            context
-        );
-
-        return attribution + response;
+        return this.runner.runAutonomousLoop(this.gemini, QualityPersona.SYSTEM_INSTRUCTION, initialMessage + "\n\nCONTEXT:\n" + fullContext);
     }
 }
