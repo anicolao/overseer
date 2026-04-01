@@ -94,6 +94,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.OVERSEER_TOKEN || secrets.GITHUB_TOKEN }}
+          TRACE_JSONL_PATH: trace_${{ github.run_id }}.jsonl
         run: nix develop --command npx tsx src/dispatch.ts
 
       - name: Persistence Backstop
@@ -126,3 +127,12 @@ jobs:
           name: agent-session-logs-${{ github.run_id }}
           path: session_*.log
           retention-days: 7
+
+      - name: Upload Trace JSONL
+        if: always() && steps.backstop_guard.outputs.skip_workflow != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: trace-jsonl-${{ github.run_id }}
+          path: trace_*.jsonl
+          retention-days: 7
+          if-no-files-found: warn

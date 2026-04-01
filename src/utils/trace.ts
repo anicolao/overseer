@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 export interface TraceContext {
 	traceId: string;
@@ -18,6 +20,23 @@ const traceStorage = new AsyncLocalStorage<TraceContext>();
 
 let fetchInstrumentationInstalled = false;
 let fetchCallSequence = 0;
+let traceJsonlPathInitialized = false;
+
+function getTraceJsonlPath(): string {
+	return (
+		process.env.TRACE_JSONL_PATH ||
+		`trace_${process.env.GITHUB_RUN_ID || "local"}.jsonl`
+	);
+}
+
+function ensureTraceJsonlParentDir() {
+	if (traceJsonlPathInitialized) {
+		return;
+	}
+
+	traceJsonlPathInitialized = true;
+	mkdirSync(dirname(getTraceJsonlPath()), { recursive: true });
+}
 
 export function makeTraceId(parts: {
 	runId?: string;
@@ -150,7 +169,17 @@ export function logTrace(
 		...data,
 	};
 
-	console.log(`[TRACE] ${safeJsonStringify(payload)}`);
+	const serializedPayload = safeJsonStringify(payload);
+	console.log(`[TRACE] ${serializedPayload}`);
+
+	try {
+		ensureTraceJsonlParentDir();
+		appendFileSync(getTraceJsonlPath(), `${serializedPayload}\n`, "utf8");
+	} catch (error) {
+		console.error(
+			`[TRACE_WRITE_ERROR] ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 }
 
 export function installFetchInstrumentation() {
