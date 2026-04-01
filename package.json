@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "prepare": "npx simple-git-hooks"
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -30,12 +30,9 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
-    "simple-git-hooks": "^2.13.1",
+    "husky": "^9.1.7",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "npx tsc --noEmit"
   }
 }
