@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel, ChatSession, Content } from '@google/generative-ai';
 
 export interface PersonaResponse {
     content: string;
@@ -12,7 +12,6 @@ export class GeminiService {
 
     constructor(apiKey: string) {
         this.genAI = new GoogleGenerativeAI(apiKey);
-        // Using Gemini 3.1 Pro Preview as requested (migrating from deprecated 3.0)
         this.model = this.genAI.getGenerativeModel({ 
             model: "gemini-3.1-pro-preview" 
         });
@@ -37,5 +36,18 @@ ${userMessage}
         const result = await this.model.generateContent(fullPrompt);
         const response = await result.response;
         return response.text();
+    }
+
+    /**
+     * Starts a stateful chat session for autonomous iteration.
+     */
+    startChat(systemInstruction: string, history: Content[] = []): ChatSession {
+        return this.model.startChat({
+            history,
+            systemInstruction: {
+                role: "system",
+                parts: [{ text: systemInstruction }]
+            }
+        });
     }
 }

@@ -42,3 +42,11 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.OVERSEER_TOKEN || secrets.GITHUB_TOKEN }}
         run: nix develop --command npx tsx src/dispatch.ts
+
+      - name: Upload Session Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-session-logs-${{ github.run_id }}
+          path: session_*.log
+          retention-days: 7
