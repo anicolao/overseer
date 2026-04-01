@@ -19,6 +19,19 @@ export function getAttribution(
 	return `I am the **${personaName}**, and I am responding to ${source} from ${target}.\n\n`;
 }
 
+export function extractDirectedTask(body: string): string {
+	let task = body.trim();
+
+	task = task.replace(
+		/^I am the \*\*Overseer\*\*, and I am responding to [\s\S]*?\.\n\n/,
+		"",
+	);
+	task = task.replace(/\n*\s*Next step: @[a-z-]+ to take action\.?\s*$/i, "");
+	task = task.replace(/\n*\s*Next step: human review required\.?\s*$/i, "");
+
+	return task.trim();
+}
+
 export async function isLimitReached(
 	github: GitHubService,
 	owner: string,

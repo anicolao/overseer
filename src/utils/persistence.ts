@@ -25,11 +25,55 @@ export interface PersistWorkResult {
 	details?: Record<string, string | string[] | number | boolean>;
 }
 
+export function parsePorcelainPaths(statusOutput: string): string[] {
+	const entries = statusOutput.split("\0").filter(Boolean);
+	const paths: string[] = [];
+
+	for (let index = 0; index < entries.length; index++) {
+		const entry = entries[index];
+		if (!entry || entry.length < 4) {
+			continue;
+		}
+
+		const status = entry.slice(0, 2);
+		const path = entry.slice(3);
+		if (!path) {
+			continue;
+		}
+
+		if (status.includes("R") || status.includes("C")) {
+			const renamedPath = entries[index + 1];
+			if (renamedPath) {
+				paths.push(renamedPath);
+				index++;
+				continue;
+			}
+		}
+
+		paths.push(path);
+	}
+
+	return Array.from(new Set(paths));
+}
+
 export class PersistenceService {
 	async ensureIssueBranch(
 		issueNumber: number,
 	): Promise<EnsureIssueBranchResult> {
 		const branchName = this.getBranchName(issueNumber);
+		await this.runGit(
+			["config", "--global", "user.name", "Overseer Bot"],
+			"persistence.gitConfigUserName",
+		);
+		await this.runGit(
+			[
+				"config",
+				"--global",
+				"user.email",
+				"overseer-bot@users.noreply.github.com",
+			],
+			"persistence.gitConfigUserEmail",
+		);
 		await this.runGit(["fetch", "origin"], "persistence.fetchOrigin");
 
 		const remoteExists = await this.remoteBranchExists(branchName);
@@ -249,21 +293,10 @@ export class PersistenceService {
 
 	private async getRelevantChangedPaths(): Promise<string[]> {
 		const statusResult = await this.runGit(
-			["status", "--porcelain=1", "--untracked-files=all"],
+			["status", "--porcelain=1", "-z", "--untracked-files=all"],
 			"persistence.status",
 		);
-		const rawPaths = statusResult.stdout
-			.split("\n")
-			.map((line) => line.trim())
-			.filter(Boolean)
-			.map((line) => line.replace(/^[A-Z? ]{2}\s+/, ""))
-			.map((line) => {
-				if (line.includes(" -> ")) {
-					const [, targetPath] = line.split(" -> ");
-					return targetPath || line;
-				}
-				return line;
-			});
+		const rawPaths = parsePorcelainPaths(statusResult.stdout);
 
 		return Array.from(
 			new Set(rawPaths.filter((path) => !this.isIgnoredPath(path))),

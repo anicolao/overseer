@@ -21,28 +21,53 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Detect Backstop Sentinel
+        id: backstop_guard
+        run: |
+          skip_workflow=false
+          if [ "${GITHUB_EVENT_NAME}" = "issue_comment" ]; then
+            comment_body="$(jq -r '.comment.body // ""' "$GITHUB_EVENT_PATH")"
+            if printf '%s' "$comment_body" | grep -Fq '<!-- overseer:persistence-backstop -->'; then
+              skip_workflow=true
+              echo "Skipping workflow because it was triggered by a persistence backstop comment."
+            fi
+          fi
+          echo "skip_workflow=${skip_workflow}" >> "$GITHUB_OUTPUT"
+
       - name: Record Initial Git State
         id: git_state
+        if: steps.backstop_guard.outputs.skip_workflow != 'true'
         run: echo "initial_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Install Nix
+        if: steps.backstop_guard.outputs.skip_workflow != 'true'
         uses: cachix/install-nix-action@v27
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Magic Nix Cache
+        if: steps.backstop_guard.outputs.skip_workflow != 'true'
         uses: DeterminateSystems/magic-nix-cache-action@v7
 
       - name: Setup Node.js
+        if: steps.backstop_guard.outputs.skip_workflow != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
+      - name: Configure Git Identity
+        if: steps.backstop_guard.outputs.skip_workflow != 'true'
+        run: |
+          git config --global user.name "Overseer Bot"
+          git config --global user.email "overseer-bot@users.noreply.github.com"
+
       - name: Install Dependencies
+        if: steps.backstop_guard.outputs.skip_workflow != 'true'
         run: npm install
 
       - name: Run Overseer Dispatcher
         id: dispatcher
+        if: steps.backstop_guard.outputs.skip_workflow != 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.OVERSEER_TOKEN || secrets.GITHUB_TOKEN }}
@@ -50,7 +75,7 @@ jobs:
 
       - name: Persistence Backstop
         id: persistence_backstop
-        if: always()
+        if: always() && steps.backstop_guard.outputs.skip_workflow != 'true'
         env:
           INITIAL_SHA: ${{ steps.git_state.outputs.initial_sha }}
         run: bash .github/scripts/persistence_backstop.sh
@@ -72,7 +97,7 @@ jobs:
             --body-file "${{ steps.persistence_backstop.outputs.comment_path }}"
 
       - name: Upload Session Logs
-        if: always()
+        if: always() && steps.backstop_guard.outputs.skip_workflow != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: agent-session-logs-${{ github.run_id }}
