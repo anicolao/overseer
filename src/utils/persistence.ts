@@ -49,7 +49,27 @@ export class PersistenceService {
 		);
 		await this.runGit(["fetch", "origin"], "persistence.fetchOrigin");
 
+		const currentBranch = (
+			await this.runGit(
+				["rev-parse", "--abbrev-ref", "HEAD"],
+				"persistence.currentBranch",
+			)
+		).stdout.trim();
 		const remoteExists = await this.remoteBranchExists(branchName);
+		if (currentBranch === branchName) {
+			if (!remoteExists) {
+				await this.runGit(
+					["push", "-u", "origin", branchName],
+					"persistence.pushCurrentBranch",
+					{ branchName },
+				);
+			}
+			return {
+				branchName,
+				created: !remoteExists,
+			};
+		}
+
 		if (remoteExists) {
 			await this.runGit(
 				["checkout", "-B", branchName, `origin/${branchName}`],

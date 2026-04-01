@@ -34,6 +34,29 @@ jobs:
           fi
           echo "skip_workflow=${skip_workflow}" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare Issue Branch
+        id: issue_branch
+        if: steps.backstop_guard.outputs.skip_workflow != 'true'
+        run: |
+          prepared=false
+          issue_number="$(jq -r '.issue.number // empty' "$GITHUB_EVENT_PATH")"
+          if [ -n "$issue_number" ]; then
+            target_branch="bot/issue-${issue_number}"
+            git fetch origin "$target_branch" || true
+            if git show-ref --verify --quiet "refs/remotes/origin/${target_branch}"; then
+              git checkout -B "$target_branch" "origin/$target_branch"
+              echo "created=false" >> "$GITHUB_OUTPUT"
+            else
+              git checkout -B "$target_branch" "origin/main"
+              git push -u origin "$target_branch"
+              echo "created=true" >> "$GITHUB_OUTPUT"
+            fi
+            echo "issue_number=${issue_number}" >> "$GITHUB_OUTPUT"
+            echo "target_branch=${target_branch}" >> "$GITHUB_OUTPUT"
+            prepared=true
+          fi
+          echo "prepared=${prepared}" >> "$GITHUB_OUTPUT"
+
       - name: Record Initial Git State
         id: git_state
         if: steps.backstop_guard.outputs.skip_workflow != 'true'
