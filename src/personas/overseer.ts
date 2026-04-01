@@ -1,15 +1,15 @@
-import { GeminiService } from '../utils/gemini.js';
-import { GitHubService } from '../utils/github.js';
-import { PersonaHelper } from '../utils/persona_helper.js';
-import { AgentRunner } from '../utils/agent_runner.js';
-import type { IterationResult } from '../utils/agent_runner.js';
+import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
+import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
+import type { GeminiService } from "../utils/gemini.js";
+import type { GitHubService } from "../utils/github.js";
+import { getAttribution, isLimitReached } from "../utils/persona_helper.js";
 
 export class OverseerPersona {
-    private gemini: GeminiService;
-    private github: GitHubService;
-    private runner: AgentRunner;
+	private gemini: GeminiService;
+	private github: GitHubService;
+	private runner: AgentRunner;
 
-    static readonly SYSTEM_INSTRUCTION = `
+	static readonly SYSTEM_INSTRUCTION = `
 You are the Overseer, an expert Linux developer operating in a Nix-based execution environment on GitHub Actions. Your job is to orchestrate a team of AI agent personas.
 
 ORCHESTRATION RULES:
@@ -29,37 +29,82 @@ Current Personas:
 - @quality: Verification and review (Reviewer only, NO file writing).
     `;
 
-    constructor(gemini: GeminiService, github: GitHubService) {
-        this.gemini = gemini;
-        this.github = github;
-        this.runner = new AgentRunner();
-    }
+	constructor(gemini: GeminiService, github: GitHubService) {
+		this.gemini = gemini;
+		this.github = github;
+		this.runner = new AgentRunnerClass();
+	}
 
-    async handleNewIssue(owner: string, repo: string, issueNumber: number, title: string, body: string): Promise<IterationResult> {
-        console.log(`Overseer handling new issue #${issueNumber}: ${title}`);
-        
-        if (await PersonaHelper.isLimitReached(this.github, owner, repo, issueNumber, 'Overseer', '@overseer', body)) {
-            return { finalResponse: '', log: 'Limit reached' };
-        }
+	async handleNewIssue(
+		owner: string,
+		repo: string,
+		issueNumber: number,
+		title: string,
+		body: string,
+	): Promise<IterationResult> {
+		console.log(`Overseer handling new issue #${issueNumber}: ${title}`);
 
-        const attribution = PersonaHelper.getAttribution('Overseer', issueNumber);
-        const context = `ISSUE TITLE: ${title}\nISSUE BODY:\n${body}`;
-        const initialMessage = `${attribution}\nA new vision has been proposed. Please review the repository state and initiate the first micro-task.`;
+		if (
+			await isLimitReached(
+				this.github,
+				owner,
+				repo,
+				issueNumber,
+				"Overseer",
+				"@overseer",
+				body,
+			)
+		) {
+			return { finalResponse: "", log: "Limit reached" };
+		}
 
-        return this.runner.runAutonomousLoop(this.gemini, OverseerPersona.SYSTEM_INSTRUCTION, initialMessage);
-    }
+		const attribution = getAttribution("Overseer", issueNumber);
+		const initialMessage = `${attribution}\nA new vision has been proposed. Please review the repository state and initiate the first micro-task.`;
 
-    async handleComment(owner: string, repo: string, issueNumber: number, commenter: string, body: string): Promise<IterationResult> {
-        console.log(`Overseer handling comment from ${commenter} on issue #${issueNumber}`);
-        
-        if (await PersonaHelper.isLimitReached(this.github, owner, repo, issueNumber, 'Overseer', '@overseer', body)) {
-            return { finalResponse: '', log: 'Limit reached' };
-        }
+		return this.runner.runAutonomousLoop(
+			this.gemini,
+			OverseerPersona.SYSTEM_INSTRUCTION,
+			initialMessage,
+		);
+	}
 
-        const attribution = PersonaHelper.getAttribution('Overseer', issueNumber, commenter);
-        const fullContext = await this.github.getFullIssueContext(owner, repo, issueNumber);
-        const initialMessage = `${attribution}\nThe issue has been updated. Review the full context and decide the next micro-task.`;
+	async handleComment(
+		owner: string,
+		repo: string,
+		issueNumber: number,
+		commenter: string,
+		body: string,
+	): Promise<IterationResult> {
+		console.log(
+			`Overseer handling comment from ${commenter} on issue #${issueNumber}`,
+		);
 
-        return this.runner.runAutonomousLoop(this.gemini, OverseerPersona.SYSTEM_INSTRUCTION, initialMessage + "\n\nCONTEXT:\n" + fullContext);
-    }
+		if (
+			await isLimitReached(
+				this.github,
+				owner,
+				repo,
+				issueNumber,
+				"Overseer",
+				"@overseer",
+				body,
+			)
+		) {
+			return { finalResponse: "", log: "Limit reached" };
+		}
+
+		const attribution = getAttribution("Overseer", issueNumber, commenter);
+		const fullContext = await this.github.getFullIssueContext(
+			owner,
+			repo,
+			issueNumber,
+		);
+		const initialMessage = `${attribution}\nThe issue has been updated. Review the full context and decide the next micro-task.`;
+
+		return this.runner.runAutonomousLoop(
+			this.gemini,
+			OverseerPersona.SYSTEM_INSTRUCTION,
+			`${initialMessage}\n\nCONTEXT:\n${fullContext}`,
+		);
+	}
 }

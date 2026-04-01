@@ -4,9 +4,11 @@
   "description": "Overseer is a GitHub-native agent coordination system designed to enable AI agents to collaborate autonomously as a virtual engineering team.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "build": "tsc",
-    "prepare": "husky"
+    "prepare": "husky",
+    "lint": "biome check src/",
+    "format": "biome format --write src/"
   },
   "repository": {
     "type": "git",
@@ -28,6 +30,7 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.10",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "husky": "^9.1.7",
