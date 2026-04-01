@@ -1,5 +1,4 @@
-import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
-import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
+import { AgentRunner, type IterationResult } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
 import { getAttribution } from "../utils/persona_helper.js";
@@ -25,7 +24,7 @@ You are authorized to read any file and execute any verification command in the 
 	constructor(gemini: GeminiService, github: GitHubService) {
 		this.gemini = gemini;
 		this.github = github;
-		this.runner = new AgentRunnerClass();
+		this.runner = new AgentRunner();
 	}
 
 	async handleReviewRequest(
@@ -34,12 +33,20 @@ You are authorized to read any file and execute any verification command in the 
 		issueNumber: number,
 		prNumber: number,
 		developer: string,
+		commentUrl?: string,
+		commenterPersona?: string,
 	): Promise<IterationResult> {
 		console.log(
 			`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`,
 		);
 
-		const attribution = getAttribution("Quality", issueNumber, developer);
+		const attribution = getAttribution(
+			"Quality",
+			issueNumber,
+			developer,
+			commentUrl,
+			commenterPersona,
+		);
 		const fullContext = await this.github.getFullIssueContext(
 			owner,
 			repo,

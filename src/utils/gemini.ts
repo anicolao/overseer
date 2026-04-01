@@ -28,31 +28,69 @@ export class GeminiService {
 		context?: string,
 	): Promise<string> {
 		const fullPrompt = `
-SYSTEM INSTRUCTION:
-${systemInstruction}
+	SYSTEM INSTRUCTION:
+	${systemInstruction}
 
-CONTEXT:
-${context || "No additional context provided."}
+	CONTEXT:
+	${context || "No additional context provided."}
 
-USER MESSAGE:
-${userMessage}
-        `;
+	USER MESSAGE:
+	${userMessage}
+	    `;
 
-		const result = await this.model.generateContent(fullPrompt);
-		const response = await result.response;
-		return response.text();
+		let retries = 0;
+		const maxRetries = 3;
+		while (retries < maxRetries) {
+			try {
+				const result = await this.model.generateContent(fullPrompt);
+				const response = await result.response;
+				return response.text();
+			} catch (error) {
+				retries++;
+				console.error(
+					`Gemini promptPersona failed (attempt ${retries}/${maxRetries}):`,
+					error,
+				);
+				if (retries === maxRetries) throw error;
+				await new Promise((resolve) => setTimeout(resolve, 2000 * retries));
+			}
+		}
+		return ""; // Should not be reached
 	}
 
 	/**
 	 * Starts a stateful chat session for autonomous iteration.
 	 */
 	startChat(systemInstruction: string, history: Content[] = []): ChatSession {
-		return this.model.startChat({
+		const chat = this.model.startChat({
 			history,
 			systemInstruction: {
 				role: "system",
 				parts: [{ text: systemInstruction }],
 			},
 		});
+
+		// Wrap sendMessage with retry logic
+		const originalSendMessage = chat.sendMessage.bind(chat);
+		chat.sendMessage = async (content) => {
+			let retries = 0;
+			const maxRetries = 3;
+			while (retries < maxRetries) {
+				try {
+					return await originalSendMessage(content);
+				} catch (error) {
+					retries++;
+					console.error(
+						`Gemini sendMessage failed (attempt ${retries}/${maxRetries}):`,
+						error,
+					);
+					if (retries === maxRetries) throw error;
+					await new Promise((resolve) => setTimeout(resolve, 2000 * retries));
+				}
+			}
+			throw new Error("Gemini sendMessage failed after max retries");
+		};
+
+		return chat;
 	}
 }
