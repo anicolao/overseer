@@ -21,6 +21,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Record Initial Git State
+        id: git_state
+        run: echo "initial_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Install Nix
         uses: cachix/install-nix-action@v27
         with:
@@ -38,10 +42,34 @@ jobs:
         run: npm install
 
       - name: Run Overseer Dispatcher
+        id: dispatcher
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.OVERSEER_TOKEN || secrets.GITHUB_TOKEN }}
         run: nix develop --command npx tsx src/dispatch.ts
+
+      - name: Persistence Backstop
+        id: persistence_backstop
+        if: always()
+        env:
+          INITIAL_SHA: ${{ steps.git_state.outputs.initial_sha }}
+        run: bash .github/scripts/persistence_backstop.sh
+
+      - name: Upload Persistence Backstop Artifacts
+        if: always() && steps.persistence_backstop.outputs.triggered == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: persistence-backstop-${{ github.run_id }}
+          path: ${{ steps.persistence_backstop.outputs.artifact_dir }}
+          retention-days: 7
+
+      - name: Comment Persistence Backstop
+        if: always() && steps.persistence_backstop.outputs.triggered == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.OVERSEER_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment "${{ steps.persistence_backstop.outputs.issue_number }}" \
+            --body-file "${{ steps.persistence_backstop.outputs.comment_path }}"
 
       - name: Upload Session Logs
         if: always()
