@@ -7,6 +7,7 @@ import { QualityPersona } from "./personas/quality.js";
 import type { IterationResult } from "./utils/agent_runner.js";
 import { GeminiService } from "./utils/gemini.js";
 import { GitHubService } from "./utils/github.js";
+import { getAttribution } from "./utils/persona_helper.js";
 import { ShellService } from "./utils/shell.js";
 import { truncate } from "./utils/text.js";
 
@@ -72,8 +73,18 @@ async function run() {
 		"@quality": "quality",
 	};
 
+	const personaNameMap: Record<string, string> = {
+		overseer: "Overseer",
+		"product-architect": "Product/Architect",
+		planner: "Planner",
+		"developer-tester": "Developer/Tester",
+		quality: "Quality",
+	};
+
 	let iterationResult: IterationResult | null = null;
 	let executedPersona: string | null = null;
+	let commentUrl: string | undefined;
+	let senderPersona: string | undefined;
 
 	if (eventName === "issues" && eventData.action === "opened") {
 		iterationResult = await personas.overseer.handleNewIssue(
@@ -86,10 +97,9 @@ async function run() {
 		executedPersona = "overseer";
 	} else if (eventName === "issue_comment" && eventData.action === "created") {
 		const body = eventData.comment.body as string;
-		const commentUrl = eventData.comment.html_url as string;
+		commentUrl = eventData.comment.html_url as string;
 
 		// 1. Identify sender persona if bot
-		let senderPersona: string | undefined;
 		if (sender === botUser) {
 			const personaMatch = body.match(/I am the \*\*(.+?)\*\*/);
 			if (personaMatch) {
@@ -138,18 +148,12 @@ async function run() {
 
 		if (shouldExecute && executedPersona) {
 			// 4. Persona-Specific Bot Protection: Prevent self-triggering
-			if (sender === botUser) {
-				const personaNameMap: Record<string, string> = {
-					overseer: "Overseer",
-					"product-architect": "Product/Architect",
-					planner: "Planner",
-					"developer-tester": "Developer/Tester",
-					quality: "Quality",
-				};
-				if (senderPersona === personaNameMap[executedPersona]) {
-					console.log(`Ignoring self-trigger from ${executedPersona}`);
-					return;
-				}
+			if (
+				sender === botUser &&
+				senderPersona === personaNameMap[executedPersona]
+			) {
+				console.log(`Ignoring self-trigger from ${executedPersona}`);
+				return;
 			}
 
 			console.log(`Executing persona: ${executedPersona}`);
@@ -227,6 +231,10 @@ async function run() {
 			executedPersona,
 			iterationResult,
 			handleMap,
+			personaNameMap,
+			sender,
+			commentUrl,
+			senderPersona,
 		);
 	}
 }
@@ -240,10 +248,16 @@ async function finalizeRun(
 	persona: string,
 	result: IterationResult,
 	handleMap: Record<string, string>,
+	personaNameMap: Record<string, string>,
+	triggeringUser?: string,
+	triggeringCommentUrl?: string,
+	triggeringPersona?: string,
 ) {
+	// 1. Save Session Log as Artifact
 	const logPath = `session_${persona}_${Date.now()}.log`;
 	fs.writeFileSync(logPath, result.log);
 
+	// 2. Automated Persistence
 	if (["developer-tester", "product-architect", "planner"].includes(persona)) {
 		console.log(
 			`Specialized agent ${persona} finished. Attempting automated persistence...`,
@@ -261,6 +275,7 @@ async function finalizeRun(
 		);
 	}
 
+	// 3. Determine Next Persona
 	let nextPersona: string | null = null;
 	if (persona !== "overseer") {
 		nextPersona = "overseer";
@@ -272,15 +287,34 @@ async function finalizeRun(
 		}
 	}
 
+	// 4. Update State
 	await github.setActivePersona(owner, repo, issueNumber, nextPersona);
 
+	// 5. Build Final Response with Hardcoded Attribution
 	const runId = process.env.GITHUB_RUN_ID;
 	const artifactLink = runId
 		? `\n\n[View Full Execution Log](https://github.com/${owner}/${repo}/actions/runs/${runId})`
 		: "";
 
-	const finalComment = truncate(result.finalResponse, 50000) + artifactLink;
-	await github.addCommentToIssue(owner, repo, issueNumber, finalComment);
+	const currentPersonaName = personaNameMap[persona];
+	const attributionHeader = getAttribution(
+		currentPersonaName,
+		issueNumber,
+		triggeringUser,
+		triggeringCommentUrl,
+		triggeringPersona,
+	);
+
+	const finalComment =
+		attributionHeader + truncate(result.finalResponse, 50000) + artifactLink;
+
+	try {
+		await github.addCommentToIssue(owner, repo, issueNumber, finalComment);
+	} catch (error) {
+		console.error("Failed to post comment, attempting a smaller one", error);
+		const fallback = `${attributionHeader}I finished my task, but my full response was too large to post as a GitHub comment. I have returned control to the hub.\n\nNext step: @overseer to take action`;
+		await github.addCommentToIssue(owner, repo, issueNumber, fallback);
+	}
 }
 
 run().catch((error) => {

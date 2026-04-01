@@ -1,7 +1,7 @@
-import { AgentRunner, type IterationResult } from "../utils/agent_runner.js";
+import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
+import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
-import { getAttribution } from "../utils/persona_helper.js";
 
 export class QualityPersona {
 	private gemini: GeminiService;
@@ -24,7 +24,7 @@ You are authorized to read any file and execute any verification command in the 
 	constructor(gemini: GeminiService, github: GitHubService) {
 		this.gemini = gemini;
 		this.github = github;
-		this.runner = new AgentRunner();
+		this.runner = new AgentRunnerClass();
 	}
 
 	async handleReviewRequest(
@@ -33,26 +33,19 @@ You are authorized to read any file and execute any verification command in the 
 		issueNumber: number,
 		prNumber: number,
 		developer: string,
-		commentUrl?: string,
-		commenterPersona?: string,
+		_commentUrl?: string,
+		_commenterPersona?: string,
 	): Promise<IterationResult> {
 		console.log(
 			`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`,
 		);
 
-		const attribution = getAttribution(
-			"Quality",
-			issueNumber,
-			developer,
-			commentUrl,
-			commenterPersona,
-		);
 		const fullContext = await this.github.getFullIssueContext(
 			owner,
 			repo,
 			issueNumber,
 		);
-		const initialMessage = `${attribution}\nA quality review has been requested for PR #${prNumber}. Please verify the implementation against project standards using the available tools.`;
+		const initialMessage = `A quality review has been requested for PR #${prNumber}. Please verify the implementation against project standards using the available tools.`;
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,
