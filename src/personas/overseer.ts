@@ -1,5 +1,4 @@
-import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
-import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
+import { AgentRunner, type IterationResult } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
 import { getAttribution, isLimitReached } from "../utils/persona_helper.js";
@@ -32,7 +31,7 @@ Current Personas:
 	constructor(gemini: GeminiService, github: GitHubService) {
 		this.gemini = gemini;
 		this.github = github;
-		this.runner = new AgentRunnerClass();
+		this.runner = new AgentRunner();
 	}
 
 	async handleNewIssue(
@@ -74,6 +73,8 @@ Current Personas:
 		issueNumber: number,
 		commenter: string,
 		body: string,
+		commentUrl?: string,
+		commenterPersona?: string,
 	): Promise<IterationResult> {
 		console.log(
 			`Overseer handling comment from ${commenter} on issue #${issueNumber}`,
@@ -93,7 +94,13 @@ Current Personas:
 			return { finalResponse: "", log: "Limit reached" };
 		}
 
-		const attribution = getAttribution("Overseer", issueNumber, commenter);
+		const attribution = getAttribution(
+			"Overseer",
+			issueNumber,
+			commenter,
+			commentUrl,
+			commenterPersona,
+		);
 		const fullContext = await this.github.getFullIssueContext(
 			owner,
 			repo,

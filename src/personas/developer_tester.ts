@@ -1,5 +1,4 @@
-import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
-import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
+import { AgentRunner, type IterationResult } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
 import { getAttribution } from "../utils/persona_helper.js";
@@ -25,7 +24,7 @@ You are authorized to modify any file in the repository using standard Unix tool
 	constructor(gemini: GeminiService, github: GitHubService) {
 		this.gemini = gemini;
 		this.github = github;
-		this.runner = new AgentRunnerClass();
+		this.runner = new AgentRunner();
 	}
 
 	async handleTask(
@@ -33,12 +32,20 @@ You are authorized to modify any file in the repository using standard Unix tool
 		repo: string,
 		issueNumber: number,
 		taskDescription: string,
+		commentUrl?: string,
+		commenterPersona?: string,
 	): Promise<IterationResult> {
 		console.log(
 			`Developer/Tester handling task for issue #${issueNumber}: ${taskDescription}`,
 		);
 
-		const attribution = getAttribution("Developer/Tester", issueNumber);
+		const attribution = getAttribution(
+			"Developer/Tester",
+			issueNumber,
+			undefined,
+			commentUrl,
+			commenterPersona,
+		);
 		const fullContext = await this.github.getFullIssueContext(
 			owner,
 			repo,

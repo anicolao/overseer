@@ -1,5 +1,4 @@
-import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
-import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
+import { AgentRunner, type IterationResult } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
 import { getAttribution } from "../utils/persona_helper.js";
@@ -24,7 +23,7 @@ You are authorized to modify files using standard Unix tools via [RUN:command].
 	constructor(gemini: GeminiService, github: GitHubService) {
 		this.gemini = gemini;
 		this.github = github;
-		this.runner = new AgentRunnerClass();
+		this.runner = new AgentRunner();
 	}
 
 	async handleMention(
@@ -33,12 +32,20 @@ You are authorized to modify files using standard Unix tools via [RUN:command].
 		issueNumber: number,
 		mentioner: string,
 		body: string,
+		commentUrl?: string,
+		mentionerPersona?: string,
 	): Promise<IterationResult> {
 		console.log(
 			`Planner handling mention from ${mentioner} in issue #${issueNumber}`,
 		);
 
-		const attribution = getAttribution("Planner", issueNumber, mentioner);
+		const attribution = getAttribution(
+			"Planner",
+			issueNumber,
+			mentioner,
+			commentUrl,
+			mentionerPersona,
+		);
 		const fullContext = await this.github.getFullIssueContext(
 			owner,
 			repo,

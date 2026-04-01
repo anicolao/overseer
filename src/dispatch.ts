@@ -85,12 +85,16 @@ async function run() {
 		);
 		executedPersona = "overseer";
 	} else if (eventName === "issue_comment" && eventData.action === "created") {
-		const body = eventData.comment.body;
+		const body = eventData.comment.body as string;
+		const commentUrl = eventData.comment.html_url as string;
 
-		// 1. Bot Protection: Ignore if the bot POSTED the comment AND it's that persona's OWN attribution.
-		if (sender === botUser && body.startsWith("I am the ")) {
-			console.log("Ignoring bot-generated comment");
-			return;
+		// 1. Identify sender persona if bot
+		let senderPersona: string | undefined;
+		if (sender === botUser) {
+			const personaMatch = body.match(/^I am the \*\*(.+?)\*\*/);
+			if (personaMatch) {
+				senderPersona = personaMatch[1];
+			}
 		}
 
 		// 2. Identify target persona
@@ -137,6 +141,8 @@ async function run() {
 						issueNumber,
 						sender,
 						body,
+						commentUrl,
+						senderPersona,
 					);
 				} else if (executedPersona === "product-architect") {
 					iterationResult = await personas.productArchitect.handleMention(
@@ -145,6 +151,8 @@ async function run() {
 						issueNumber,
 						sender,
 						body,
+						commentUrl,
+						senderPersona,
 					);
 				} else if (executedPersona === "planner") {
 					iterationResult = await personas.planner.handleMention(
@@ -153,6 +161,8 @@ async function run() {
 						issueNumber,
 						sender,
 						body,
+						commentUrl,
+						senderPersona,
 					);
 				} else if (executedPersona === "developer-tester") {
 					iterationResult = await personas.developerTester.handleTask(
@@ -160,6 +170,8 @@ async function run() {
 						repo,
 						issueNumber,
 						body,
+						commentUrl,
+						senderPersona,
 					);
 				} else if (executedPersona === "quality") {
 					const prMatch =
@@ -171,6 +183,8 @@ async function run() {
 						issueNumber,
 						prNumber,
 						sender,
+						commentUrl,
+						senderPersona,
 					);
 				}
 			} catch (error) {

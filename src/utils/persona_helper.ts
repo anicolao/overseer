@@ -4,11 +4,19 @@ export function getAttribution(
 	personaName: string,
 	issueNumber: number,
 	commenter?: string,
+	commentUrl?: string,
+	commenterPersona?: string,
 ): string {
-	const responderContext = commenter
-		? `a comment from ${commenter} on issue #${issueNumber}`
+	const source = commentUrl
+		? `[this comment](${commentUrl})`
 		: `issue #${issueNumber}`;
-	return `I am the ${personaName}, and I am responding to ${responderContext}.\n\n`;
+	const target = commenterPersona
+		? `the ${commenterPersona}`
+		: commenter
+			? `@${commenter}`
+			: "the issue";
+
+	return `I am the **${personaName}**, and I am responding to ${source} from ${target}.\n\n`;
 }
 
 export async function isLimitReached(
