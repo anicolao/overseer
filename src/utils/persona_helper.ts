@@ -32,6 +32,14 @@ export function extractDirectedTask(body: string): string {
 	return task.trim();
 }
 
+export function hasExplicitPersonaMention(
+	text: string,
+	personaHandle: string,
+): boolean {
+	const escapedHandle = personaHandle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return new RegExp(`(^|\\s)${escapedHandle}(?=\\s|$)`, "i").test(text);
+}
+
 export async function isLimitReached(
 	github: GitHubService,
 	owner: string,
