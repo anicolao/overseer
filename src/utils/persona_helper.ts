@@ -6,7 +6,7 @@ export class PersonaHelper {
         issueNumber: number,
         commenter?: string
     ): string {
-        const responderContext = commenter ? `a comment from @${commenter} on issue #${issueNumber}` : `issue #${issueNumber}`;
+        const responderContext = commenter ? `a comment from ${commenter} on issue #${issueNumber}` : `issue #${issueNumber}`;
         return `I am the ${personaName}, and I am responding to ${responderContext}.\n\n`;
     }
 
