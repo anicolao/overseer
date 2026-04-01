@@ -75,7 +75,7 @@ jobs:
 
       - name: Persistence Backstop
         id: persistence_backstop
-        if: always() && steps.backstop_guard.outputs.skip_workflow != 'true'
+        if: always() && steps.backstop_guard.outputs.skip_workflow != 'true' && steps.dispatcher.outputs.persona_executed == 'true'
         env:
           INITIAL_SHA: ${{ steps.git_state.outputs.initial_sha }}
         run: bash .github/scripts/persistence_backstop.sh

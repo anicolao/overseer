@@ -8,7 +8,10 @@ import type { IterationResult } from "./utils/agent_runner.js";
 import { GeminiService } from "./utils/gemini.js";
 import { GitHubService } from "./utils/github.js";
 import { PersistenceService } from "./utils/persistence.js";
-import { getAttribution } from "./utils/persona_helper.js";
+import {
+	getAttribution,
+	hasExplicitPersonaMention,
+} from "./utils/persona_helper.js";
 import { truncate } from "./utils/text.js";
 import {
 	logTrace,
@@ -17,6 +20,14 @@ import {
 	type TraceContext,
 	textStats,
 } from "./utils/trace.js";
+
+function appendGithubOutput(key: string, value: string): void {
+	const outputPath = process.env.GITHUB_OUTPUT;
+	if (!outputPath) {
+		return;
+	}
+	fs.appendFileSync(outputPath, `${key}=${value}\n`);
+}
 
 async function run() {
 	const eventPath = process.env.GITHUB_EVENT_PATH;
@@ -50,6 +61,8 @@ async function run() {
 		hasGeminiApiKey: geminiApiKey.length > 0,
 		hasGithubToken: githubToken.length > 0,
 	});
+	appendGithubOutput("persona_executed", "false");
+	appendGithubOutput("executed_persona", "");
 
 	console.log(`Received GitHub event: ${eventName} from ${sender}`);
 
@@ -68,6 +81,20 @@ async function run() {
 	} else {
 		console.log(`Ignoring event type: ${eventName}`);
 		return;
+	}
+
+	if (eventName === "issues" && eventData.action === "opened") {
+		const issueText = `${eventData.issue.title || ""}\n${eventData.issue.body || ""}`;
+		if (!hasExplicitPersonaMention(issueText, "@overseer")) {
+			logTrace("dispatcher.issueOpen.skippedWithoutMention", {
+				title: textStats(eventData.issue.title || ""),
+				body: textStats(eventData.issue.body || ""),
+			});
+			console.log(
+				"Skipping issue-open dispatch because the issue does not explicitly mention @overseer",
+			);
+			return;
+		}
 	}
 
 	const branchState = await persistence.ensureIssueBranch(issueNumber);
@@ -110,6 +137,8 @@ async function run() {
 
 	if (eventName === "issues" && eventData.action === "opened") {
 		executedPersona = "overseer";
+		appendGithubOutput("persona_executed", "true");
+		appendGithubOutput("executed_persona", executedPersona);
 		traceContext = {
 			traceId: makeTraceId({
 				runId: process.env.GITHUB_RUN_ID,
@@ -190,6 +219,8 @@ async function run() {
 		}
 
 		if (shouldExecute && executedPersona) {
+			appendGithubOutput("persona_executed", "true");
+			appendGithubOutput("executed_persona", executedPersona);
 			traceContext = {
 				traceId: makeTraceId({
 					runId: process.env.GITHUB_RUN_ID,
