@@ -10,6 +10,13 @@ import { GitHubService } from "./utils/github.js";
 import { getAttribution } from "./utils/persona_helper.js";
 import { ShellService } from "./utils/shell.js";
 import { truncate } from "./utils/text.js";
+import {
+	logTrace,
+	makeTraceId,
+	runWithTraceContext,
+	type TraceContext,
+	textStats,
+} from "./utils/trace.js";
 
 async function run() {
 	const eventPath = process.env.GITHUB_EVENT_PATH;
@@ -35,6 +42,14 @@ async function run() {
 
 	const sender = eventData.sender?.login;
 	const botUser = "anicolao"; // The identity used by OVERSEER_TOKEN
+	logTrace("dispatcher.start", {
+		eventName,
+		sender,
+		runId: process.env.GITHUB_RUN_ID,
+		nodeVersion: process.version,
+		hasGeminiApiKey: geminiApiKey.length > 0,
+		hasGithubToken: githubToken.length > 0,
+	});
 
 	console.log(`Received GitHub event: ${eventName} from ${sender}`);
 
@@ -85,16 +100,38 @@ async function run() {
 	let executedPersona: string | null = null;
 	let commentUrl: string | undefined;
 	let senderPersona: string | undefined;
+	let traceContext: TraceContext | undefined;
 
 	if (eventName === "issues" && eventData.action === "opened") {
-		iterationResult = await personas.overseer.handleNewIssue(
+		executedPersona = "overseer";
+		traceContext = {
+			traceId: makeTraceId({
+				runId: process.env.GITHUB_RUN_ID,
+				persona: executedPersona,
+				issueNumber,
+			}),
+			persona: executedPersona,
 			owner,
 			repo,
 			issueNumber,
-			eventData.issue.title,
-			eventData.issue.body || "",
-		);
-		executedPersona = "overseer";
+			runId: process.env.GITHUB_RUN_ID,
+			eventName,
+			sender,
+		};
+		iterationResult = await runWithTraceContext(traceContext, async () => {
+			logTrace("dispatcher.persona.dispatch", {
+				trigger: "issues.opened",
+				title: textStats(eventData.issue.title),
+				body: textStats(eventData.issue.body || ""),
+			});
+			return personas.overseer.handleNewIssue(
+				owner,
+				repo,
+				issueNumber,
+				eventData.issue.title,
+				eventData.issue.body || "",
+			);
+		});
 	} else if (eventName === "issue_comment" && eventData.action === "created") {
 		const body = eventData.comment.body as string;
 		commentUrl = eventData.comment.html_url as string;
@@ -147,6 +184,22 @@ async function run() {
 		}
 
 		if (shouldExecute && executedPersona) {
+			traceContext = {
+				traceId: makeTraceId({
+					runId: process.env.GITHUB_RUN_ID,
+					persona: executedPersona,
+					issueNumber,
+				}),
+				persona: executedPersona,
+				owner,
+				repo,
+				issueNumber,
+				runId: process.env.GITHUB_RUN_ID,
+				eventName,
+				sender,
+				commentUrl,
+				senderPersona,
+			};
 			// 4. Persona-Specific Bot Protection: Prevent self-triggering
 			if (
 				sender === botUser &&
@@ -158,62 +211,86 @@ async function run() {
 
 			console.log(`Executing persona: ${executedPersona}`);
 			try {
-				if (executedPersona === "overseer") {
-					iterationResult = await personas.overseer.handleComment(
-						owner,
-						repo,
-						issueNumber,
-						sender,
-						body,
-						commentUrl,
-						senderPersona,
-					);
-				} else if (executedPersona === "product-architect") {
-					iterationResult = await personas.productArchitect.handleMention(
-						owner,
-						repo,
-						issueNumber,
-						sender,
-						body,
-						commentUrl,
-						senderPersona,
-					);
-				} else if (executedPersona === "planner") {
-					iterationResult = await personas.planner.handleMention(
-						owner,
-						repo,
-						issueNumber,
-						sender,
-						body,
-						commentUrl,
-						senderPersona,
-					);
-				} else if (executedPersona === "developer-tester") {
-					iterationResult = await personas.developerTester.handleTask(
-						owner,
-						repo,
-						issueNumber,
-						body,
-						commentUrl,
-						senderPersona,
-					);
-				} else if (executedPersona === "quality") {
-					const prMatch =
-						body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
-					const prNumber = prMatch ? Number.parseInt(prMatch[1], 10) : 0;
-					iterationResult = await personas.quality.handleReviewRequest(
-						owner,
-						repo,
-						issueNumber,
-						prNumber,
-						sender,
-						commentUrl,
-						senderPersona,
-					);
-				}
-			} catch (error) {
-				console.error(`Persona failed: ${executedPersona}`, error);
-				iterationResult = {
+				iterationResult = await runWithTraceContext(traceContext, async () => {
+					logTrace("dispatcher.persona.dispatch", {
+						trigger: "issue_comment.created",
+						activePersona,
+						targetedPersona,
+						body: textStats(body),
+					});
+
+					if (executedPersona === "overseer") {
+						return personas.overseer.handleComment(
+							owner,
+							repo,
+							issueNumber,
+							sender,
+							body,
+							commentUrl,
+							senderPersona,
+						);
+					}
+					if (executedPersona === "product-architect") {
+						return personas.productArchitect.handleMention(
+							owner,
+							repo,
+							issueNumber,
+							sender,
+							body,
+							commentUrl,
+							senderPersona,
+						);
+					}
+					if (executedPersona === "planner") {
+						return personas.planner.handleMention(
+							owner,
+							repo,
+							issueNumber,
+							sender,
+							body,
+							commentUrl,
+							senderPersona,
+						);
+					}
+					if (executedPersona === "developer-tester") {
+						return personas.developerTester.handleTask(
+							owner,
+							repo,
+							issueNumber,
+							body,
+							commentUrl,
+							senderPersona,
+						);
+					}
+					if (executedPersona === "quality") {
+						const prMatch =
+							body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
+						const prNumber = prMatch ? Number.parseInt(prMatch[1], 10) : 0;
+						logTrace("dispatcher.quality.prInference", {
+							body: textStats(body),
+							prNumber,
+						});
+						return personas.quality.handleReviewRequest(
+							owner,
+							repo,
+							issueNumber,
+							prNumber,
+							sender,
+							commentUrl,
+							senderPersona,
+						);
+					}
+					return null;
+				});
+				} catch (error) {
+					console.error(`Persona failed: ${executedPersona}`, error);
+					await runWithTraceContext(traceContext, async () => {
+						logTrace("dispatcher.persona.error", {
+							error:
+								error instanceof Error ? error.stack || error.message : error,
+						});
+					});
+					iterationResult = {
 					finalResponse: `ERROR: Execution failed. Details: ${error instanceof Error ? error.message : String(error)}`,
 					log: `CRITICAL ERROR: ${error}`,
 				};
@@ -222,20 +299,44 @@ async function run() {
 	}
 
 	if (iterationResult && executedPersona) {
-		await finalizeRun(
-			github,
-			shell,
-			owner,
-			repo,
-			issueNumber,
-			executedPersona,
-			iterationResult,
-			handleMap,
-			personaNameMap,
-			sender,
-			commentUrl,
-			senderPersona,
-		);
+		const finalTraceContext =
+			traceContext ||
+			({
+				traceId: makeTraceId({
+					runId: process.env.GITHUB_RUN_ID,
+					persona: executedPersona,
+					issueNumber,
+				}),
+				persona: executedPersona,
+				owner,
+				repo,
+				issueNumber,
+				runId: process.env.GITHUB_RUN_ID,
+				eventName,
+				sender,
+				commentUrl,
+				senderPersona,
+			} satisfies TraceContext);
+		await runWithTraceContext(finalTraceContext, async () => {
+			logTrace("dispatcher.finalize.begin", {
+				finalResponse: textStats(iterationResult?.finalResponse || ""),
+				log: textStats(iterationResult?.log || ""),
+			});
+			await finalizeRun(
+				github,
+				shell,
+				owner,
+				repo,
+				issueNumber,
+				executedPersona,
+				iterationResult,
+				handleMap,
+				personaNameMap,
+				sender,
+				commentUrl,
+				senderPersona,
+			);
+		});
 	}
 }
 

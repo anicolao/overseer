@@ -1,5 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import { truncate } from "./text.js";
+import { logTrace, textStats } from "./trace.js";
 
 export class GitHubService {
 	private octokit: Octokit;
@@ -37,11 +38,19 @@ export class GitHubService {
 	}
 
 	async getIssue(owner: string, repo: string, issueNumber: number) {
-		return this.octokit.rest.issues.get({
+		const startedAt = Date.now();
+		const result = await this.octokit.rest.issues.get({
 			owner,
 			repo,
 			issue_number: issueNumber,
 		});
+		logTrace("github.issue.get", {
+			durationMs: Date.now() - startedAt,
+			title: textStats(result.data.title),
+			body: textStats(result.data.body || ""),
+			commentCount: result.data.comments,
+		});
+		return result;
 	}
 
 	async createOrUpdateFile(
@@ -92,12 +101,20 @@ export class GitHubService {
 		repo: string,
 		issueNumber: number,
 	): Promise<string[]> {
+		const startedAt = Date.now();
 		const { data: issue } = await this.octokit.rest.issues.get({
 			owner,
 			repo,
 			issue_number: issueNumber,
 		});
-		return issue.labels.map((l: any) => (typeof l === "string" ? l : l.name));
+		const labels = issue.labels.map((l: any) =>
+			typeof l === "string" ? l : l.name,
+		);
+		logTrace("github.issue.labels", {
+			durationMs: Date.now() - startedAt,
+			labels,
+		});
+		return labels;
 	}
 
 	async setActivePersona(
@@ -183,11 +200,17 @@ export class GitHubService {
 	}
 
 	async listIssueComments(owner: string, repo: string, issueNumber: number) {
-		return this.octokit.rest.issues.listComments({
+		const startedAt = Date.now();
+		const result = await this.octokit.rest.issues.listComments({
 			owner,
 			repo,
 			issue_number: issueNumber,
 		});
+		logTrace("github.issueComments.list", {
+			durationMs: Date.now() - startedAt,
+			commentCount: result.data.length,
+		});
+		return result;
 	}
 
 	async getFullIssueContext(
@@ -211,6 +234,12 @@ export class GitHubService {
 			const commentBody = truncate(comment.body || "", 5000);
 			context += `COMMENT BY @${author}:\n${commentBody}\n\n`;
 		}
+
+		logTrace("github.issueContext.built", {
+			totalComments: comments.data.length,
+			includedComments: recentComments.length,
+			context: textStats(context),
+		});
 
 		return context;
 	}

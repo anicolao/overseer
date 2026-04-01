@@ -3,6 +3,7 @@ import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
 import { isLimitReached } from "../utils/persona_helper.js";
+import { logTrace, textStats } from "../utils/trace.js";
 
 export class OverseerPersona {
 	private gemini: GeminiService;
@@ -60,6 +61,11 @@ Current Personas:
 
 		const initialMessage =
 			"A new vision has been proposed. Please review the repository state and initiate the first micro-task.";
+		logTrace("persona.overseer.newIssuePromptPrepared", {
+			title: textStats(title),
+			body: textStats(body),
+			initialMessage: textStats(initialMessage),
+		});
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,
@@ -102,6 +108,13 @@ Current Personas:
 		);
 		const initialMessage =
 			"The issue has been updated. Review the full context and decide the next micro-task.";
+		logTrace("persona.overseer.commentPromptPrepared", {
+			commenter,
+			body: textStats(body),
+			initialMessage: textStats(initialMessage),
+			fullContext: textStats(fullContext),
+			combinedInput: textStats(`${initialMessage}\n\nCONTEXT:\n${fullContext}`),
+		});
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,
