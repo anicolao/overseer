@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/rest";
+import { truncate } from "./text.js";
 
 export class GitHubService {
 	private octokit: Octokit;
@@ -62,7 +63,7 @@ export class GitHubService {
 			if (!Array.isArray(data)) {
 				sha = data.sha;
 			}
-		} catch (_error) {
+		} catch (error) {
 			// File doesn't exist yet, that's fine
 		}
 
@@ -75,6 +76,64 @@ export class GitHubService {
 			sha,
 			branch,
 		});
+	}
+
+	async listPullRequests(owner: string, repo: string, headBranch: string) {
+		return this.octokit.rest.pulls.list({
+			owner,
+			repo,
+			head: `${owner}:${headBranch}`,
+			state: "open",
+		});
+	}
+
+	async getIssueLabels(
+		owner: string,
+		repo: string,
+		issueNumber: number,
+	): Promise<string[]> {
+		const { data: issue } = await this.octokit.rest.issues.get({
+			owner,
+			repo,
+			issue_number: issueNumber,
+		});
+		return issue.labels.map((l: any) => (typeof l === "string" ? l : l.name));
+	}
+
+	async setActivePersona(
+		owner: string,
+		repo: string,
+		issueNumber: number,
+		persona: string | null,
+	) {
+		const currentLabels = await this.getIssueLabels(owner, repo, issueNumber);
+		const filteredLabels = currentLabels.filter(
+			(label) => !label.startsWith("active-persona:"),
+		);
+
+		if (persona) {
+			filteredLabels.push(`active-persona:${persona}`);
+		}
+
+		return this.octokit.rest.issues.setLabels({
+			owner,
+			repo,
+			issue_number: issueNumber,
+			labels: filteredLabels,
+		});
+	}
+
+	async getIssueCommentCount(
+		owner: string,
+		repo: string,
+		issueNumber: number,
+	): Promise<number> {
+		const { data: issue } = await this.octokit.rest.issues.get({
+			owner,
+			repo,
+			issue_number: issueNumber,
+		});
+		return issue.comments;
 	}
 
 	async createBranch(
@@ -123,55 +182,6 @@ export class GitHubService {
 		});
 	}
 
-	async getIssueCommentCount(
-		owner: string,
-		repo: string,
-		issueNumber: number,
-	): Promise<number> {
-		const { data: issue } = await this.octokit.rest.issues.get({
-			owner,
-			repo,
-			issue_number: issueNumber,
-		});
-		return issue.comments;
-	}
-
-	async getIssueLabels(
-		owner: string,
-		repo: string,
-		issueNumber: number,
-	): Promise<string[]> {
-		const { data: issue } = await this.octokit.rest.issues.get({
-			owner,
-			repo,
-			issue_number: issueNumber,
-		});
-		return issue.labels.map((l: any) => (typeof l === "string" ? l : l.name));
-	}
-
-	async setActivePersona(
-		owner: string,
-		repo: string,
-		issueNumber: number,
-		persona: string | null,
-	) {
-		const currentLabels = await this.getIssueLabels(owner, repo, issueNumber);
-		const filteredLabels = currentLabels.filter(
-			(label) => !label.startsWith("active-persona:"),
-		);
-
-		if (persona) {
-			filteredLabels.push(`active-persona:${persona}`);
-		}
-
-		return this.octokit.rest.issues.setLabels({
-			owner,
-			repo,
-			issue_number: issueNumber,
-			labels: filteredLabels,
-		});
-	}
-
 	async listIssueComments(owner: string, repo: string, issueNumber: number) {
 		return this.octokit.rest.issues.listComments({
 			owner,
@@ -190,56 +200,19 @@ export class GitHubService {
 
 		let context = `ISSUE TITLE: ${issue.data.title}\n`;
 		context += `ISSUE BODY:\n${issue.data.body || "No body provided."}\n\n`;
-		context += `--- COMMENTS ---\n`;
+		context += "--- COMMENTS (Truncated to last 15) ---\n";
 
-		for (const comment of comments.data) {
-			context += `COMMENT BY @${comment.user?.login}:\n${comment.body}\n\n`;
+		// Only take the last 15 comments to prevent payload explosion
+		const recentComments = comments.data.slice(-15);
+
+		for (const comment of recentComments) {
+			const author = comment.user?.login;
+			// Truncate each individual comment to avoid massive bot chatter drowning out context
+			const commentBody = truncate(comment.body || "", 5000);
+			context += `COMMENT BY @${author}:\n${commentBody}\n\n`;
 		}
 
 		return context;
-	}
-
-	async getFilesRecursive(
-		owner: string,
-		repo: string,
-		path: string = "",
-		ref: string = "main",
-	): Promise<{ path: string; content: string }[]> {
-		const { data } = await this.octokit.rest.repos.getContent({
-			owner,
-			repo,
-			path,
-			ref,
-		});
-
-		let results: { path: string; content: string }[] = [];
-
-		if (Array.isArray(data)) {
-			for (const item of data) {
-				if (item.type === "dir") {
-					const subFiles = await this.getFilesRecursive(
-						owner,
-						repo,
-						item.path,
-						ref,
-					);
-					results = results.concat(subFiles);
-				} else if (item.type === "file") {
-					const content = await this.getFileContent(
-						owner,
-						repo,
-						item.path,
-						ref,
-					);
-					results.push({ path: item.path, content });
-				}
-			}
-		} else if (data.type === "file") {
-			const content = await this.getFileContent(owner, repo, data.path, ref);
-			results.push({ path: data.path, content });
-		}
-
-		return results;
 	}
 
 	async createPullRequest(

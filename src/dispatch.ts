@@ -62,7 +62,7 @@ async function run() {
 		? activePersonaLabel.split(":")[1]
 		: null;
 
-	console.log(`Active persona: ${activePersona}`);
+	console.log(`Active persona from label: ${activePersona}`);
 
 	const handleMap: Record<string, string> = {
 		"@overseer": "overseer",
@@ -91,7 +91,7 @@ async function run() {
 		// 1. Identify sender persona if bot
 		let senderPersona: string | undefined;
 		if (sender === botUser) {
-			const personaMatch = body.match(/^I am the \*\*(.+?)\*\*/);
+			const personaMatch = body.match(/I am the \*\*(.+?)\*\*/);
 			if (personaMatch) {
 				senderPersona = personaMatch[1];
 			}
@@ -106,6 +106,7 @@ async function run() {
 		if (!targetedPersona) {
 			const mentions = body.match(/@[a-z-]+/gi);
 			if (mentions) {
+				// Search from the end to find the most recent handoff
 				for (let i = mentions.length - 1; i >= 0; i--) {
 					const handle = mentions[i].toLowerCase();
 					if (handleMap[handle]) {
@@ -116,22 +117,41 @@ async function run() {
 			}
 		}
 
+		console.log(`Targeted persona from mentions: ${targetedPersona}`);
+
 		// 3. State Machine Logic
 		let shouldExecute = false;
 		if (activePersona === "overseer") {
 			shouldExecute = true;
 			executedPersona = "overseer";
 		} else if (activePersona !== null) {
+			// If an agent is active, it ONLY runs if it was targeted
 			if (targetedPersona === activePersona) {
 				shouldExecute = true;
 				executedPersona = activePersona;
 			}
 		} else if (targetedPersona === "overseer") {
+			// Quiescent state: human can wake up Overseer
 			shouldExecute = true;
 			executedPersona = "overseer";
 		}
 
 		if (shouldExecute && executedPersona) {
+			// 4. Persona-Specific Bot Protection: Prevent self-triggering
+			if (sender === botUser) {
+				const personaNameMap: Record<string, string> = {
+					overseer: "Overseer",
+					"product-architect": "Product/Architect",
+					planner: "Planner",
+					"developer-tester": "Developer/Tester",
+					quality: "Quality",
+				};
+				if (senderPersona === personaNameMap[executedPersona]) {
+					console.log(`Ignoring self-trigger from ${executedPersona}`);
+					return;
+				}
+			}
+
 			console.log(`Executing persona: ${executedPersona}`);
 			try {
 				if (executedPersona === "overseer") {
@@ -176,7 +196,7 @@ async function run() {
 				} else if (executedPersona === "quality") {
 					const prMatch =
 						body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
-					const prNumber = prMatch ? parseInt(prMatch[1], 10) : 0;
+					const prNumber = prMatch ? Number.parseInt(prMatch[1], 10) : 0;
 					iterationResult = await personas.quality.handleReviewRequest(
 						owner,
 						repo,
@@ -221,19 +241,17 @@ async function finalizeRun(
 	result: IterationResult,
 	handleMap: Record<string, string>,
 ) {
-	// 1. Save Session Log as Artifact (Simulated via local file for Action to pick up)
 	const logPath = `session_${persona}_${Date.now()}.log`;
 	fs.writeFileSync(logPath, result.log);
 
-	// 2. Automated Persistence (Commit/Push changes if specialized agent)
 	if (["developer-tester", "product-architect", "planner"].includes(persona)) {
 		console.log(
-			"Specialized agent finished. Attempting automated persistence...",
+			`Specialized agent ${persona} finished. Attempting automated persistence...`,
 		);
 		const branchName = `bot/issue-${issueNumber}`;
-		await shell.executeCommand(`git config --global user.name "Overseer Bot"`);
+		await shell.executeCommand('git config --global user.name "Overseer Bot"');
 		await shell.executeCommand(
-			`git config --global user.email "overseer-bot@users.noreply.github.com"`,
+			'git config --global user.email "overseer-bot@users.noreply.github.com"',
 		);
 		await shell.executeCommand(
 			`git add . && git commit -m "Auto-commit: ${persona} work for #${issueNumber}" || echo "No changes to commit"`,
@@ -243,7 +261,6 @@ async function finalizeRun(
 		);
 	}
 
-	// 3. Determine Next Persona
 	let nextPersona: string | null = null;
 	if (persona !== "overseer") {
 		nextPersona = "overseer";
@@ -251,11 +268,10 @@ async function finalizeRun(
 		const nextStepMatch = result.finalResponse.match(/Next step: (@[a-z-]+)/i);
 		if (nextStepMatch) {
 			nextPersona = handleMap[nextStepMatch[1].toLowerCase()] || null;
-			if (nextPersona === "overseer") nextPersona = null; // Safety: never delegate to self
+			if (nextPersona === "overseer") nextPersona = null;
 		}
 	}
 
-	// 4. Update State & Post Summary
 	await github.setActivePersona(owner, repo, issueNumber, nextPersona);
 
 	const runId = process.env.GITHUB_RUN_ID;
