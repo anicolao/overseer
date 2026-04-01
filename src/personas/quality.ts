@@ -1,15 +1,15 @@
-import { GeminiService } from '../utils/gemini.js';
-import { GitHubService } from '../utils/github.js';
-import { PersonaHelper } from '../utils/persona_helper.js';
-import { AgentRunner } from '../utils/agent_runner.js';
-import type { IterationResult } from '../utils/agent_runner.js';
+import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
+import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
+import type { GeminiService } from "../utils/gemini.js";
+import type { GitHubService } from "../utils/github.js";
+import { getAttribution } from "../utils/persona_helper.js";
 
 export class QualityPersona {
-    private gemini: GeminiService;
-    private github: GitHubService;
-    private runner: AgentRunner;
+	private gemini: GeminiService;
+	private github: GitHubService;
+	private runner: AgentRunner;
 
-    static readonly SYSTEM_INSTRUCTION = `
+	static readonly SYSTEM_INSTRUCTION = `
 You are the Quality agent, an expert Linux developer operating in a Nix-based execution environment on GitHub Actions. Your job is to verify and review the work of others.
 
 AUTONOMOUS RULES:
@@ -22,19 +22,35 @@ AUTONOMOUS RULES:
 You are authorized to read any file and execute any verification command in the VM.
     `;
 
-    constructor(gemini: GeminiService, github: GitHubService) {
-        this.gemini = gemini;
-        this.github = github;
-        this.runner = new AgentRunner();
-    }
+	constructor(gemini: GeminiService, github: GitHubService) {
+		this.gemini = gemini;
+		this.github = github;
+		this.runner = new AgentRunnerClass();
+	}
 
-    async handleReviewRequest(owner: string, repo: string, issueNumber: number, prNumber: number, developer: string): Promise<IterationResult> {
-        console.log(`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`);
+	async handleReviewRequest(
+		owner: string,
+		repo: string,
+		issueNumber: number,
+		prNumber: number,
+		developer: string,
+	): Promise<IterationResult> {
+		console.log(
+			`Quality agent handling review request from ${developer} for PR #${prNumber} on issue #${issueNumber}`,
+		);
 
-        const attribution = PersonaHelper.getAttribution('Quality', issueNumber, developer);
-        const fullContext = await this.github.getFullIssueContext(owner, repo, issueNumber);
-        const initialMessage = `${attribution}\nA quality review has been requested for PR #${prNumber}. Please verify the implementation against project standards using the available tools.`;
+		const attribution = getAttribution("Quality", issueNumber, developer);
+		const fullContext = await this.github.getFullIssueContext(
+			owner,
+			repo,
+			issueNumber,
+		);
+		const initialMessage = `${attribution}\nA quality review has been requested for PR #${prNumber}. Please verify the implementation against project standards using the available tools.`;
 
-        return this.runner.runAutonomousLoop(this.gemini, QualityPersona.SYSTEM_INSTRUCTION, initialMessage + "\n\nCONTEXT:\n" + fullContext);
-    }
+		return this.runner.runAutonomousLoop(
+			this.gemini,
+			QualityPersona.SYSTEM_INSTRUCTION,
+			`${initialMessage}\n\nCONTEXT:\n${fullContext}`,
+		);
+	}
 }
