@@ -1,7 +1,8 @@
-import { AgentRunner, type IterationResult } from "../utils/agent_runner.js";
+import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
+import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
-import { getAttribution, isLimitReached } from "../utils/persona_helper.js";
+import { isLimitReached } from "../utils/persona_helper.js";
 
 export class OverseerPersona {
 	private gemini: GeminiService;
@@ -31,7 +32,7 @@ Current Personas:
 	constructor(gemini: GeminiService, github: GitHubService) {
 		this.gemini = gemini;
 		this.github = github;
-		this.runner = new AgentRunner();
+		this.runner = new AgentRunnerClass();
 	}
 
 	async handleNewIssue(
@@ -57,8 +58,8 @@ Current Personas:
 			return { finalResponse: "", log: "Limit reached" };
 		}
 
-		const attribution = getAttribution("Overseer", issueNumber);
-		const initialMessage = `${attribution}\nA new vision has been proposed. Please review the repository state and initiate the first micro-task.`;
+		const initialMessage =
+			"A new vision has been proposed. Please review the repository state and initiate the first micro-task.";
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,
@@ -73,8 +74,8 @@ Current Personas:
 		issueNumber: number,
 		commenter: string,
 		body: string,
-		commentUrl?: string,
-		commenterPersona?: string,
+		_commentUrl?: string,
+		_commenterPersona?: string,
 	): Promise<IterationResult> {
 		console.log(
 			`Overseer handling comment from ${commenter} on issue #${issueNumber}`,
@@ -94,19 +95,13 @@ Current Personas:
 			return { finalResponse: "", log: "Limit reached" };
 		}
 
-		const attribution = getAttribution(
-			"Overseer",
-			issueNumber,
-			commenter,
-			commentUrl,
-			commenterPersona,
-		);
 		const fullContext = await this.github.getFullIssueContext(
 			owner,
 			repo,
 			issueNumber,
 		);
-		const initialMessage = `${attribution}\nThe issue has been updated. Review the full context and decide the next micro-task.`;
+		const initialMessage =
+			"The issue has been updated. Review the full context and decide the next micro-task.";
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,

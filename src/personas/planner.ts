@@ -1,7 +1,7 @@
-import { AgentRunner, type IterationResult } from "../utils/agent_runner.js";
+import type { AgentRunner, IterationResult } from "../utils/agent_runner.js";
+import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
-import { getAttribution } from "../utils/persona_helper.js";
 
 export class PlannerPersona {
 	private gemini: GeminiService;
@@ -23,7 +23,7 @@ You are authorized to modify files using standard Unix tools via [RUN:command].
 	constructor(gemini: GeminiService, github: GitHubService) {
 		this.gemini = gemini;
 		this.github = github;
-		this.runner = new AgentRunner();
+		this.runner = new AgentRunnerClass();
 	}
 
 	async handleMention(
@@ -32,26 +32,19 @@ You are authorized to modify files using standard Unix tools via [RUN:command].
 		issueNumber: number,
 		mentioner: string,
 		body: string,
-		commentUrl?: string,
-		mentionerPersona?: string,
+		_commentUrl?: string,
+		_mentionerPersona?: string,
 	): Promise<IterationResult> {
 		console.log(
 			`Planner handling mention from ${mentioner} in issue #${issueNumber}`,
 		);
 
-		const attribution = getAttribution(
-			"Planner",
-			issueNumber,
-			mentioner,
-			commentUrl,
-			mentionerPersona,
-		);
 		const fullContext = await this.github.getFullIssueContext(
 			owner,
 			repo,
 			issueNumber,
 		);
-		const initialMessage = `${attribution}\nThe Overseer has tasked you with planning a design: ${body}\n\nPlease proceed with breaking this down into micro-tasks in the repository.`;
+		const initialMessage = `The Overseer has tasked you with planning a design: ${body}\n\nPlease proceed with breaking this down into micro-tasks in the repository.`;
 
 		return this.runner.runAutonomousLoop(
 			this.gemini,
