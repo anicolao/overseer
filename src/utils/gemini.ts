@@ -1,9 +1,13 @@
-import type { Content } from "@google/generative-ai";
+import type {
+	Content,
+	EnhancedGenerateContentResponse,
+	Part,
+} from "@google/generative-ai";
 import {
-	type ChatSession,
 	type GenerativeModel,
 	GoogleGenerativeAI,
 } from "@google/generative-ai";
+import { AGENT_PROTOCOL_VERSION } from "./agent_protocol.js";
 import {
 	describeContent,
 	installFetchInstrumentation,
@@ -15,16 +19,31 @@ import {
 export interface PersonaResponse {
 	content: string;
 	action?: string;
-	metadata?: Record<string, any>;
+	metadata?: Record<string, unknown>;
+}
+
+export interface GeminiChatResult {
+	text: string;
+	response: EnhancedGenerateContentResponse;
+}
+
+export interface GeminiChatSession {
+	sendMessage(
+		content: string | Array<string | Part>,
+	): Promise<GeminiChatResult>;
 }
 
 export class GeminiService {
 	private genAI: GoogleGenerativeAI;
 	private model: GenerativeModel;
 	private readonly modelName: string;
+	private readonly requestTimeoutMs: number;
 
 	constructor(apiKey: string) {
 		this.modelName = "gemini-3.1-pro-preview";
+		this.requestTimeoutMs = Number(
+			process.env.GEMINI_REQUEST_TIMEOUT_MS || "120000",
+		);
 		installFetchInstrumentation();
 		this.genAI = new GoogleGenerativeAI(apiKey);
 		this.model = this.genAI.getGenerativeModel({
@@ -56,6 +75,7 @@ export class GeminiService {
 			userMessage: textStats(userMessage),
 			context: textStats(context || "No additional context provided."),
 			fullPrompt: textStats(fullPrompt),
+			requestTimeoutMs: this.requestTimeoutMs,
 		});
 		while (retries < maxRetries) {
 			const attempt = retries + 1;
@@ -64,9 +84,12 @@ export class GeminiService {
 				model: this.modelName,
 				attempt,
 				maxRetries,
+				requestTimeoutMs: this.requestTimeoutMs,
 			});
 			try {
-				const result = await this.model.generateContent(fullPrompt);
+				const result = await this.model.generateContent(fullPrompt, {
+					timeout: this.requestTimeoutMs,
+				});
 				const response = await result.response;
 				const responseText = response.text();
 				logTrace("gemini.promptPersona.success", {
@@ -90,17 +113,20 @@ export class GeminiService {
 				await new Promise((resolve) => setTimeout(resolve, 2000 * retries));
 			}
 		}
-		return ""; // Should not be reached
+		return "";
 	}
 
-	/**
-	 * Starts a stateful chat session for autonomous iteration.
-	 */
-	startChat(systemInstruction: string, history: Content[] = []): ChatSession {
+	startChat(
+		systemInstruction: string,
+		history: Content[] = [],
+	): GeminiChatSession {
 		logTrace("gemini.startChat", {
 			model: this.modelName,
 			systemInstruction: textStats(systemInstruction),
 			historyItems: history.length,
+			requestTimeoutMs: this.requestTimeoutMs,
+			responseMimeType: "application/json",
+			responseProtocolVersion: AGENT_PROTOCOL_VERSION,
 		});
 		const chat = this.model.startChat({
 			history,
@@ -108,50 +134,89 @@ export class GeminiService {
 				role: "system",
 				parts: [{ text: systemInstruction }],
 			},
+			generationConfig: {
+				responseMimeType: "application/json",
+			},
 		});
+		const originalSendMessageStream = chat.sendMessageStream.bind(chat);
 
-		// Wrap sendMessage with retry logic
-		const originalSendMessage = chat.sendMessage.bind(chat);
-		chat.sendMessage = async (content) => {
-			let retries = 0;
-			const maxRetries = 3;
-			const contentSummary = describeContent(content);
-			while (retries < maxRetries) {
-				const attempt = retries + 1;
-				const startedAt = Date.now();
-				logTrace("gemini.sendMessage.begin", {
-					model: this.modelName,
-					attempt,
-					maxRetries,
-					content: contentSummary,
-				});
-				try {
-					const result = await originalSendMessage(content);
-					const response = await result.response;
-					logTrace("gemini.sendMessage.success", {
+		return {
+			sendMessage: async (content) => {
+				let retries = 0;
+				const maxRetries = 3;
+				const contentSummary = describeContent(content);
+
+				while (retries < maxRetries) {
+					const attempt = retries + 1;
+					const startedAt = Date.now();
+					logTrace("gemini.sendMessage.begin", {
 						model: this.modelName,
 						attempt,
-						durationMs: Date.now() - startedAt,
-						candidateCount: response.candidates?.length ?? 0,
-						usageMetadata: response.usageMetadata,
-						promptFeedback: response.promptFeedback,
+						maxRetries,
+						content: contentSummary,
+						requestTimeoutMs: this.requestTimeoutMs,
+						streaming: true,
 					});
-					return result;
-				} catch (error) {
-					retries++;
-					logTrace("gemini.sendMessage.error", {
-						model: this.modelName,
-						attempt,
-						durationMs: Date.now() - startedAt,
-						error: serializeError(error),
-					});
-					if (retries === maxRetries) throw error;
-					await new Promise((resolve) => setTimeout(resolve, 2000 * retries));
+
+					try {
+						const result = await originalSendMessageStream(content, {
+							timeout: this.requestTimeoutMs,
+						});
+						let chunkCount = 0;
+						let streamedText = "";
+						let firstChunkDelayMs: number | undefined;
+
+						for await (const chunk of result.stream) {
+							const chunkText = chunk.text();
+							chunkCount++;
+							streamedText += chunkText;
+							if (firstChunkDelayMs === undefined) {
+								firstChunkDelayMs = Date.now() - startedAt;
+							}
+							logTrace("gemini.sendMessage.chunk", {
+								model: this.modelName,
+								attempt,
+								chunkIndex: chunkCount,
+								chunkText: textStats(chunkText),
+								accumulatedText: textStats(streamedText),
+								firstChunkDelayMs,
+							});
+						}
+
+						const response = await result.response;
+						const responseText = response.text();
+						logTrace("gemini.sendMessage.success", {
+							model: this.modelName,
+							attempt,
+							durationMs: Date.now() - startedAt,
+							chunkCount,
+							firstChunkDelayMs,
+							responseText: textStats(responseText),
+							streamedText: textStats(streamedText),
+							candidateCount: response.candidates?.length ?? 0,
+							usageMetadata: response.usageMetadata,
+							promptFeedback: response.promptFeedback,
+						});
+
+						return {
+							text: responseText,
+							response,
+						};
+					} catch (error) {
+						retries++;
+						logTrace("gemini.sendMessage.error", {
+							model: this.modelName,
+							attempt,
+							durationMs: Date.now() - startedAt,
+							error: serializeError(error),
+						});
+						if (retries === maxRetries) throw error;
+						await new Promise((resolve) => setTimeout(resolve, 2000 * retries));
+					}
 				}
-			}
-			throw new Error("Gemini sendMessage failed after max retries");
-		};
 
-		return chat;
+				throw new Error("Gemini sendMessage failed after max retries");
+			},
+		};
 	}
 }

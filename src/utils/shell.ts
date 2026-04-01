@@ -1,5 +1,6 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import type { AgentAction } from "./agent_protocol.js";
 import { logTrace, serializeError, textStats } from "./trace.js";
 
 const execAsync = promisify(exec);
@@ -51,25 +52,24 @@ export class ShellService {
 		}
 	}
 
-	/**
-	 * Parses a string for [RUN:command]...[/RUN] blocks and executes them.
-	 */
-	async executeAllBlocks(content: string): Promise<string> {
-		const runRegex = /\[RUN:([\s\S]+?)\]/g;
+	async executeActions(actions: AgentAction[]): Promise<string> {
 		let fullOutput = "";
-		const matches = Array.from(content.matchAll(runRegex));
-		logTrace("shell.blocks.scan", {
-			content: textStats(content),
-			runMarkerCount: (content.match(/\[RUN:/g) || []).length,
-			parsedBlockCount: matches.length,
-			parsedCommands: matches.map((match) => match[1].trim()),
+		logTrace("shell.actions.scan", {
+			actionCount: actions.length,
+			actions: actions.map((action) => ({
+				type: action.type,
+				command: textStats(action.command),
+			})),
 		});
 
-		for (const match of matches) {
-			const command = match[1].trim();
-			const result = await this.executeCommand(command);
+		for (const action of actions) {
+			if (action.type !== "run_shell") {
+				continue;
+			}
 
-			fullOutput += `\n--- EXECUTING: ${command} ---\n`;
+			const result = await this.executeCommand(action.command);
+
+			fullOutput += `\n--- EXECUTING: ${action.command} ---\n`;
 			if (result.stdout) fullOutput += `STDOUT:\n${result.stdout}\n`;
 			if (result.stderr) fullOutput += `STDERR:\n${result.stderr}\n`;
 			fullOutput += `EXIT CODE: ${result.exitCode}\n`;
