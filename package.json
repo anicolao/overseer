@@ -8,7 +8,8 @@
     "build": "tsc",
     "prepare": "husky",
     "lint": "biome check src/",
-    "format": "biome format --write src/"
+    "format": "biome format --write src/",
+    "bots:inspect": "tsx src/scripts/inspect_bots.ts"
   },
   "repository": {
     "type": "git",
