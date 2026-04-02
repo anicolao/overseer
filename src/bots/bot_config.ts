@@ -175,11 +175,7 @@ function loadPromptAssembly(
 		const absolutePath = resolve(repoRoot, promptFile);
 		const content = renderPromptTemplate(readFileSync(absolutePath, "utf8"));
 		promptFileContents[promptFile] = content;
-		return [
-			`<!-- BEGIN PROMPT FILE: ${promptFile} -->`,
-			content.trimEnd(),
-			`<!-- END PROMPT FILE: ${promptFile} -->`,
-		].join("\n");
+		return content.trimEnd();
 	});
 
 	return {
