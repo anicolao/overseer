@@ -12,14 +12,14 @@ describe("parseAgentProtocolResponse", () => {
 				version: AGENT_PROTOCOL_VERSION,
 				plan: ["Inspect the repository root."],
 				next_step: "Inspect the repository root.",
-				actions: [{ type: "run_shell", command: "ls -la" }],
+				actions: [{ type: "run_ro_shell", command: "ls -la" }],
 				task_status: "in_progress",
 			}),
 		);
 
 		expect(parsed.protocol.task_status).toBe("in_progress");
 		expect(parsed.protocol.actions).toEqual([
-			{ type: "run_shell", command: "ls -la" },
+			{ type: "run_ro_shell", command: "ls -la" },
 		]);
 	});
 
@@ -46,14 +46,30 @@ I will comply.
   "version": "${AGENT_PROTOCOL_VERSION}",
   "plan": ["Review shell output."],
   "next_step": "Review shell output.",
- "actions": [{"type": "run_shell", "command": "cat package.json"}],
+ "actions": [{"type": "run_ro_shell", "command": "cat package.json"}],
   "task_status": "in_progress"
 }`);
 
 		expect(parsed.protocol.actions[0]).toEqual({
-			type: "run_shell",
+			type: "run_ro_shell",
 			command: "cat package.json",
 		});
+	});
+
+	it("parses run_shell actions", () => {
+		const parsed = parseAgentProtocolResponse(
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Edit the target file."],
+				next_step: "Edit the target file.",
+				actions: [{ type: "run_shell", command: "printf ok >> target.txt" }],
+				task_status: "in_progress",
+			}),
+		);
+
+		expect(parsed.protocol.actions).toEqual([
+			{ type: "run_shell", command: "printf ok >> target.txt" },
+		]);
 	});
 
 	it("parses persist_work actions", () => {
@@ -77,8 +93,8 @@ I will comply.
 				plan: ["Read repository guidance", "Implement the task"],
 				next_step: "Read WORKFLOW.md.",
 				actions: [
-					{ type: "run_shell", command: "cat WORKFLOW.md" },
-					{ type: "run_shell", command: "cat docs/plans/current-plan.md" },
+					{ type: "run_ro_shell", command: "cat WORKFLOW.md" },
+					{ type: "run_ro_shell", command: "cat docs/plans/current-plan.md" },
 				],
 				task_status: "in_progress",
 				github_comment: "Started work and am reading repository guidance.",
@@ -134,7 +150,7 @@ I will comply.
 					version: AGENT_PROTOCOL_VERSION,
 					plan: ["Inspect files."],
 					next_step: "Inspect files.",
-					actions: [{ type: "run_shell", command: "ls" }],
+					actions: [{ type: "run_ro_shell", command: "ls" }],
 					task_status: "in_progress",
 					handoff_to: "@planner",
 				}),
@@ -162,7 +178,7 @@ I will comply.
 				JSON.stringify({
 					version: AGENT_PROTOCOL_VERSION,
 					next_step: "Inspect files.",
-					actions: [{ type: "run_shell", command: "ls" }],
+					actions: [{ type: "run_ro_shell", command: "ls" }],
 					task_status: "in_progress",
 				}),
 			),
@@ -176,7 +192,9 @@ I will comply.
 				version: AGENT_PROTOCOL_VERSION,
 				plan: ["Read the plan", "Implement the change"],
 				next_step: "Read the plan",
-				actions: [{ type: "run_shell", command: "cat docs/plans/current.md" }],
+				actions: [
+					{ type: "run_ro_shell", command: "cat docs/plans/current.md" },
+				],
 				task_status: "in_progress",
 			}),
 			previousGithubComment: "Reading the plan before changing code.",

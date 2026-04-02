@@ -24,7 +24,7 @@ describe("AgentRunner", () => {
 				plan: ["Inspect the repository root.", "Return control."],
 				next_step: "Inspect the repository root.",
 				actions: [
-					{ type: "run_shell", command: "printf 'hello'" },
+					{ type: "run_ro_shell", command: "printf 'hello'" },
 					{ type: "run_shell", command: "printf 'world'" },
 				],
 				task_status: "in_progress",
@@ -58,8 +58,12 @@ describe("AgentRunner", () => {
 		const shell = makeFakeShell(async (actions) =>
 			actions
 				.filter(
-					(action): action is Extract<AgentAction, { type: "run_shell" }> =>
-						action.type === "run_shell",
+					(
+						action,
+					): action is Extract<
+						AgentAction,
+						{ type: "run_shell" | "run_ro_shell" }
+					> => action.type === "run_shell" || action.type === "run_ro_shell",
 				)
 				.map(
 					(action) =>
@@ -74,6 +78,9 @@ describe("AgentRunner", () => {
 			"System instruction",
 			"Initial message",
 			5,
+			{
+				shellAccess: "read_write",
+			},
 		);
 
 		expect(result.finalResponse).toBe(
@@ -162,7 +169,7 @@ describe("AgentRunner", () => {
 				version: AGENT_PROTOCOL_VERSION,
 				plan: ["Inspect WORKFLOW.md.", "Return control."],
 				next_step: "Inspect WORKFLOW.md.",
-				actions: [{ type: "run_shell", command: "printf 'ok'" }],
+				actions: [{ type: "run_ro_shell", command: "printf 'ok'" }],
 				task_status: "in_progress",
 				github_comment: "Started work and am inspecting repository guidance.",
 			}),
@@ -216,6 +223,54 @@ describe("AgentRunner", () => {
 		);
 		expect(result.finalResponse).toBe("Completed the requested work.");
 		expect(result.log).toContain("GITHUB COMMENT APPENDED");
+	});
+
+	it("rejects run_shell for read-only personas", async () => {
+		const responses = [
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect files safely.", "Return control."],
+				next_step: "Inspect files safely.",
+				actions: [{ type: "run_shell", command: "printf 'nope' > file.txt" }],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect files safely.", "Return control."],
+				next_step: "Return control to the dispatcher.",
+				actions: [],
+				task_status: "done",
+				final_response: "Returned control after the rejected action.",
+			}),
+		];
+
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage() {
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner(makeFakeShell(async () => ""));
+		const result = await runner.runAutonomousLoop(
+			gemini as never,
+			"System instruction",
+			"Initial message",
+			5,
+			{
+				shellAccess: "read_only",
+			},
+		);
+
+		expect(result.log).toContain("run_shell_not_available");
+		expect(result.finalResponse).toContain("Returned control");
 	});
 
 	it("requires a structured handoff when configured", async () => {

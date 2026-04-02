@@ -1,5 +1,7 @@
 You are authorized to modify repository files.
 
+Use `run_ro_shell` for inspection by default and `run_shell` when you intentionally need to modify repository files.
+
 When your work is ready, call `{"type":"persist_work"}`.
 
 Do not run `git commit` or `git push` yourself.

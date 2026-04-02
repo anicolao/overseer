@@ -7,6 +7,7 @@ describe("bot_config", () => {
 		const developer = getBotOrThrow(registry, "developer-tester");
 
 		expect(developer.kind).toBe("task");
+		expect(developer.shellAccess).toBe("read_write");
 		expect(developer.allowPersistWork).toBe(true);
 		expect(developer.prompt.promptFiles).toContain(
 			"prompts/shared/agent-protocol.md",
@@ -20,6 +21,10 @@ describe("bot_config", () => {
 		expect(developer.prompt.concatenatedPrompt).toContain(
 			"You implement code and verification for the assigned task.",
 		);
+		expect(developer.prompt.concatenatedPrompt).toContain(
+			'"type":"run_ro_shell"',
+		);
+		expect(developer.prompt.concatenatedPrompt).toContain('"type":"run_shell"');
 		expect(developer.prompt.concatenatedPrompt).not.toContain(
 			"BEGIN PROMPT FILE:",
 		);
@@ -29,7 +34,11 @@ describe("bot_config", () => {
 		const registry = loadBotRegistry();
 
 		expect(getBotOrThrow(registry, "overseer").kind).toBe("overseer");
+		expect(getBotOrThrow(registry, "quality").shellAccess).toBe("read_only");
 		expect(getBotOrThrow(registry, "quality").allowPersistWork).toBe(false);
+		expect(
+			getBotOrThrow(registry, "quality").prompt.concatenatedPrompt,
+		).toContain("Do not use `run_shell`.");
 		expect(registry.all).toHaveLength(5);
 	});
 });

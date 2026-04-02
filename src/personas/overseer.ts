@@ -36,6 +36,7 @@ export class OverseerPersona {
 		return {
 			requireDoneHandoff: true,
 			modelName: this.bot.llm.model,
+			shellAccess: this.bot.shellAccess,
 			promptDefinition: {
 				botId: this.bot.id,
 				displayName: this.bot.displayName,

@@ -11,6 +11,7 @@ import {
 import { prependStatusUpdateSentinel } from "./comment_markers.js";
 import type { GeminiService } from "./gemini.js";
 import type { PersistWorkResult } from "./persistence.js";
+import type { ShellExecutionMode } from "./shell.js";
 import { ShellService } from "./shell.js";
 import { logTrace, textStats } from "./trace.js";
 
@@ -25,6 +26,7 @@ export interface AgentRunnerOptions {
 	appendGithubComment?: (markdown: string) => Promise<void>;
 	requireDoneHandoff?: boolean;
 	modelName?: string;
+	shellAccess?: ShellExecutionMode;
 	promptDefinition?: {
 		botId: string;
 		displayName: string;
@@ -208,9 +210,31 @@ export class AgentRunner {
 		}
 
 		const outputs: string[] = [];
+		const shellAccess = options.shellAccess ?? "read_write";
 
 		for (const action of actions) {
+			if (action.type === "run_ro_shell") {
+				outputs.push(await this.shell.executeActions([action]));
+				continue;
+			}
+
 			if (action.type === "run_shell") {
+				if (shellAccess !== "read_write") {
+					outputs.push(
+						JSON.stringify(
+							{
+								ok: false,
+								error_code: "run_shell_not_available",
+								message:
+									'run_shell is not available for this persona. Use "run_ro_shell" instead.',
+							},
+							null,
+							2,
+						),
+					);
+					continue;
+				}
+
 				outputs.push(await this.shell.executeActions([action]));
 				continue;
 			}
@@ -221,8 +245,7 @@ export class AgentRunner {
 						{
 							ok: false,
 							error_code: "persist_not_available",
-							message:
-								'persist_work is not available for this persona. Use "run_shell" instead.',
+							message: "persist_work is not available for this persona.",
 						},
 						null,
 						2,

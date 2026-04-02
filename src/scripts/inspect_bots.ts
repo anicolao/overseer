@@ -38,11 +38,11 @@ export function renderBotListMarkdown(bots: LoadedBotDefinition[]): string {
 	const lines = [
 		"# Bots",
 		"",
-		"| ID | Name | Kind | Model | Persist | Prompt Files |",
-		"| --- | --- | --- | --- | --- | ---: |",
+		"| ID | Name | Kind | Shell | Model | Persist | Prompt Files |",
+		"| --- | --- | --- | --- | --- | --- | ---: |",
 		...bots.map(
 			(bot) =>
-				`| \`${bot.id}\` | ${bot.displayName} | \`${bot.kind}\` | \`${bot.llm.model}\` | ${bot.allowPersistWork ? "yes" : "no"} | ${bot.prompt.promptFiles.length} |`,
+				`| \`${bot.id}\` | ${bot.displayName} | \`${bot.kind}\` | \`${bot.shellAccess}\` | \`${bot.llm.model}\` | ${bot.allowPersistWork ? "yes" : "no"} | ${bot.prompt.promptFiles.length} |`,
 		),
 		"",
 		"Usage:",
@@ -61,6 +61,7 @@ export function renderBotDetailMarkdown(bot: LoadedBotDefinition): string {
 		"",
 		`- ID: \`${bot.id}\``,
 		`- Kind: \`${bot.kind}\``,
+		`- Shell Access: \`${bot.shellAccess}\``,
 		`- Provider: \`${bot.llm.provider}\``,
 		`- Model: \`${bot.llm.model}\``,
 		`- Persist Work: ${bot.allowPersistWork ? "yes" : "no"}`,
