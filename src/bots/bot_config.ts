@@ -28,6 +28,7 @@ interface RawBotDefinition {
 	};
 	prompt_files?: string[];
 	allow_persist_work?: boolean;
+	require_done_handoff?: boolean;
 	max_iterations?: number;
 }
 
@@ -46,6 +47,7 @@ export interface LoadedBotDefinition {
 		model: string;
 	};
 	allowPersistWork: boolean;
+	requireDoneHandoff: boolean;
 	maxIterations: number;
 	prompt: LoadedPromptAssembly;
 }
@@ -133,6 +135,7 @@ function loadBotDefinition(
 		`${id}.llm.model`,
 	);
 	const allowPersistWork = Boolean(rawBot.allow_persist_work);
+	const requireDoneHandoff = Boolean(rawBot.require_done_handoff);
 	const maxIterations = parsePositiveInteger(
 		rawBot.max_iterations ?? defaults.defaultMaxIterations,
 		`${id}.max_iterations`,
@@ -154,6 +157,7 @@ function loadBotDefinition(
 			model,
 		},
 		allowPersistWork,
+		requireDoneHandoff,
 		maxIterations,
 		prompt: loadPromptAssembly(repoRoot, promptFiles),
 	};

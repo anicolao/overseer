@@ -69,6 +69,7 @@ export class TaskPersona {
 				const body = `${getAttribution(this.bot.displayName, issueNumber)}${markdown}`;
 				await this.github.addCommentToIssue(owner, repo, issueNumber, body);
 			},
+			requireDoneHandoff: this.bot.requireDoneHandoff,
 		};
 
 		return this.runner.runAutonomousLoop(
