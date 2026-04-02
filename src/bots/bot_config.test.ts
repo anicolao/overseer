@@ -15,10 +15,13 @@ describe("bot_config", () => {
 			developer.prompt.promptFileContents["prompts/shared/agent-protocol.md"],
 		).toContain('"version": "overseer/v1"');
 		expect(developer.prompt.concatenatedPrompt).toContain(
-			"BEGIN PROMPT FILE: prompts/shared/base.md",
+			"You are operating inside a repository checkout on GitHub Actions",
 		);
 		expect(developer.prompt.concatenatedPrompt).toContain(
-			"BEGIN PROMPT FILE: prompts/developer-tester.md",
+			"You implement code and verification for the assigned task.",
+		);
+		expect(developer.prompt.concatenatedPrompt).not.toContain(
+			"BEGIN PROMPT FILE:",
 		);
 	});
 
