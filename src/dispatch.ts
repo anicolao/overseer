@@ -1,9 +1,7 @@
 import * as fs from "node:fs";
-import { DeveloperTesterPersona } from "./personas/developer_tester.js";
+import { getBotOrThrow, loadBotRegistry } from "./bots/bot_config.js";
 import { OverseerPersona } from "./personas/overseer.js";
-import { PlannerPersona } from "./personas/planner.js";
-import { ProductArchitectPersona } from "./personas/product_architect.js";
-import { QualityPersona } from "./personas/quality.js";
+import { TaskPersona } from "./personas/task_persona.js";
 import type { IterationResult } from "./utils/agent_runner.js";
 import { GeminiService } from "./utils/gemini.js";
 import { GitHubService } from "./utils/github.js";
@@ -42,13 +40,34 @@ async function run() {
 	const gemini = new GeminiService(geminiApiKey);
 	const github = new GitHubService(githubToken);
 	const persistence = new PersistenceService();
+	const botRegistry = loadBotRegistry();
 
 	const personas = {
-		overseer: new OverseerPersona(gemini, github),
-		productArchitect: new ProductArchitectPersona(gemini, github, persistence),
-		planner: new PlannerPersona(gemini, github, persistence),
-		developerTester: new DeveloperTesterPersona(gemini, github, persistence),
-		quality: new QualityPersona(gemini, github),
+		overseer: new OverseerPersona(
+			getBotOrThrow(botRegistry, "overseer"),
+			gemini,
+			github,
+		),
+		productArchitect: new TaskPersona(
+			getBotOrThrow(botRegistry, "product-architect"),
+			gemini,
+			persistence,
+		),
+		planner: new TaskPersona(
+			getBotOrThrow(botRegistry, "planner"),
+			gemini,
+			persistence,
+		),
+		developerTester: new TaskPersona(
+			getBotOrThrow(botRegistry, "developer-tester"),
+			gemini,
+			persistence,
+		),
+		quality: new TaskPersona(
+			getBotOrThrow(botRegistry, "quality"),
+			gemini,
+			persistence,
+		),
 	};
 
 	const sender = eventData.sender?.login;
@@ -268,54 +287,16 @@ async function run() {
 						);
 					}
 					if (executedPersona === "product-architect") {
-						return personas.productArchitect.handleMention(
-							owner,
-							repo,
-							issueNumber,
-							sender,
-							body,
-							commentUrl,
-							senderPersona,
-						);
+						return personas.productArchitect.handleTask(issueNumber, body);
 					}
 					if (executedPersona === "planner") {
-						return personas.planner.handleMention(
-							owner,
-							repo,
-							issueNumber,
-							sender,
-							body,
-							commentUrl,
-							senderPersona,
-						);
+						return personas.planner.handleTask(issueNumber, body);
 					}
 					if (executedPersona === "developer-tester") {
-						return personas.developerTester.handleTask(
-							owner,
-							repo,
-							issueNumber,
-							body,
-							commentUrl,
-							senderPersona,
-						);
+						return personas.developerTester.handleTask(issueNumber, body);
 					}
 					if (executedPersona === "quality") {
-						const prMatch =
-							body.match(/PR.*?#(\d+)/i) || body.match(/pull.*?\/(\d+)/i);
-						const prNumber = prMatch ? Number.parseInt(prMatch[1], 10) : 0;
-						logTrace("dispatcher.quality.prInference", {
-							body: textStats(body),
-							prNumber,
-						});
-						return personas.quality.handleReviewRequest(
-							owner,
-							repo,
-							issueNumber,
-							prNumber,
-							sender,
-							commentUrl,
-							senderPersona,
-						);
+						return personas.quality.handleTask(issueNumber, body);
 					}
 					return null;
 				});
