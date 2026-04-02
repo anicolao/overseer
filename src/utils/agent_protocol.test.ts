@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	AGENT_PROTOCOL_VERSION,
+	buildContinuationMessage,
 	parseAgentProtocolResponse,
 } from "./agent_protocol.js";
 
@@ -166,5 +167,33 @@ I will comply.
 				}),
 			),
 		).toThrow(/plan/);
+	});
+
+	it("builds continuation messages that restate task and prior response", () => {
+		const message = buildContinuationMessage({
+			originalTask: "Developer Task:\nTask ID: issue-55",
+			previousResponseJson: JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Read the plan", "Implement the change"],
+				next_step: "Read the plan",
+				actions: [{ type: "run_shell", command: "cat docs/plans/current.md" }],
+				task_status: "in_progress",
+			}),
+			previousGithubComment: "Reading the plan before changing code.",
+			actionOutput:
+				"--- EXECUTING: cat docs/plans/current.md ---\nSTDOUT:\nPlan contents",
+		});
+
+		expect(message).toContain("ORIGINAL TASK:");
+		expect(message).toContain("Task ID: issue-55");
+		expect(message).toContain("MOST RECENT STRUCTURED RESPONSE:");
+		expect(message).toContain('"next_step":"Read the plan"');
+		expect(message).toContain("MOST RECENT GITHUB STATUS COMMENT:");
+		expect(message).toContain("Reading the plan before changing code.");
+		expect(message).toContain("LATEST ACTION OUTPUT:");
+		expect(message).toContain("Plan contents");
+		expect(message).toContain(
+			'Continue the task using protocol "overseer/v1".',
+		);
 	});
 });

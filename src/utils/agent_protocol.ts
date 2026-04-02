@@ -38,6 +38,13 @@ export interface ParsedAgentProtocolResponse {
 	rawJson: string;
 }
 
+export interface ContinuationContext {
+	originalTask: string;
+	previousResponseJson: string;
+	previousGithubComment?: string;
+	actionOutput: string;
+}
+
 export const AGENT_PROTOCOL_PROMPT = `
 RESPONSE PROTOCOL:
 Work to this workflow on every turn:
@@ -81,11 +88,27 @@ export function buildProtocolRepairMessage(
 	].join("\n\n");
 }
 
-export function buildContinuationMessage(actionOutput: string): string {
+export function buildContinuationMessage({
+	originalTask,
+	previousResponseJson,
+	previousGithubComment,
+	actionOutput,
+}: ContinuationContext): string {
 	return [
-		"ACTION OUTPUT:",
+		"ORIGINAL TASK:",
+		originalTask,
+		"",
+		"MOST RECENT STRUCTURED RESPONSE:",
+		previousResponseJson,
+		"",
+		...(previousGithubComment
+			? ["MOST RECENT GITHUB STATUS COMMENT:", previousGithubComment, ""]
+			: []),
+		"LATEST ACTION OUTPUT:",
 		actionOutput,
 		"",
+		"Continue the same task. Do not restart or reinterpret the assignment.",
+		"Use the original task and your most recent structured response to decide the next step.",
 		`Continue the task using protocol "${AGENT_PROTOCOL_VERSION}".`,
 		"Return exactly one JSON object.",
 	].join("\n");

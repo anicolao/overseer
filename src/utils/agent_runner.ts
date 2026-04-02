@@ -83,6 +83,7 @@ export class AgentRunner {
 			repositoryGuidance.history,
 			options.modelName,
 		);
+		const originalTask = initialMessage;
 		let currentMessage = initialMessage;
 		let iteration = 0;
 
@@ -176,7 +177,12 @@ export class AgentRunner {
 				actionOutput: textStats(actionOutput),
 			});
 			this.log(`ACTION OUTPUT: ${actionOutput}\n`);
-			currentMessage = buildContinuationMessage(actionOutput);
+			currentMessage = buildContinuationMessage({
+				originalTask,
+				previousResponseJson: parsedResponse.rawJson,
+				previousGithubComment: parsedResponse.protocol.github_comment,
+				actionOutput,
+			});
 		}
 
 		logTrace("agent.loop.maxIterationsReached", {
