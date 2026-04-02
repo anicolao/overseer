@@ -2,10 +2,21 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { AgentAction } from "./agent_protocol.js";
 import { AGENT_PROTOCOL_VERSION } from "./agent_protocol.js";
 import { AgentRunner } from "./agent_runner.js";
+import type { ShellService } from "./shell.js";
 
 describe("AgentRunner", () => {
+	const makeFakeShell = (
+		executeActions: (actions: AgentAction[]) => Promise<string>,
+	): ShellService =>
+		({
+			async executeActions(actions: AgentAction[]) {
+				return executeActions(actions);
+			},
+		}) as unknown as ShellService;
+
 	it("executes structured shell actions and returns the final response", async () => {
 		const responses = [
 			JSON.stringify({
@@ -42,7 +53,20 @@ describe("AgentRunner", () => {
 			},
 		};
 
-		const runner = new AgentRunner();
+		const shell = makeFakeShell(async (actions) =>
+			actions
+				.filter(
+					(action): action is Extract<AgentAction, { type: "run_shell" }> =>
+						action.type === "run_shell",
+				)
+				.map(
+					(action) =>
+						`\n--- EXECUTING: ${action.command} ---\nSTDOUT:\n${action.command.replace("printf ", "").replaceAll("'", "")}\nEXIT CODE: 0\n`,
+				)
+				.join(""),
+		);
+
+		const runner = new AgentRunner(shell);
 		const result = await runner.runAutonomousLoop(
 			gemini as never,
 			"System instruction",
@@ -92,7 +116,11 @@ describe("AgentRunner", () => {
 			},
 		};
 
-		const runner = new AgentRunner();
+		const runner = new AgentRunner(
+			makeFakeShell(async () => {
+				return "";
+			}),
+		);
 		const result = await runner.runAutonomousLoop(
 			gemini as never,
 			"System instruction",
@@ -148,7 +176,11 @@ describe("AgentRunner", () => {
 			},
 		};
 
-		const runner = new AgentRunner();
+		const shell = makeFakeShell(
+			async () =>
+				"\n--- EXECUTING: printf 'ok' ---\nSTDOUT:\nok\nEXIT CODE: 0\n",
+		);
+		const runner = new AgentRunner(shell);
 		const result = await runner.runAutonomousLoop(
 			gemini as never,
 			"System instruction",
@@ -200,7 +232,11 @@ describe("AgentRunner", () => {
 				},
 			};
 
-			const runner = new AgentRunner();
+			const runner = new AgentRunner(
+				makeFakeShell(async () => {
+					return "";
+				}),
+			);
 			await runner.runAutonomousLoop(
 				gemini as never,
 				"System instruction",

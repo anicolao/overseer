@@ -14,15 +14,19 @@ export interface ShellResult {
 
 export class ShellService {
 	async executeCommand(command: string): Promise<ShellResult> {
+		const wrappedCommand = wrapInNixDevelop(command);
 		console.log(`Executing shell command: ${command}`);
 		const startedAt = Date.now();
 		logTrace("shell.command.begin", {
 			command,
+			wrappedCommand,
+			runsInsideNixDevelop: wrappedCommand !== command,
 		});
 		try {
-			const { stdout, stderr } = await execAsync(command);
+			const { stdout, stderr } = await execAsync(wrappedCommand);
 			logTrace("shell.command.success", {
 				command,
+				wrappedCommand,
 				durationMs: Date.now() - startedAt,
 				stdout: textStats(stdout.trim()),
 				stderr: textStats(stderr.trim()),
@@ -37,6 +41,7 @@ export class ShellService {
 			console.error(`Command execution failed: ${command}`, error);
 			logTrace("shell.command.error", {
 				command,
+				wrappedCommand,
 				durationMs: Date.now() - startedAt,
 				exitCode: err.code || 1,
 				stdout: textStats(err.stdout?.trim() || ""),
@@ -80,4 +85,17 @@ export class ShellService {
 
 		return fullOutput;
 	}
+}
+
+export function wrapInNixDevelop(command: string): string {
+	const trimmedCommand = command.trim();
+	if (/^nix\s+develop\b/.test(trimmedCommand)) {
+		return command;
+	}
+
+	return `nix develop -c bash -lc ${shellSingleQuote(command)}`;
+}
+
+function shellSingleQuote(value: string): string {
+	return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
