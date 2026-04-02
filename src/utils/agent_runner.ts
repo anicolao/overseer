@@ -22,6 +22,7 @@ export interface IterationResult {
 
 export interface AgentRunnerOptions {
 	persistWork?: () => Promise<PersistWorkResult>;
+	persistQa?: () => Promise<PersistWorkResult>;
 	appendGithubComment?: (markdown: string) => Promise<void>;
 	requireDoneHandoff?: boolean;
 	modelName?: string;
@@ -215,24 +216,49 @@ export class AgentRunner {
 				continue;
 			}
 
-			if (!options.persistWork) {
-				outputs.push(
-					JSON.stringify(
-						{
-							ok: false,
-							error_code: "persist_not_available",
-							message:
-								'persist_work is not available for this persona. Use "run_shell" instead.',
-						},
-						null,
-						2,
-					),
-				);
+			if (action.type === "persist_work") {
+				if (!options.persistWork) {
+					outputs.push(
+						JSON.stringify(
+							{
+								ok: false,
+								error_code: "persist_not_available",
+								message:
+									'persist_work is not available for this persona. Use "run_shell" instead.',
+							},
+							null,
+							2,
+						),
+					);
+					continue;
+				}
+
+				const result = await options.persistWork();
+				outputs.push(JSON.stringify(result, null, 2));
 				continue;
 			}
 
-			const result = await options.persistWork();
-			outputs.push(JSON.stringify(result, null, 2));
+			if (action.type === "persist_qa") {
+				if (!options.persistQa) {
+					outputs.push(
+						JSON.stringify(
+							{
+								ok: false,
+								error_code: "persist_qa_not_available",
+								message:
+									'persist_qa is not available for this persona. Use "run_shell" instead.',
+							},
+							null,
+							2,
+						),
+					);
+					continue;
+				}
+
+				const result = await options.persistQa();
+				outputs.push(JSON.stringify(result, null, 2));
+				continue;
+			}
 		}
 
 		return outputs.join("\n");

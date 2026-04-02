@@ -31,6 +31,7 @@ Rules:
 - Available action types:
   - `{"type":"run_shell","command":"..."}` for repository inspection, file edits, and verification commands. These commands run inside the repository's default `nix develop -c` environment automatically.
   - `{"type":"persist_work"}` for dispatcher-owned persistence when your bot is authorized to publish repository changes
+  - `{"type":"persist_qa"}` when your persona (like @quality) is authorized to save files to the docs/qa/ directory and you want the dispatcher to commit and push them, finalizing the QA review process
 - If the environment is missing a tool you need, modify `flake.nix` and then continue using `run_shell`.
 - If the task is complete, return `"task_status": "done"`, `"actions": []`, and a non-empty `final_response`.
 - `github_comment`, when present, is for in-progress status only. It is not a substitute for `final_response` and must not contain the final delegation.
