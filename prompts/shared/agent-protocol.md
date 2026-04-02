@@ -3,8 +3,9 @@ Response protocol:
 Work to this workflow on every turn:
 
 1. keep a concrete plan in mind for the task
+2. return that plan explicitly in `plan`
 2. state the immediate next step in `next_step`
-3. either take exactly one action or finish the task
+3. either take one or more ordered actions or finish the task
 4. observe the result and loop
 
 Return exactly one JSON object and nothing else.
@@ -12,21 +13,23 @@ Return exactly one JSON object and nothing else.
 Required top-level fields:
 
 - `"version": "{{AGENT_PROTOCOL_VERSION}}"`
+- `"plan": ["step 1", "step 2"]`
 - `"next_step": "<the immediate next step you intend to take>"`
-- `"actions": []` or an array containing exactly one action object
+- `"actions": []` or an array of ordered action objects
 - `"task_status": "in_progress"` or `"done"`
 
 Optional top-level fields:
 
-- `"plan": ["step 1", "step 2"]`
 - `"final_response": "<required when task_status is done>"`
 - `"github_comment": "<markdown progress update to append to the issue thread>"`
 
 Rules:
 
-- If you need to inspect or modify the repository, return `"task_status": "in_progress"` and exactly one action.
-- Use `{"type":"run_shell","command":"..."}` for repository inspection, file edits, and verification commands.
-- Use `{"type":"persist_work"}` only when your bot is authorized to publish repository changes.
+- If you need to inspect or modify the repository, return `"task_status": "in_progress"` and at least one action.
+- `actions` is an ordered list. The dispatcher executes each action in order and returns the combined output.
+- Available action types:
+  - `{"type":"run_shell","command":"..."}` for repository inspection, file edits, and verification commands
+  - `{"type":"persist_work"}` for dispatcher-owned persistence when your bot is authorized to publish repository changes
 - If the task is complete, return `"task_status": "done"`, `"actions": []`, and a non-empty `final_response`.
 - `github_comment`, when present, should be a concise markdown progress update for the issue thread. It is not a substitute for `final_response`.
 - Do not use markdown fences or prose outside the JSON object.
@@ -47,6 +50,10 @@ Example in-progress response object:
     {
       "type": "run_shell",
       "command": "cd /project && [ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
+    },
+    {
+      "type": "run_shell",
+      "command": "cd /project && cat docs/plans/current-plan.md"
     }
   ],
   "task_status": "in_progress",

@@ -108,6 +108,7 @@ export class AgentRunner {
 
 			logTrace("agent.iteration.protocol", {
 				iteration,
+				plan: parsedResponse.protocol.plan,
 				taskStatus: parsedResponse.protocol.task_status,
 				nextStep: parsedResponse.protocol.next_step,
 				actionCount: parsedResponse.protocol.actions.length,
@@ -133,13 +134,15 @@ export class AgentRunner {
 				};
 			}
 
-			const actionOutput = await this.executeAction(
-				parsedResponse.protocol.actions[0],
+			const actionOutput = await this.executeActions(
+				parsedResponse.protocol.actions,
 				options,
 			);
 			logTrace("agent.iteration.action", {
 				iteration,
-				actionType: parsedResponse.protocol.actions[0]?.type,
+				actionTypes: parsedResponse.protocol.actions.map(
+					(action) => action.type,
+				),
 				actionOutput: textStats(actionOutput),
 			});
 			this.log(`ACTION OUTPUT: ${actionOutput}\n`);
@@ -160,35 +163,43 @@ export class AgentRunner {
 		console.log(text);
 	}
 
-	private async executeAction(
-		action:
-			| ParsedAgentProtocolResponse["protocol"]["actions"][number]
-			| undefined,
+	private async executeActions(
+		actions: ParsedAgentProtocolResponse["protocol"]["actions"],
 		options: AgentRunnerOptions,
 	): Promise<string> {
-		if (!action) {
-			return "ERROR: No action was supplied.";
+		if (actions.length === 0) {
+			return "ERROR: No actions were supplied.";
 		}
 
-		if (action.type === "run_shell") {
-			return this.shell.executeActions([action]);
+		const outputs: string[] = [];
+
+		for (const action of actions) {
+			if (action.type === "run_shell") {
+				outputs.push(await this.shell.executeActions([action]));
+				continue;
+			}
+
+			if (!options.persistWork) {
+				outputs.push(
+					JSON.stringify(
+						{
+							ok: false,
+							error_code: "persist_not_available",
+							message:
+								'persist_work is not available for this persona. Use "run_shell" instead.',
+						},
+						null,
+						2,
+					),
+				);
+				continue;
+			}
+
+			const result = await options.persistWork();
+			outputs.push(JSON.stringify(result, null, 2));
 		}
 
-		if (!options.persistWork) {
-			return JSON.stringify(
-				{
-					ok: false,
-					error_code: "persist_not_available",
-					message:
-						'persist_work is not available for this persona. Use "run_shell" instead.',
-				},
-				null,
-				2,
-			);
-		}
-
-		const result = await options.persistWork();
-		return JSON.stringify(result, null, 2);
+		return outputs.join("\n");
 	}
 
 	private async appendGithubComment(

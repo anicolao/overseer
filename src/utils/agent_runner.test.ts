@@ -7,12 +7,17 @@ describe("AgentRunner", () => {
 		const responses = [
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect the repository root.", "Return control."],
 				next_step: "Inspect the repository root.",
-				actions: [{ type: "run_shell", command: "printf 'hello'" }],
+				actions: [
+					{ type: "run_shell", command: "printf 'hello'" },
+					{ type: "run_shell", command: "printf 'world'" },
+				],
 				task_status: "in_progress",
 			}),
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect the repository root.", "Return control."],
 				next_step: "Return control to the dispatcher.",
 				actions: [],
 				task_status: "done",
@@ -46,6 +51,7 @@ describe("AgentRunner", () => {
 			"Verified the repository root and completed the task.",
 		);
 		expect(result.log).toContain("hello");
+		expect(result.log).toContain("world");
 		expect(result.log).toContain("PROTOCOL RESPONSE");
 	});
 
@@ -53,12 +59,14 @@ describe("AgentRunner", () => {
 		const responses = [
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Persist the prepared file.", "Return control."],
 				next_step: "Persist the prepared file.",
 				actions: [{ type: "persist_work" }],
 				task_status: "in_progress",
 			}),
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Persist the prepared file.", "Return control."],
 				next_step: "Return control to the dispatcher.",
 				actions: [],
 				task_status: "done",
@@ -106,6 +114,7 @@ describe("AgentRunner", () => {
 		const responses = [
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect WORKFLOW.md.", "Return control."],
 				next_step: "Inspect WORKFLOW.md.",
 				actions: [{ type: "run_shell", command: "printf 'ok'" }],
 				task_status: "in_progress",
@@ -113,6 +122,7 @@ describe("AgentRunner", () => {
 			}),
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect WORKFLOW.md.", "Return control."],
 				next_step: "Return control to the dispatcher.",
 				actions: [],
 				task_status: "done",
