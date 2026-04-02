@@ -133,7 +133,9 @@ function loadBotDefinition(
 		`${id}.llm.provider`,
 	);
 	const model = requireNonEmptyString(
-		rawBot.llm?.model || defaults.defaultModel,
+		process.env.OVERSEER_OVERRIDE_MODEL ||
+			rawBot.llm?.model ||
+			defaults.defaultModel,
 		`${id}.llm.model`,
 	);
 	const allowPersistWork = Boolean(rawBot.allow_persist_work);
