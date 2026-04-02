@@ -20,7 +20,11 @@ export interface PersistWorkAction {
 	type: "persist_work";
 }
 
-export type AgentAction = RunShellAction | PersistWorkAction;
+export interface PersistQaAction {
+	type: "persist_qa";
+}
+
+export type AgentAction = RunShellAction | PersistWorkAction | PersistQaAction;
 
 export interface AgentProtocolResponse {
 	version: typeof AGENT_PROTOCOL_VERSION;
@@ -53,7 +57,7 @@ Work to this workflow on every turn:
 - You may include \`handoff_to\` on \`"done"\` responses to make the next recipient explicit. Valid values: ${AGENT_HANDOFF_TARGETS.map((target) => `\`${target}\``).join(", ")}.
 - If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and at least one action.
 - \`actions\` is an ordered list executed sequentially by the dispatcher.
-- Available actions: \`{"type":"run_shell","command":"..."}\` and \`{"type":"persist_work"}\`.
+- Available actions: \`{"type":"run_shell","command":"..."}\`, \`{"type":"persist_work"}\`, and \`{"type":"persist_qa"}\`.
 - Use \`{"type":"run_shell","command":"..."}\` for repository inspection, file edits, and verification commands.
 - Use \`{"type":"persist_work"}\` only when your persona is authorized to publish repo changes and you want the dispatcher-owned persistence mechanism to commit and push your work.
 - \`github_comment\` is for in-progress status only. Do not put delegation or the final handoff there.
@@ -314,8 +318,14 @@ function parseAction(value: unknown, index: number): AgentAction {
 		};
 	}
 
+	if (type === "persist_qa") {
+		return {
+			type: "persist_qa",
+		};
+	}
+
 	throw new Error(
-		`actions[${index}].type must be "run_shell" or "persist_work"`,
+		`actions[${index}].type must be "run_shell", "persist_work", or "persist_qa"`,
 	);
 }
 

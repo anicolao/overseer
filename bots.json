@@ -58,12 +58,9 @@
 			"display_name": "Quality",
 			"kind": "task",
 			"allow_persist_work": false,
-			"prompt_files": [
-				"prompts/shared/task-agent.md",
-				"prompts/shared/read-only-agent.md",
-				"prompts/quality.md"
-			],
-			"require_done_handoff": true
+			"prompt_files": ["prompts/shared/task-agent.md", "prompts/quality.md"],
+			"require_done_handoff": true,
+			"allow_persist_qa": true
 		}
 	]
 }

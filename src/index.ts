@@ -99,7 +99,17 @@ export const overseerWebhook = async (req: Request, res: Response) => {
 			if (body.includes("@planner")) {
 				await personas.planner.handleTask(owner.login, name, number, body);
 			}
-			// Additional routing logic for Developer/Tester and Quality...
+			if (body.includes("@developer-tester")) {
+				await personas.developerTester.handleTask(
+					owner.login,
+					name,
+					number,
+					body,
+				);
+			}
+			if (body.includes("@quality")) {
+				await personas.quality.handleTask(owner.login, name, number, body);
+			}
 		}
 
 		res.status(200).send("Event processed");
