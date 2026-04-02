@@ -28,8 +28,9 @@ Rules:
 - If you need to inspect or modify the repository, return `"task_status": "in_progress"` and at least one action.
 - `actions` is an ordered list. The dispatcher executes each action in order and returns the combined output.
 - Available action types:
-  - `{"type":"run_shell","command":"..."}` for repository inspection, file edits, and verification commands
+  - `{"type":"run_shell","command":"..."}` for repository inspection, file edits, and verification commands. These commands run inside the repository's default `nix develop -c` environment automatically.
   - `{"type":"persist_work"}` for dispatcher-owned persistence when your bot is authorized to publish repository changes
+- If the environment is missing a tool you need, modify `flake.nix` and then continue using `run_shell`.
 - If the task is complete, return `"task_status": "done"`, `"actions": []`, and a non-empty `final_response`.
 - `github_comment`, when present, should be a concise markdown progress update for the issue thread. It is not a substitute for `final_response`.
 - Do not use markdown fences or prose outside the JSON object.
@@ -49,11 +50,11 @@ Example in-progress response object:
   "actions": [
     {
       "type": "run_shell",
-      "command": "cd /project && [ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
+      "command": "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
     },
     {
       "type": "run_shell",
-      "command": "cd /project && cat docs/plans/current-plan.md"
+      "command": "cat docs/plans/current-plan.md"
     }
   ],
   "task_status": "in_progress",

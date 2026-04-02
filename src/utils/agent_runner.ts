@@ -47,8 +47,8 @@ export class AgentRunner {
 	private shell: ShellService;
 	private sessionLog: string = "";
 
-	constructor() {
-		this.shell = new ShellService();
+	constructor(shell: ShellService = new ShellService()) {
+		this.shell = shell;
 	}
 
 	async runAutonomousLoop(
