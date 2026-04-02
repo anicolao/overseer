@@ -9,6 +9,7 @@ describe("parseAgentProtocolResponse", () => {
 		const parsed = parseAgentProtocolResponse(
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect the repository root."],
 				next_step: "Inspect the repository root.",
 				actions: [{ type: "run_shell", command: "ls -la" }],
 				task_status: "in_progress",
@@ -25,6 +26,7 @@ describe("parseAgentProtocolResponse", () => {
 		const parsed = parseAgentProtocolResponse(`\`\`\`json
 {
   "version": "${AGENT_PROTOCOL_VERSION}",
+  "plan": ["Finish the assigned task."],
   "next_step": "Finish up.",
   "actions": [],
   "task_status": "done",
@@ -41,6 +43,7 @@ describe("parseAgentProtocolResponse", () => {
 I will comply.
 {
   "version": "${AGENT_PROTOCOL_VERSION}",
+  "plan": ["Review shell output."],
   "next_step": "Review shell output.",
  "actions": [{"type": "run_shell", "command": "cat package.json"}],
   "task_status": "in_progress"
@@ -56,6 +59,7 @@ I will comply.
 		const parsed = parseAgentProtocolResponse(
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Persist the prepared plan."],
 				next_step: "Persist the prepared plan.",
 				actions: [{ type: "persist_work" }],
 				task_status: "in_progress",
@@ -69,10 +73,13 @@ I will comply.
 		const parsed = parseAgentProtocolResponse(
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
-				next_step: "Read WORKFLOW.md.",
-				actions: [{ type: "run_shell", command: "cat WORKFLOW.md" }],
-				task_status: "in_progress",
 				plan: ["Read repository guidance", "Implement the task"],
+				next_step: "Read WORKFLOW.md.",
+				actions: [
+					{ type: "run_shell", command: "cat WORKFLOW.md" },
+					{ type: "run_shell", command: "cat docs/plans/current-plan.md" },
+				],
+				task_status: "in_progress",
 				github_comment: "Started work and am reading repository guidance.",
 			}),
 		);
@@ -84,6 +91,7 @@ I will comply.
 		expect(parsed.protocol.github_comment).toBe(
 			"Started work and am reading repository guidance.",
 		);
+		expect(parsed.protocol.actions).toHaveLength(2);
 	});
 
 	it("rejects done responses without final_response", () => {
@@ -91,11 +99,25 @@ I will comply.
 			parseAgentProtocolResponse(
 				JSON.stringify({
 					version: AGENT_PROTOCOL_VERSION,
+					plan: ["Stop."],
 					next_step: "Stop.",
 					actions: [],
 					task_status: "done",
 				}),
 			),
 		).toThrow(/final_response/);
+	});
+
+	it("rejects responses without a plan", () => {
+		expect(() =>
+			parseAgentProtocolResponse(
+				JSON.stringify({
+					version: AGENT_PROTOCOL_VERSION,
+					next_step: "Inspect files.",
+					actions: [{ type: "run_shell", command: "ls" }],
+					task_status: "in_progress",
+				}),
+			),
+		).toThrow(/plan/);
 	});
 });
