@@ -34,6 +34,7 @@ export class OverseerPersona {
 		issueNumber: number,
 	): AgentRunnerOptions {
 		return {
+			requireDoneHandoff: true,
 			modelName: this.bot.llm.model,
 			promptDefinition: {
 				botId: this.bot.id,

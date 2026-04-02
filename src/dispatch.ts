@@ -3,8 +3,14 @@ import { getBotOrThrow, loadBotRegistry } from "./bots/bot_config.js";
 import { OverseerPersona } from "./personas/overseer.js";
 import { TaskPersona } from "./personas/task_persona.js";
 import type { IterationResult } from "./utils/agent_runner.js";
+import { isWorkflowNoiseComment } from "./utils/comment_markers.js";
 import { GeminiService } from "./utils/gemini.js";
 import { GitHubService } from "./utils/github.js";
+import {
+	buildNextStepLine,
+	resolveNextPersona,
+	stripTrailingNextStep,
+} from "./utils/handoff.js";
 import { PersistenceService } from "./utils/persistence.js";
 import {
 	getAttribution,
@@ -193,6 +199,15 @@ async function run() {
 	} else if (eventName === "issue_comment" && eventData.action === "created") {
 		const body = eventData.comment.body as string;
 		commentUrl = eventData.comment.html_url as string;
+		if (isWorkflowNoiseComment(body)) {
+			logTrace("dispatcher.issueComment.skippedWorkflowNoise", {
+				body: textStats(body),
+			});
+			console.log(
+				"Skipping issue_comment dispatch for workflow noise comment.",
+			);
+			return;
+		}
 
 		// 1. Identify sender persona if bot
 		if (sender === botUser) {
@@ -361,7 +376,6 @@ async function run() {
 				issueNumber,
 				executedPersona,
 				iterationResult,
-				handleMap,
 				personaNameMap,
 				sender,
 				commentUrl,
@@ -378,7 +392,6 @@ async function finalizeRun(
 	issueNumber: number,
 	persona: string,
 	result: IterationResult,
-	handleMap: Record<string, string>,
 	personaNameMap: Record<string, string>,
 	triggeringUser?: string,
 	triggeringCommentUrl?: string,
@@ -389,16 +402,8 @@ async function finalizeRun(
 	fs.writeFileSync(logPath, result.log);
 
 	// 2. Determine Next Persona
-	let nextPersona: string | null = null;
-	if (persona !== "overseer") {
-		nextPersona = "overseer";
-	} else {
-		const nextStepMatch = result.finalResponse.match(/Next step: (@[a-z-]+)/i);
-		if (nextStepMatch) {
-			nextPersona = handleMap[nextStepMatch[1].toLowerCase()] || null;
-			if (nextPersona === "overseer") nextPersona = null;
-		}
-	}
+	const nextPersona = resolveNextPersona(persona, result.handoffTo);
+	const nextStepLine = buildNextStepLine(persona, result.handoffTo);
 
 	// 3. Update State
 	await github.setActivePersona(owner, repo, issueNumber, nextPersona);
@@ -418,8 +423,11 @@ async function finalizeRun(
 		triggeringPersona,
 	);
 
+	const finalBody = stripTrailingNextStep(result.finalResponse);
 	const finalComment =
-		attributionHeader + truncate(result.finalResponse, 50000) + artifactLink;
+		attributionHeader +
+		truncate(`${finalBody}\n\n${nextStepLine}`, 50000) +
+		artifactLink;
 
 	try {
 		await github.addCommentToIssue(owner, repo, issueNumber, finalComment);
