@@ -16,6 +16,27 @@ export interface IterationResult {
 
 export interface AgentRunnerOptions {
 	persistWork?: () => Promise<PersistWorkResult>;
+	modelName?: string;
+	promptDefinition?: {
+		botId: string;
+		displayName: string;
+		llm: {
+			provider: string;
+			model: string;
+		};
+		promptFiles: string[];
+		promptFileContents: Record<
+			string,
+			{
+				stats: ReturnType<typeof textStats>;
+				content: string;
+			}
+		>;
+		concatenatedPrompt: {
+			stats: ReturnType<typeof textStats>;
+			content: string;
+		};
+	};
 }
 
 export class AgentRunner {
@@ -35,12 +56,14 @@ export class AgentRunner {
 	): Promise<IterationResult> {
 		logTrace("agent.loop.start", {
 			maxIterations,
+			modelName: options.modelName,
 			systemInstruction: textStats(systemInstruction),
 			systemInstructionRaw: systemInstruction,
 			initialMessage: textStats(initialMessage),
 			initialMessageRaw: initialMessage,
+			promptDefinition: options.promptDefinition,
 		});
-		const chat = gemini.startChat(systemInstruction);
+		const chat = gemini.startChat(systemInstruction, [], options.modelName);
 		let currentMessage = initialMessage;
 		let iteration = 0;
 

@@ -1,10 +1,8 @@
 import * as crypto from "node:crypto";
 import type { Request, Response } from "express";
-import { DeveloperTesterPersona } from "./personas/developer_tester.js";
+import { getBotOrThrow, loadBotRegistry } from "./bots/bot_config.js";
 import { OverseerPersona } from "./personas/overseer.js";
-import { PlannerPersona } from "./personas/planner.js";
-import { ProductArchitectPersona } from "./personas/product_architect.js";
-import { QualityPersona } from "./personas/quality.js";
+import { TaskPersona } from "./personas/task_persona.js";
 import { GeminiService } from "./utils/gemini.js";
 import { GitHubService } from "./utils/github.js";
 import { PersistenceService } from "./utils/persistence.js";
@@ -17,13 +15,34 @@ const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "";
 const gemini = new GeminiService(geminiApiKey);
 const github = new GitHubService(githubToken);
 const persistence = new PersistenceService();
+const botRegistry = loadBotRegistry();
 
 const personas = {
-	overseer: new OverseerPersona(gemini, github),
-	productArchitect: new ProductArchitectPersona(gemini, github, persistence),
-	planner: new PlannerPersona(gemini, github, persistence),
-	developerTester: new DeveloperTesterPersona(gemini, github, persistence),
-	quality: new QualityPersona(gemini, github),
+	overseer: new OverseerPersona(
+		getBotOrThrow(botRegistry, "overseer"),
+		gemini,
+		github,
+	),
+	productArchitect: new TaskPersona(
+		getBotOrThrow(botRegistry, "product-architect"),
+		gemini,
+		persistence,
+	),
+	planner: new TaskPersona(
+		getBotOrThrow(botRegistry, "planner"),
+		gemini,
+		persistence,
+	),
+	developerTester: new TaskPersona(
+		getBotOrThrow(botRegistry, "developer-tester"),
+		gemini,
+		persistence,
+	),
+	quality: new TaskPersona(
+		getBotOrThrow(botRegistry, "quality"),
+		gemini,
+		persistence,
+	),
 };
 
 export const overseerWebhook = async (req: Request, res: Response) => {
@@ -66,22 +85,10 @@ export const overseerWebhook = async (req: Request, res: Response) => {
 				);
 			}
 			if (body.includes("@product-architect")) {
-				await personas.productArchitect.handleMention(
-					owner.login,
-					name,
-					number,
-					user.login,
-					body,
-				);
+				await personas.productArchitect.handleTask(number, body);
 			}
 			if (body.includes("@planner")) {
-				await personas.planner.handleMention(
-					owner.login,
-					name,
-					number,
-					user.login,
-					body,
-				);
+				await personas.planner.handleTask(number, body);
 			}
 			// Additional routing logic for Developer/Tester and Quality...
 		}

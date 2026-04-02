@@ -45,19 +45,21 @@ function serializeContentForTrace(
 
 export class GeminiService {
 	private genAI: GoogleGenerativeAI;
-	private model: GenerativeModel;
-	private readonly modelName: string;
+	private readonly defaultModelName: string;
 	private readonly requestTimeoutMs: number;
 
 	constructor(apiKey: string) {
-		this.modelName = "gemini-3.1-pro-preview";
+		this.defaultModelName = "gemini-3.1-pro-preview";
 		this.requestTimeoutMs = Number(
 			process.env.GEMINI_REQUEST_TIMEOUT_MS || "120000",
 		);
 		installFetchInstrumentation();
 		this.genAI = new GoogleGenerativeAI(apiKey);
-		this.model = this.genAI.getGenerativeModel({
-			model: this.modelName,
+	}
+
+	private getModel(modelName?: string): GenerativeModel {
+		return this.genAI.getGenerativeModel({
+			model: modelName || this.defaultModelName,
 		});
 	}
 
@@ -65,6 +67,7 @@ export class GeminiService {
 		systemInstruction: string,
 		userMessage: string,
 		context?: string,
+		modelName?: string,
 	): Promise<string> {
 		const fullPrompt = `
 	SYSTEM INSTRUCTION:
@@ -80,7 +83,7 @@ export class GeminiService {
 		let retries = 0;
 		const maxRetries = 3;
 		logTrace("gemini.promptPersona.prepare", {
-			model: this.modelName,
+			model: modelName || this.defaultModelName,
 			systemInstruction: textStats(systemInstruction),
 			systemInstructionRaw: systemInstruction,
 			userMessage: textStats(userMessage),
@@ -94,20 +97,22 @@ export class GeminiService {
 		while (retries < maxRetries) {
 			const attempt = retries + 1;
 			const startedAt = Date.now();
+			const resolvedModelName = modelName || this.defaultModelName;
 			logTrace("gemini.promptPersona.begin", {
-				model: this.modelName,
+				model: resolvedModelName,
 				attempt,
 				maxRetries,
 				requestTimeoutMs: this.requestTimeoutMs,
 			});
 			try {
-				const result = await this.model.generateContent(fullPrompt, {
+				const model = this.getModel(modelName);
+				const result = await model.generateContent(fullPrompt, {
 					timeout: this.requestTimeoutMs,
 				});
 				const response = await result.response;
 				const responseText = response.text();
 				logTrace("gemini.promptPersona.success", {
-					model: this.modelName,
+					model: resolvedModelName,
 					attempt,
 					durationMs: Date.now() - startedAt,
 					responseText: textStats(responseText),
@@ -119,7 +124,7 @@ export class GeminiService {
 			} catch (error) {
 				retries++;
 				logTrace("gemini.promptPersona.error", {
-					model: this.modelName,
+					model: resolvedModelName,
 					attempt,
 					durationMs: Date.now() - startedAt,
 					error: serializeError(error),
@@ -134,9 +139,11 @@ export class GeminiService {
 	startChat(
 		systemInstruction: string,
 		history: Content[] = [],
+		modelName?: string,
 	): GeminiChatSession {
+		const resolvedModelName = modelName || this.defaultModelName;
 		logTrace("gemini.startChat", {
-			model: this.modelName,
+			model: resolvedModelName,
 			systemInstruction: textStats(systemInstruction),
 			systemInstructionRaw: systemInstruction,
 			historyItems: history.length,
@@ -145,7 +152,7 @@ export class GeminiService {
 			responseMimeType: "application/json",
 			responseProtocolVersion: AGENT_PROTOCOL_VERSION,
 		});
-		const chat = this.model.startChat({
+		const chat = this.getModel(resolvedModelName).startChat({
 			history,
 			systemInstruction: {
 				role: "system",
@@ -168,7 +175,7 @@ export class GeminiService {
 					const attempt = retries + 1;
 					const startedAt = Date.now();
 					logTrace("gemini.sendMessage.begin", {
-						model: this.modelName,
+						model: resolvedModelName,
 						attempt,
 						maxRetries,
 						content: contentSummary,
@@ -193,7 +200,7 @@ export class GeminiService {
 								firstChunkDelayMs = Date.now() - startedAt;
 							}
 							logTrace("gemini.sendMessage.chunk", {
-								model: this.modelName,
+								model: resolvedModelName,
 								attempt,
 								chunkIndex: chunkCount,
 								chunkText: textStats(chunkText),
@@ -205,7 +212,7 @@ export class GeminiService {
 						const response = await result.response;
 						const responseText = response.text();
 						logTrace("gemini.sendMessage.success", {
-							model: this.modelName,
+							model: resolvedModelName,
 							attempt,
 							durationMs: Date.now() - startedAt,
 							chunkCount,
@@ -226,7 +233,7 @@ export class GeminiService {
 					} catch (error) {
 						retries++;
 						logTrace("gemini.sendMessage.error", {
-							model: this.modelName,
+							model: resolvedModelName,
 							attempt,
 							durationMs: Date.now() - startedAt,
 							error: serializeError(error),
