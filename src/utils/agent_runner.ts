@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import type { Content } from "@google/generative-ai";
 import {
 	buildContinuationMessage,
 	buildProtocolRepairMessage,
@@ -55,6 +58,7 @@ export class AgentRunner {
 		maxIterations: number = 50,
 		options: AgentRunnerOptions = {},
 	): Promise<IterationResult> {
+		const repositoryGuidance = this.loadRepositoryGuidance();
 		logTrace("agent.loop.start", {
 			maxIterations,
 			modelName: options.modelName,
@@ -63,8 +67,18 @@ export class AgentRunner {
 			initialMessage: textStats(initialMessage),
 			initialMessageRaw: initialMessage,
 			promptDefinition: options.promptDefinition,
+			repositoryGuidancePath: repositoryGuidance.path,
+			repositoryGuidance: repositoryGuidance.content
+				? textStats(repositoryGuidance.content)
+				: undefined,
+			repositoryGuidanceRaw: repositoryGuidance.content,
+			repositoryGuidanceHistory: repositoryGuidance.history,
 		});
-		const chat = gemini.startChat(systemInstruction, [], options.modelName);
+		const chat = gemini.startChat(
+			systemInstruction,
+			repositoryGuidance.history,
+			options.modelName,
+		);
 		let currentMessage = initialMessage;
 		let iteration = 0;
 
@@ -224,5 +238,55 @@ export class AgentRunner {
 			githubCommentRaw: markdown,
 		});
 		this.log(`GITHUB COMMENT APPENDED: ${markdown}\n`);
+	}
+
+	private loadRepositoryGuidance(): {
+		path?: string;
+		content?: string;
+		history: Content[];
+	} {
+		const agentsPath = resolve(process.cwd(), "AGENTS.md");
+		if (!existsSync(agentsPath)) {
+			return {
+				history: [],
+			};
+		}
+
+		const content = readFileSync(agentsPath, "utf8").trim();
+		if (content.length === 0) {
+			return {
+				path: agentsPath,
+				content,
+				history: [],
+			};
+		}
+
+		const userMessage = [
+			"Repository guidance from the top-level AGENTS.md file.",
+			"Follow this guidance for the rest of the task.",
+			"",
+			"AGENTS.md:",
+			"",
+			content,
+		].join("\n");
+
+		return {
+			path: agentsPath,
+			content,
+			history: [
+				{
+					role: "user",
+					parts: [{ text: userMessage }],
+				},
+				{
+					role: "model",
+					parts: [
+						{
+							text: "Understood. I will follow the repository guidance from AGENTS.md.",
+						},
+					],
+				},
+			],
+		};
 	}
 }
