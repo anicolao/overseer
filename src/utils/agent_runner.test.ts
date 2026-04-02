@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AGENT_PROTOCOL_VERSION } from "./agent_protocol.js";
 import { AgentRunner } from "./agent_runner.js";
@@ -163,5 +166,75 @@ describe("AgentRunner", () => {
 		]);
 		expect(result.finalResponse).toBe("Completed the requested work.");
 		expect(result.log).toContain("GITHUB COMMENT APPENDED");
+	});
+
+	it("injects top-level AGENTS.md into chat history before the task input", async () => {
+		const tempDir = mkdtempSync(join(tmpdir(), "overseer-agent-runner-"));
+		writeFileSync(
+			join(tempDir, "AGENTS.md"),
+			"# Repo Rules\nAlways read the plan first.\n",
+		);
+
+		const originalCwd = process.cwd();
+		const capturedHistories: unknown[] = [];
+
+		try {
+			process.chdir(tempDir);
+
+			const gemini = {
+				startChat(_systemInstruction: string, history: unknown[]) {
+					capturedHistories.push(history);
+					return {
+						async sendMessage() {
+							const next = JSON.stringify({
+								version: AGENT_PROTOCOL_VERSION,
+								plan: ["Return control."],
+								next_step: "Return control to the dispatcher.",
+								actions: [],
+								task_status: "done",
+								final_response: "Completed the requested work.",
+							});
+							return { text: next, response: { text: () => next } };
+						},
+					};
+				},
+			};
+
+			const runner = new AgentRunner();
+			await runner.runAutonomousLoop(
+				gemini as never,
+				"System instruction",
+				"Initial message",
+				5,
+			);
+		} finally {
+			process.chdir(originalCwd);
+		}
+
+		expect(capturedHistories).toHaveLength(1);
+		expect(capturedHistories[0]).toEqual([
+			{
+				role: "user",
+				parts: [
+					{
+						text: expect.stringContaining(
+							"Repository guidance from the top-level AGENTS.md file.",
+						),
+					},
+				],
+			},
+			{
+				role: "model",
+				parts: [
+					{
+						text: "Understood. I will follow the repository guidance from AGENTS.md.",
+					},
+				],
+			},
+		]);
+		expect(
+			(capturedHistories[0] as Array<{ parts: Array<{ text: string }> }>)[0]
+				?.parts[0]?.text,
+		).toContain("Always read the plan first.");
 	});
 });
