@@ -16,6 +16,7 @@
       "id": "overseer",
       "display_name": "Overseer",
       "kind": "overseer",
+      "shell_access": "read_only",
       "allow_persist_work": false,
       "prompt_files": [
         "prompts/shared/overseer-core.md",
@@ -26,6 +27,7 @@
       "id": "product-architect",
       "display_name": "Product/Architect",
       "kind": "task",
+      "shell_access": "read_write",
       "allow_persist_work": true,
       "prompt_files": [
         "prompts/shared/task-agent.md",
@@ -37,6 +39,7 @@
       "id": "planner",
       "display_name": "Planner",
       "kind": "task",
+      "shell_access": "read_write",
       "allow_persist_work": true,
       "prompt_files": [
         "prompts/shared/task-agent.md",
@@ -48,6 +51,7 @@
       "id": "developer-tester",
       "display_name": "Developer/Tester",
       "kind": "task",
+      "shell_access": "read_write",
       "allow_persist_work": true,
       "prompt_files": [
         "prompts/shared/task-agent.md",
@@ -60,6 +64,7 @@
       "id": "quality",
       "display_name": "Quality",
       "kind": "task",
+      "shell_access": "read_only",
       "allow_persist_work": false,
       "prompt_files": [
         "prompts/shared/task-agent.md",

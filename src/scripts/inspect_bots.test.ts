@@ -14,6 +14,8 @@ describe("inspect_bots", () => {
 		expect(markdown).toContain("# Bots");
 		expect(markdown).toContain("| `overseer` | Overseer |");
 		expect(markdown).toContain("| `developer-tester` | Developer/Tester |");
+		expect(markdown).toContain("| `read_only` |");
+		expect(markdown).toContain("| `read_write` |");
 	});
 
 	it("renders detail for a specific bot including prompt files and contents", () => {
@@ -22,6 +24,7 @@ describe("inspect_bots", () => {
 		const markdown = renderBotDetailMarkdown(bot);
 
 		expect(markdown).toContain("# Developer/Tester");
+		expect(markdown).toContain("Shell Access: `read_write`");
 		expect(markdown).toContain("## Prompt Files");
 		expect(markdown).toContain("`prompts/shared/developer-guidance.md`");
 		expect(markdown).toContain("## Concatenated Prompt");

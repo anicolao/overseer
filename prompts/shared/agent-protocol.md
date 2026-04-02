@@ -29,9 +29,8 @@ Rules:
 - If you need to inspect or modify the repository, return `"task_status": "in_progress"` and at least one action.
 - `actions` is an ordered list. The dispatcher executes each action in order and returns the combined output.
 - Available action types:
-  - `{"type":"run_shell","command":"..."}` for repository inspection, file edits, and verification commands. These commands run inside the repository's default `nix develop -c` environment automatically.
-  - `{"type":"persist_work"}` for dispatcher-owned persistence when your bot is authorized to publish repository changes
-- If the environment is missing a tool you need, modify `flake.nix` and then continue using `run_shell`.
+{{AVAILABLE_ACTIONS_BULLETS}}
+{{SHELL_ACTION_RULES}}
 - If the task is complete, return `"task_status": "done"`, `"actions": []`, and a non-empty `final_response`.
 - `github_comment`, when present, is for in-progress status only. It is not a substitute for `final_response` and must not contain the final delegation.
 - `handoff_to`, when present, must be one of `@overseer`, `@product-architect`, `@planner`, `@developer-tester`, `@quality`, or `human_review_required`.
@@ -50,16 +49,7 @@ Example in-progress response object:
     "Persist the work and confirm it exists on the issue branch."
   ],
   "next_step": "Read WORKFLOW.md and the referenced plan file before changing code.",
-  "actions": [
-    {
-      "type": "run_shell",
-      "command": "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
-    },
-    {
-      "type": "run_shell",
-      "command": "cat docs/plans/current-plan.md"
-    }
-  ],
+  "actions": {{IN_PROGRESS_EXAMPLE_ACTIONS}},
   "task_status": "in_progress",
   "github_comment": "Started work on the assigned task and am reading the required repository guidance first."
 }

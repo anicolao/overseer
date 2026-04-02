@@ -48,6 +48,7 @@ export class TaskPersona {
 			issueNumber,
 			taskBody: textStats(taskBody),
 			taskBodyRaw: taskBody,
+			shellAccess: this.bot.shellAccess,
 			allowPersistWork: this.bot.allowPersistWork,
 			maxIterations: this.bot.maxIterations,
 			llm: this.bot.llm,
@@ -56,6 +57,7 @@ export class TaskPersona {
 
 		const runnerOptions: AgentRunnerOptions = {
 			modelName: this.bot.llm.model,
+			shellAccess: this.bot.shellAccess,
 			promptDefinition: {
 				botId: this.bot.id,
 				displayName: this.bot.displayName,

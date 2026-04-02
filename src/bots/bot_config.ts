@@ -5,6 +5,7 @@ import { textStats } from "../utils/trace.js";
 
 export type BotKind = "overseer" | "task";
 export type LlmProvider = "gemini";
+export type ShellAccess = "read_only" | "read_write";
 
 interface RawBotManifest {
 	defaults?: {
@@ -22,6 +23,7 @@ interface RawBotDefinition {
 	id?: string;
 	display_name?: string;
 	kind?: string;
+	shell_access?: string;
 	llm?: {
 		provider?: string;
 		model?: string;
@@ -45,6 +47,7 @@ export interface LoadedBotDefinition {
 		provider: LlmProvider;
 		model: string;
 	};
+	shellAccess: ShellAccess;
 	allowPersistWork: boolean;
 	maxIterations: number;
 	prompt: LoadedPromptAssembly;
@@ -124,6 +127,7 @@ function loadBotDefinition(
 		`${id}.display_name`,
 	);
 	const kind = parseKind(rawBot.kind, id);
+	const shellAccess = parseShellAccess(rawBot.shell_access, id);
 	const provider = parseProvider(
 		rawBot.llm?.provider || defaults.defaultProvider,
 		`${id}.llm.provider`,
@@ -153,15 +157,23 @@ function loadBotDefinition(
 			provider,
 			model,
 		},
+		shellAccess,
 		allowPersistWork,
 		maxIterations,
-		prompt: loadPromptAssembly(repoRoot, promptFiles),
+		prompt: loadPromptAssembly(repoRoot, promptFiles, {
+			shellAccess,
+			allowPersistWork,
+		}),
 	};
 }
 
 function loadPromptAssembly(
 	repoRoot: string,
 	promptFiles: string[],
+	context: {
+		shellAccess: ShellAccess;
+		allowPersistWork: boolean;
+	},
 ): LoadedPromptAssembly {
 	const duplicatePromptFiles = findDuplicates(promptFiles);
 	if (duplicatePromptFiles.length > 0) {
@@ -173,7 +185,10 @@ function loadPromptAssembly(
 	const promptFileContents: Record<string, string> = {};
 	const sections = promptFiles.map((promptFile) => {
 		const absolutePath = resolve(repoRoot, promptFile);
-		const content = renderPromptTemplate(readFileSync(absolutePath, "utf8"));
+		const content = renderPromptTemplate(
+			readFileSync(absolutePath, "utf8"),
+			context,
+		);
 		promptFileContents[promptFile] = content;
 		return content.trimEnd();
 	});
@@ -185,11 +200,24 @@ function loadPromptAssembly(
 	};
 }
 
-function renderPromptTemplate(content: string): string {
-	return content.replaceAll(
-		"{{AGENT_PROTOCOL_VERSION}}",
-		AGENT_PROTOCOL_VERSION,
-	);
+function renderPromptTemplate(
+	content: string,
+	context: {
+		shellAccess: ShellAccess;
+		allowPersistWork: boolean;
+	},
+): string {
+	return content
+		.replaceAll("{{AGENT_PROTOCOL_VERSION}}", AGENT_PROTOCOL_VERSION)
+		.replaceAll(
+			"{{AVAILABLE_ACTIONS_BULLETS}}",
+			buildAvailableActionsBullets(context),
+		)
+		.replaceAll(
+			"{{IN_PROGRESS_EXAMPLE_ACTIONS}}",
+			buildExampleActionsJson(context),
+		)
+		.replaceAll("{{SHELL_ACTION_RULES}}", buildShellActionRules(context));
 }
 
 function parseKind(value: string | undefined, fieldPrefix: string): BotKind {
@@ -197,6 +225,18 @@ function parseKind(value: string | undefined, fieldPrefix: string): BotKind {
 		return value;
 	}
 	throw new Error(`${fieldPrefix}.kind must be "overseer" or "task"`);
+}
+
+function parseShellAccess(
+	value: string | undefined,
+	fieldPrefix: string,
+): ShellAccess {
+	if (value === "read_only" || value === "read_write") {
+		return value;
+	}
+	throw new Error(
+		`${fieldPrefix}.shell_access must be "read_only" or "read_write"`,
+	);
 }
 
 function parseProvider(
@@ -236,6 +276,86 @@ function findDuplicates(values: string[]): string[] {
 		seen.add(value);
 	}
 	return [...duplicates];
+}
+
+function buildAvailableActionsBullets(context: {
+	shellAccess: ShellAccess;
+	allowPersistWork: boolean;
+}): string {
+	const bullets = [
+		'- `{"type":"run_ro_shell","command":"..."}` for repository inspection and verification commands inside a disposable read-only clone of the repository. This command runs inside the repository\'s default `nix develop -c` environment automatically.',
+	];
+
+	if (context.shellAccess === "read_write") {
+		bullets.push(
+			'- `{"type":"run_shell","command":"..."}` for repository edits and verification commands in the live repository checkout. This command also runs inside the repository\'s default `nix develop -c` environment automatically.',
+		);
+	} else {
+		bullets.push(
+			"- `run_shell` is not available to this bot. Stay inside `run_ro_shell` and do not attempt repository writes.",
+		);
+	}
+
+	if (context.allowPersistWork) {
+		bullets.push(
+			'- `{"type":"persist_work"}` for dispatcher-owned persistence when your bot is authorized to publish repository changes.',
+		);
+	} else {
+		bullets.push(
+			"- `persist_work` is not available to this bot unless the dispatcher explicitly enables it.",
+		);
+	}
+
+	return bullets.join("\n");
+}
+
+function buildExampleActionsJson(context: {
+	shellAccess: ShellAccess;
+	allowPersistWork: boolean;
+}): string {
+	const actions =
+		context.shellAccess === "read_write"
+			? `[
+    {
+      "type": "run_ro_shell",
+      "command": "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
+    },
+    {
+      "type": "run_shell",
+      "command": "cat docs/plans/current-plan.md"
+    }
+  ]`
+			: `[
+    {
+      "type": "run_ro_shell",
+      "command": "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
+    },
+    {
+      "type": "run_ro_shell",
+      "command": "cat docs/plans/current-plan.md"
+    }
+  ]`;
+
+	return actions;
+}
+
+function buildShellActionRules(context: {
+	shellAccess: ShellAccess;
+	allowPersistWork: boolean;
+}): string {
+	if (context.shellAccess === "read_write") {
+		return [
+			"- `run_ro_shell` is the default choice for inspection and verification.",
+			"- Use `run_shell` only when you intentionally need to modify repository files or run write-dependent project tooling.",
+			"- If the environment is missing a tool you need, edit `flake.nix` and then continue using the shell actions above.",
+		].join("\n");
+	}
+
+	return [
+		"- Use `run_ro_shell` for inspection and verification only.",
+		"- `run_shell` is unavailable to this bot.",
+		"- If the environment is missing a tool you need, note that in your output instead of trying to modify the repository or tooling configuration yourself.",
+	].join("\n");
 }
 
 export function summarizePromptAssembly(prompt: LoadedPromptAssembly) {
