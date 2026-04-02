@@ -8,7 +8,7 @@ import type {
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
-import { isLimitReached } from "../utils/persona_helper.js";
+import { getAttribution, isLimitReached } from "../utils/persona_helper.js";
 import { logTrace, textStats } from "../utils/trace.js";
 
 export class OverseerPersona {
@@ -28,7 +28,11 @@ export class OverseerPersona {
 		this.runner = new AgentRunnerClass();
 	}
 
-	private buildRunnerOptions(): AgentRunnerOptions {
+	private buildRunnerOptions(
+		owner: string,
+		repo: string,
+		issueNumber: number,
+	): AgentRunnerOptions {
 		return {
 			modelName: this.bot.llm.model,
 			promptDefinition: {
@@ -36,6 +40,10 @@ export class OverseerPersona {
 				displayName: this.bot.displayName,
 				llm: this.bot.llm,
 				...summarizePromptAssembly(this.bot.prompt),
+			},
+			appendGithubComment: async (markdown: string) => {
+				const body = `${getAttribution(this.bot.displayName, issueNumber)}${markdown}`;
+				await this.github.addCommentToIssue(owner, repo, issueNumber, body);
 			},
 		};
 	}
@@ -77,7 +85,7 @@ export class OverseerPersona {
 			this.bot.prompt.concatenatedPrompt,
 			taskBody,
 			this.bot.maxIterations,
-			this.buildRunnerOptions(),
+			this.buildRunnerOptions(owner, repo, issueNumber),
 		);
 	}
 
@@ -138,7 +146,7 @@ ${fullContext}`;
 			this.bot.prompt.concatenatedPrompt,
 			taskBody,
 			this.bot.maxIterations,
-			this.buildRunnerOptions(),
+			this.buildRunnerOptions(owner, repo, issueNumber),
 		);
 	}
 }

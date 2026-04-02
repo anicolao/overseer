@@ -101,4 +101,57 @@ describe("AgentRunner", () => {
 		expect(result.finalResponse).toContain("Persisted the plan");
 		expect(result.log).toContain('"commit_sha": "abc123"');
 	});
+
+	it("posts optional github_comment updates during the loop", async () => {
+		const responses = [
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				next_step: "Inspect WORKFLOW.md.",
+				actions: [{ type: "run_shell", command: "printf 'ok'" }],
+				task_status: "in_progress",
+				github_comment: "Started work and am inspecting repository guidance.",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				next_step: "Return control to the dispatcher.",
+				actions: [],
+				task_status: "done",
+				final_response: "Completed the requested work.",
+			}),
+		];
+
+		const postedComments: string[] = [];
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage() {
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner();
+		const result = await runner.runAutonomousLoop(
+			gemini as never,
+			"System instruction",
+			"Initial message",
+			5,
+			{
+				appendGithubComment: async (markdown) => {
+					postedComments.push(markdown);
+				},
+			},
+		);
+
+		expect(postedComments).toEqual([
+			"Started work and am inspecting repository guidance.",
+		]);
+		expect(result.finalResponse).toBe("Completed the requested work.");
+		expect(result.log).toContain("GITHUB COMMENT APPENDED");
+	});
 });

@@ -16,6 +16,7 @@ export interface IterationResult {
 
 export interface AgentRunnerOptions {
 	persistWork?: () => Promise<PersistWorkResult>;
+	appendGithubComment?: (markdown: string) => Promise<void>;
 	modelName?: string;
 	promptDefinition?: {
 		botId: string;
@@ -110,10 +111,20 @@ export class AgentRunner {
 				taskStatus: parsedResponse.protocol.task_status,
 				nextStep: parsedResponse.protocol.next_step,
 				actionCount: parsedResponse.protocol.actions.length,
+				githubComment: textStats(parsedResponse.protocol.github_comment || ""),
+				githubCommentRaw: parsedResponse.protocol.github_comment || "",
 				finalResponse: textStats(parsedResponse.protocol.final_response || ""),
 				finalResponseRaw: parsedResponse.protocol.final_response || "",
 			});
 			this.log(`PROTOCOL RESPONSE: ${parsedResponse.rawJson}\n`);
+
+			if (parsedResponse.protocol.github_comment) {
+				await this.appendGithubComment(
+					parsedResponse.protocol.github_comment,
+					options,
+					iteration,
+				);
+			}
 
 			if (parsedResponse.protocol.task_status === "done") {
 				return {
@@ -178,5 +189,29 @@ export class AgentRunner {
 
 		const result = await options.persistWork();
 		return JSON.stringify(result, null, 2);
+	}
+
+	private async appendGithubComment(
+		markdown: string,
+		options: AgentRunnerOptions,
+		iteration: number,
+	): Promise<void> {
+		if (!options.appendGithubComment) {
+			logTrace("agent.iteration.githubComment.skipped", {
+				iteration,
+				reason: "appendGithubComment not configured",
+				githubComment: textStats(markdown),
+				githubCommentRaw: markdown,
+			});
+			return;
+		}
+
+		await options.appendGithubComment(markdown);
+		logTrace("agent.iteration.githubComment.posted", {
+			iteration,
+			githubComment: textStats(markdown),
+			githubCommentRaw: markdown,
+		});
+		this.log(`GITHUB COMMENT APPENDED: ${markdown}\n`);
 	}
 }

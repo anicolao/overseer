@@ -65,6 +65,27 @@ I will comply.
 		expect(parsed.protocol.actions).toEqual([{ type: "persist_work" }]);
 	});
 
+	it("parses optional github_comment and plan fields", () => {
+		const parsed = parseAgentProtocolResponse(
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				next_step: "Read WORKFLOW.md.",
+				actions: [{ type: "run_shell", command: "cat WORKFLOW.md" }],
+				task_status: "in_progress",
+				plan: ["Read repository guidance", "Implement the task"],
+				github_comment: "Started work and am reading repository guidance.",
+			}),
+		);
+
+		expect(parsed.protocol.plan).toEqual([
+			"Read repository guidance",
+			"Implement the task",
+		]);
+		expect(parsed.protocol.github_comment).toBe(
+			"Started work and am reading repository guidance.",
+		);
+	});
+
 	it("rejects done responses without final_response", () => {
 		expect(() =>
 			parseAgentProtocolResponse(

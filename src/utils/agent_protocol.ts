@@ -19,6 +19,7 @@ export interface AgentProtocolResponse {
 	actions: AgentAction[];
 	task_status: AgentTaskStatus;
 	final_response?: string;
+	github_comment?: string;
 	plan?: string[];
 }
 
@@ -29,14 +30,24 @@ export interface ParsedAgentProtocolResponse {
 
 export const AGENT_PROTOCOL_PROMPT = `
 RESPONSE PROTOCOL:
+Work to this workflow on every turn:
+1. Keep a concrete plan in mind.
+2. State the immediate next step in \`next_step\`.
+3. Either take exactly one action or finish the task.
+4. Observe the result and loop.
 - Return exactly one JSON object and nothing else.
 - Use \`"version": "${AGENT_PROTOCOL_VERSION}"\`.
 - Always include \`next_step\`, \`actions\`, and \`task_status\`.
+- You may include \`plan\` as an array of strings.
+- You may include \`github_comment\` as a concise markdown progress update to append to the GitHub issue thread.
 - If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and exactly one action.
 - Use \`{"type":"run_shell","command":"..."}\` for repository inspection, file edits, and verification commands.
 - Use \`{"type":"persist_work"}\` only when your persona is authorized to publish repo changes and you want the dispatcher-owned persistence mechanism to commit and push your work.
 - If the task is complete, respond with \`"task_status": "done"\`, \`"actions": []\`, and \`final_response\` containing the concise human-facing summary that should be posted back to GitHub.
 - Do not use \`[RUN:command]\`, markdown fences, or prose outside the JSON object.
+
+Example in-progress response:
+{"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Read the relevant files before editing.","actions":[{"type":"run_shell","command":"cd /project && ls -la"}],"task_status":"in_progress","github_comment":"Started work and am inspecting the relevant files."}
 `;
 
 export function buildProtocolRepairMessage(
@@ -97,6 +108,10 @@ export function parseAgentProtocolResponse(
 		record.final_response,
 		"final_response",
 	);
+	const githubComment = parseOptionalNonEmptyString(
+		record.github_comment,
+		"github_comment",
+	);
 	const plan = parseOptionalPlan(record.plan);
 
 	if (taskStatus === "in_progress" && actions.length !== 1) {
@@ -124,6 +139,7 @@ export function parseAgentProtocolResponse(
 			actions,
 			task_status: taskStatus,
 			final_response: finalResponse,
+			github_comment: githubComment,
 			plan,
 		},
 	};
