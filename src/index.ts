@@ -26,21 +26,25 @@ const personas = {
 	productArchitect: new TaskPersona(
 		getBotOrThrow(botRegistry, "product-architect"),
 		gemini,
+		github,
 		persistence,
 	),
 	planner: new TaskPersona(
 		getBotOrThrow(botRegistry, "planner"),
 		gemini,
+		github,
 		persistence,
 	),
 	developerTester: new TaskPersona(
 		getBotOrThrow(botRegistry, "developer-tester"),
 		gemini,
+		github,
 		persistence,
 	),
 	quality: new TaskPersona(
 		getBotOrThrow(botRegistry, "quality"),
 		gemini,
+		github,
 		persistence,
 	),
 };
@@ -85,10 +89,15 @@ export const overseerWebhook = async (req: Request, res: Response) => {
 				);
 			}
 			if (body.includes("@product-architect")) {
-				await personas.productArchitect.handleTask(number, body);
+				await personas.productArchitect.handleTask(
+					owner.login,
+					name,
+					number,
+					body,
+				);
 			}
 			if (body.includes("@planner")) {
-				await personas.planner.handleTask(number, body);
+				await personas.planner.handleTask(owner.login, name, number, body);
 			}
 			// Additional routing logic for Developer/Tester and Quality...
 		}

@@ -51,21 +51,25 @@ async function run() {
 		productArchitect: new TaskPersona(
 			getBotOrThrow(botRegistry, "product-architect"),
 			gemini,
+			github,
 			persistence,
 		),
 		planner: new TaskPersona(
 			getBotOrThrow(botRegistry, "planner"),
 			gemini,
+			github,
 			persistence,
 		),
 		developerTester: new TaskPersona(
 			getBotOrThrow(botRegistry, "developer-tester"),
 			gemini,
+			github,
 			persistence,
 		),
 		quality: new TaskPersona(
 			getBotOrThrow(botRegistry, "quality"),
 			gemini,
+			github,
 			persistence,
 		),
 	};
@@ -287,16 +291,26 @@ async function run() {
 						);
 					}
 					if (executedPersona === "product-architect") {
-						return personas.productArchitect.handleTask(issueNumber, body);
+						return personas.productArchitect.handleTask(
+							owner,
+							repo,
+							issueNumber,
+							body,
+						);
 					}
 					if (executedPersona === "planner") {
-						return personas.planner.handleTask(issueNumber, body);
+						return personas.planner.handleTask(owner, repo, issueNumber, body);
 					}
 					if (executedPersona === "developer-tester") {
-						return personas.developerTester.handleTask(issueNumber, body);
+						return personas.developerTester.handleTask(
+							owner,
+							repo,
+							issueNumber,
+							body,
+						);
 					}
 					if (executedPersona === "quality") {
-						return personas.quality.handleTask(issueNumber, body);
+						return personas.quality.handleTask(owner, repo, issueNumber, body);
 					}
 					return null;
 				});
