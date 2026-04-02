@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect Backstop Sentinel
+      - name: Detect Ignorable Comment Sentinels
         id: backstop_guard
         run: |
           skip_workflow=false
@@ -30,6 +30,9 @@ jobs:
             if printf '%s' "$comment_body" | grep -Fq '<!-- overseer:persistence-backstop -->'; then
               skip_workflow=true
               echo "Skipping workflow because it was triggered by a persistence backstop comment."
+            elif printf '%s' "$comment_body" | grep -Fq '<!-- overseer:status-update -->'; then
+              skip_workflow=true
+              echo "Skipping workflow because it was triggered by a bot status update comment."
             fi
           fi
           echo "skip_workflow=${skip_workflow}" >> "$GITHUB_OUTPUT"

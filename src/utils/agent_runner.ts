@@ -2,11 +2,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Content } from "@google/generative-ai";
 import {
+	type AgentHandoffTarget,
 	buildContinuationMessage,
 	buildProtocolRepairMessage,
 	type ParsedAgentProtocolResponse,
 	parseAgentProtocolResponse,
 } from "./agent_protocol.js";
+import { prependStatusUpdateSentinel } from "./comment_markers.js";
 import type { GeminiService } from "./gemini.js";
 import type { PersistWorkResult } from "./persistence.js";
 import { ShellService } from "./shell.js";
@@ -14,12 +16,14 @@ import { logTrace, textStats } from "./trace.js";
 
 export interface IterationResult {
 	finalResponse: string;
+	handoffTo?: AgentHandoffTarget;
 	log: string;
 }
 
 export interface AgentRunnerOptions {
 	persistWork?: () => Promise<PersistWorkResult>;
 	appendGithubComment?: (markdown: string) => Promise<void>;
+	requireDoneHandoff?: boolean;
 	modelName?: string;
 	promptDefinition?: {
 		botId: string;
@@ -130,6 +134,7 @@ export class AgentRunner {
 				githubCommentRaw: parsedResponse.protocol.github_comment || "",
 				finalResponse: textStats(parsedResponse.protocol.final_response || ""),
 				finalResponseRaw: parsedResponse.protocol.final_response || "",
+				handoffTo: parsedResponse.protocol.handoff_to,
 			});
 			this.log(`PROTOCOL RESPONSE: ${parsedResponse.rawJson}\n`);
 
@@ -142,8 +147,19 @@ export class AgentRunner {
 			}
 
 			if (parsedResponse.protocol.task_status === "done") {
+				if (options.requireDoneHandoff && !parsedResponse.protocol.handoff_to) {
+					const error =
+						'task_status "done" requires a non-empty handoff_to for this persona';
+					logTrace("agent.iteration.protocolError", {
+						iteration,
+						error,
+					});
+					currentMessage = buildProtocolRepairMessage(error, responseText);
+					continue;
+				}
 				return {
 					finalResponse: parsedResponse.protocol.final_response || "",
+					handoffTo: parsedResponse.protocol.handoff_to,
 					log: this.sessionLog,
 				};
 			}
@@ -231,11 +247,14 @@ export class AgentRunner {
 			return;
 		}
 
-		await options.appendGithubComment(markdown);
+		const commentBody = prependStatusUpdateSentinel(markdown);
+		await options.appendGithubComment(commentBody);
 		logTrace("agent.iteration.githubComment.posted", {
 			iteration,
 			githubComment: textStats(markdown),
 			githubCommentRaw: markdown,
+			commentBody: textStats(commentBody),
+			commentBodyRaw: commentBody,
 		});
 		this.log(`GITHUB COMMENT APPENDED: ${markdown}\n`);
 	}

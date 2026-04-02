@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/rest";
+import { isWorkflowNoiseComment } from "./comment_markers.js";
 import { truncate } from "./text.js";
 import { logTrace, textStats } from "./trace.js";
 
@@ -72,7 +73,7 @@ export class GitHubService {
 			if (!Array.isArray(data)) {
 				sha = data.sha;
 			}
-		} catch (error) {
+		} catch (_error) {
 			// File doesn't exist yet, that's fine
 		}
 
@@ -226,7 +227,9 @@ export class GitHubService {
 		context += "--- COMMENTS (Truncated to last 15) ---\n";
 
 		// Only take the last 15 comments to prevent payload explosion
-		const recentComments = comments.data.slice(-15);
+		const recentComments = comments.data
+			.filter((comment) => !isWorkflowNoiseComment(comment.body || ""))
+			.slice(-15);
 
 		for (const comment of recentComments) {
 			const author = comment.user?.login;

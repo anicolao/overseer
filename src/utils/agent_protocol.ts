@@ -1,6 +1,15 @@
 export const AGENT_PROTOCOL_VERSION = "overseer/v1";
+export const AGENT_HANDOFF_TARGETS = [
+	"@overseer",
+	"@product-architect",
+	"@planner",
+	"@developer-tester",
+	"@quality",
+	"human_review_required",
+] as const;
 
 export type AgentTaskStatus = "in_progress" | "done";
+export type AgentHandoffTarget = (typeof AGENT_HANDOFF_TARGETS)[number];
 
 export interface RunShellAction {
 	type: "run_shell";
@@ -21,6 +30,7 @@ export interface AgentProtocolResponse {
 	task_status: AgentTaskStatus;
 	final_response?: string;
 	github_comment?: string;
+	handoff_to?: AgentHandoffTarget;
 }
 
 export interface ParsedAgentProtocolResponse {
@@ -40,16 +50,22 @@ Work to this workflow on every turn:
 - Use \`"version": "${AGENT_PROTOCOL_VERSION}"\`.
 - Always include \`plan\`, \`next_step\`, \`actions\`, and \`task_status\`.
 - You may include \`github_comment\` as a concise markdown progress update to append to the GitHub issue thread.
+- You may include \`handoff_to\` on \`"done"\` responses to make the next recipient explicit. Valid values: ${AGENT_HANDOFF_TARGETS.map((target) => `\`${target}\``).join(", ")}.
 - If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and at least one action.
 - \`actions\` is an ordered list executed sequentially by the dispatcher.
 - Available actions: \`{"type":"run_shell","command":"..."}\` and \`{"type":"persist_work"}\`.
 - Use \`{"type":"run_shell","command":"..."}\` for repository inspection, file edits, and verification commands.
 - Use \`{"type":"persist_work"}\` only when your persona is authorized to publish repo changes and you want the dispatcher-owned persistence mechanism to commit and push your work.
+- \`github_comment\` is for in-progress status only. Do not put delegation or the final handoff there.
+- If you set \`handoff_to\`, the dispatcher will append the standardized \`Next step: ...\` line when it posts your final GitHub comment.
 - If the task is complete, respond with \`"task_status": "done"\`, \`"actions": []\`, and \`final_response\` containing the concise human-facing summary that should be posted back to GitHub.
 - Do not use \`[RUN:command]\`, markdown fences, or prose outside the JSON object.
 
 Example in-progress response:
 {"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Read the relevant files before editing.","actions":[{"type":"run_shell","command":"cd /project && ls -la"},{"type":"run_shell","command":"cd /project && cat WORKFLOW.md"}],"task_status":"in_progress","github_comment":"Started work and am inspecting the relevant files."}
+
+Example done response:
+{"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Return control to the dispatcher.","actions":[],"task_status":"done","handoff_to":"@planner","final_response":"Identified the relevant implementation touchpoints and prepared the planner handoff."}
 `;
 
 export function buildProtocolRepairMessage(
@@ -115,11 +131,15 @@ export function parseAgentProtocolResponse(
 		record.github_comment,
 		"github_comment",
 	);
+	const handoffTo = parseOptionalHandoffTarget(record.handoff_to);
 
 	if (taskStatus === "in_progress" && actions.length === 0) {
 		throw new Error(
 			'task_status "in_progress" requires at least one action in actions[]',
 		);
+	}
+	if (taskStatus !== "done" && handoffTo) {
+		throw new Error('handoff_to is only valid when task_status is "done"');
 	}
 
 	if (taskStatus === "done") {
@@ -143,6 +163,7 @@ export function parseAgentProtocolResponse(
 			task_status: taskStatus,
 			final_response: finalResponse,
 			github_comment: githubComment,
+			handoff_to: handoffTo,
 		},
 	};
 }
@@ -245,6 +266,21 @@ function parseTaskStatus(value: unknown): AgentTaskStatus {
 		return value;
 	}
 	throw new Error('task_status must be either "in_progress" or "done"');
+}
+
+function parseOptionalHandoffTarget(
+	value: unknown,
+): AgentHandoffTarget | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	const handoffTo = requireNonEmptyString(value, "handoff_to");
+	if (!(AGENT_HANDOFF_TARGETS as readonly string[]).includes(handoffTo)) {
+		throw new Error(
+			`handoff_to must be one of: ${AGENT_HANDOFF_TARGETS.join(", ")}`,
+		);
+	}
+	return handoffTo as AgentHandoffTarget;
 }
 
 function parseActions(value: unknown): AgentAction[] {

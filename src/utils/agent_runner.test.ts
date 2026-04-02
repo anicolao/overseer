@@ -77,6 +77,7 @@ describe("AgentRunner", () => {
 		expect(result.finalResponse).toBe(
 			"Verified the repository root and completed the task.",
 		);
+		expect(result.handoffTo).toBeUndefined();
 		expect(result.log).toContain("hello");
 		expect(result.log).toContain("world");
 		expect(result.log).toContain("PROTOCOL RESPONSE");
@@ -138,6 +139,7 @@ describe("AgentRunner", () => {
 		);
 
 		expect(result.finalResponse).toContain("Persisted the plan");
+		expect(result.handoffTo).toBeUndefined();
 		expect(result.log).toContain('"commit_sha": "abc123"');
 	});
 
@@ -194,10 +196,64 @@ describe("AgentRunner", () => {
 		);
 
 		expect(postedComments).toEqual([
-			"Started work and am inspecting repository guidance.",
+			expect.stringContaining("<!-- overseer:status-update -->"),
 		]);
+		expect(postedComments[0]).toContain(
+			"Started work and am inspecting repository guidance.",
+		);
 		expect(result.finalResponse).toBe("Completed the requested work.");
 		expect(result.log).toContain("GITHUB COMMENT APPENDED");
+	});
+
+	it("requires a structured handoff when configured", async () => {
+		const responses = [
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Hand off the work."],
+				next_step: "Return control to the dispatcher.",
+				actions: [],
+				task_status: "done",
+				final_response: "Delegating to planner.",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Hand off the work."],
+				next_step: "Return control to the dispatcher.",
+				actions: [],
+				task_status: "done",
+				handoff_to: "@planner",
+				final_response: "Delegating to planner.",
+			}),
+		];
+
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage() {
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner(makeFakeShell(async () => ""));
+		const result = await runner.runAutonomousLoop(
+			gemini as never,
+			"System instruction",
+			"Initial message",
+			5,
+			{
+				requireDoneHandoff: true,
+			},
+		);
+
+		expect(result.handoffTo).toBe("@planner");
+		expect(result.finalResponse).toBe("Delegating to planner.");
+		expect(result.log).toContain("PROTOCOL RESPONSE");
 	});
 
 	it("injects top-level AGENTS.md into chat history before the task input", async () => {

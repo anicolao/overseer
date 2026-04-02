@@ -94,6 +94,53 @@ I will comply.
 		expect(parsed.protocol.actions).toHaveLength(2);
 	});
 
+	it("parses optional handoff_to on done responses", () => {
+		const parsed = parseAgentProtocolResponse(
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Delegate to the planner."],
+				next_step: "Return control to the dispatcher.",
+				actions: [],
+				task_status: "done",
+				handoff_to: "@planner",
+				final_response: "Prepared the planner handoff.",
+			}),
+		);
+
+		expect(parsed.protocol.handoff_to).toBe("@planner");
+	});
+
+	it("rejects invalid handoff_to values", () => {
+		expect(() =>
+			parseAgentProtocolResponse(
+				JSON.stringify({
+					version: AGENT_PROTOCOL_VERSION,
+					plan: ["Stop."],
+					next_step: "Stop.",
+					actions: [],
+					task_status: "done",
+					handoff_to: "@not-a-bot",
+					final_response: "Done.",
+				}),
+			),
+		).toThrow(/handoff_to/);
+	});
+
+	it("rejects handoff_to on in-progress responses", () => {
+		expect(() =>
+			parseAgentProtocolResponse(
+				JSON.stringify({
+					version: AGENT_PROTOCOL_VERSION,
+					plan: ["Inspect files."],
+					next_step: "Inspect files.",
+					actions: [{ type: "run_shell", command: "ls" }],
+					task_status: "in_progress",
+					handoff_to: "@planner",
+				}),
+			),
+		).toThrow(/handoff_to/);
+	});
+
 	it("rejects done responses without final_response", () => {
 		expect(() =>
 			parseAgentProtocolResponse(

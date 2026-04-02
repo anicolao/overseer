@@ -22,6 +22,7 @@ Optional top-level fields:
 
 - `"final_response": "<required when task_status is done>"`
 - `"github_comment": "<markdown progress update to append to the issue thread>"`
+- `"handoff_to": "@planner"` or another explicit next recipient when a done response needs a structured handoff
 
 Rules:
 
@@ -32,7 +33,9 @@ Rules:
   - `{"type":"persist_work"}` for dispatcher-owned persistence when your bot is authorized to publish repository changes
 - If the environment is missing a tool you need, modify `flake.nix` and then continue using `run_shell`.
 - If the task is complete, return `"task_status": "done"`, `"actions": []`, and a non-empty `final_response`.
-- `github_comment`, when present, should be a concise markdown progress update for the issue thread. It is not a substitute for `final_response`.
+- `github_comment`, when present, is for in-progress status only. It is not a substitute for `final_response` and must not contain the final delegation.
+- `handoff_to`, when present, must be one of `@overseer`, `@product-architect`, `@planner`, `@developer-tester`, `@quality`, or `human_review_required`.
+- If you set `handoff_to`, the dispatcher will append the standardized `Next step: ...` line when it posts your final GitHub comment.
 - Do not use markdown fences or prose outside the JSON object.
 
 Example in-progress response object:
@@ -76,6 +79,7 @@ Example done response object:
   "next_step": "Return control to the dispatcher.",
   "actions": [],
   "task_status": "done",
-  "final_response": "Implemented the requested change, ran targeted verification, and confirmed the persisted result on the issue branch."
+  "handoff_to": "@planner",
+  "final_response": "Identified the relevant implementation touchpoints and prepared the planner handoff."
 }
 ```
