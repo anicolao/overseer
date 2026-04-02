@@ -38,11 +38,13 @@ describe("AgentRunner", () => {
 				final_response: "Verified the repository root and completed the task.",
 			}),
 		];
+		const sentMessages: string[] = [];
 
 		const gemini = {
 			startChat() {
 				return {
-					async sendMessage() {
+					async sendMessage(message: string) {
+						sentMessages.push(message);
 						const next = responses.shift();
 						if (!next) {
 							throw new Error("No more responses queued");
@@ -81,6 +83,17 @@ describe("AgentRunner", () => {
 		expect(result.log).toContain("hello");
 		expect(result.log).toContain("world");
 		expect(result.log).toContain("PROTOCOL RESPONSE");
+		expect(sentMessages).toHaveLength(2);
+		expect(sentMessages[0]).toBe("Initial message");
+		expect(sentMessages[1]).toContain("ORIGINAL TASK:");
+		expect(sentMessages[1]).toContain("Initial message");
+		expect(sentMessages[1]).toContain("MOST RECENT STRUCTURED RESPONSE:");
+		expect(sentMessages[1]).toContain(
+			'"next_step":"Inspect the repository root."',
+		);
+		expect(sentMessages[1]).toContain("LATEST ACTION OUTPUT:");
+		expect(sentMessages[1]).toContain("hello");
+		expect(sentMessages[1]).toContain("world");
 	});
 
 	it("executes persist_work actions through the injected callback", async () => {
