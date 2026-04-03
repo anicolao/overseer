@@ -30,10 +30,13 @@ Rules:
 - Available action types:
 {{AVAILABLE_ACTIONS_BULLETS}}
 {{SHELL_ACTION_RULES}}
+- Action-count rules:
+{{ACTION_COUNT_RULES}}
 - If the task is complete, return `"task_status": "done"`, `"actions": []`, and a non-empty `final_response`.
 - `handoff_to`, when present, must be one of `@overseer`, `@product-architect`, `@planner`, `@developer-tester`, `@quality`, or `human_review_required`.
 - If you set `handoff_to`, the dispatcher will append the standardized `Next step: ...` line when it posts your final GitHub comment.
 - Do not use markdown fences or prose outside the JSON object.
+- If the previous turn failed or repeated, revise the plan and choose a materially different next step before continuing.
 
 Example in-progress response object:
 

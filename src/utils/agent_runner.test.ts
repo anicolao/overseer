@@ -2,18 +2,27 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { AgentAction } from "./agent_protocol.js";
 import { AGENT_PROTOCOL_VERSION } from "./agent_protocol.js";
 import { AgentRunner } from "./agent_runner.js";
 import type { ShellService } from "./shell.js";
 
 describe("AgentRunner", () => {
 	const makeFakeShell = (
-		executeActions: (actions: AgentAction[]) => Promise<string>,
+		executeCommand: (
+			command: string,
+			executionMode?: "read_only" | "read_write",
+		) => Promise<{
+			stdout: string;
+			stderr: string;
+			exitCode: number;
+		}>,
 	): ShellService =>
 		({
-			async executeActions(actions: AgentAction[]) {
-				return executeActions(actions);
+			async executeCommand(
+				command: string,
+				executionMode?: "read_only" | "read_write",
+			) {
+				return executeCommand(command, executionMode);
 			},
 		}) as unknown as ShellService;
 
@@ -25,7 +34,7 @@ describe("AgentRunner", () => {
 				next_step: "Inspect the repository root.",
 				actions: [
 					{ type: "run_ro_shell", command: "printf 'hello'" },
-					{ type: "run_shell", command: "printf 'world'" },
+					{ type: "run_ro_shell", command: "printf 'world'" },
 				],
 				task_status: "in_progress",
 			}),
@@ -55,22 +64,11 @@ describe("AgentRunner", () => {
 			},
 		};
 
-		const shell = makeFakeShell(async (actions) =>
-			actions
-				.filter(
-					(
-						action,
-					): action is Extract<
-						AgentAction,
-						{ type: "run_shell" | "run_ro_shell" }
-					> => action.type === "run_shell" || action.type === "run_ro_shell",
-				)
-				.map(
-					(action) =>
-						`\n--- EXECUTING: ${action.command} ---\nSTDOUT:\n${action.command.replace("printf ", "").replaceAll("'", "")}\nEXIT CODE: 0\n`,
-				)
-				.join(""),
-		);
+		const shell = makeFakeShell(async (command) => ({
+			stdout: command.replace("printf ", "").replaceAll("'", ""),
+			stderr: "",
+			exitCode: 0,
+		}));
 
 		const runner = new AgentRunner(shell);
 		const result = await runner.runAutonomousLoop(
@@ -80,6 +78,7 @@ describe("AgentRunner", () => {
 			5,
 			{
 				shellAccess: "read_write",
+				maxActionsPerTurn: 2,
 			},
 		);
 
@@ -139,9 +138,11 @@ describe("AgentRunner", () => {
 		};
 
 		const runner = new AgentRunner(
-			makeFakeShell(async () => {
-				return "";
-			}),
+			makeFakeShell(async () => ({
+				stdout: "",
+				stderr: "",
+				exitCode: 0,
+			})),
 		);
 		const result = await runner.runAutonomousLoop(
 			gemini as never,
@@ -199,10 +200,11 @@ describe("AgentRunner", () => {
 			},
 		};
 
-		const shell = makeFakeShell(
-			async () =>
-				"\n--- EXECUTING: printf 'ok' ---\nSTDOUT:\nok\nEXIT CODE: 0\n",
-		);
+		const shell = makeFakeShell(async () => ({
+			stdout: "ok",
+			stderr: "",
+			exitCode: 0,
+		}));
 		const runner = new AgentRunner(shell);
 		const result = await runner.runAutonomousLoop(
 			gemini as never,
@@ -249,7 +251,13 @@ describe("AgentRunner", () => {
 			},
 		};
 
-		const runner = new AgentRunner(makeFakeShell(async () => ""));
+		const runner = new AgentRunner(
+			makeFakeShell(async () => ({
+				stdout: "",
+				stderr: "",
+				exitCode: 0,
+			})),
+		);
 		const result = await runner.runAutonomousLoop(
 			gemini as never,
 			"System instruction",
@@ -299,7 +307,13 @@ describe("AgentRunner", () => {
 			},
 		};
 
-		const runner = new AgentRunner(makeFakeShell(async () => ""));
+		const runner = new AgentRunner(
+			makeFakeShell(async () => ({
+				stdout: "",
+				stderr: "",
+				exitCode: 0,
+			})),
+		);
 		const result = await runner.runAutonomousLoop(
 			gemini as never,
 			"System instruction",
@@ -348,9 +362,11 @@ describe("AgentRunner", () => {
 			};
 
 			const runner = new AgentRunner(
-				makeFakeShell(async () => {
-					return "";
-				}),
+				makeFakeShell(async () => ({
+					stdout: "",
+					stderr: "",
+					exitCode: 0,
+				})),
 			);
 			await runner.runAutonomousLoop(
 				gemini as never,
@@ -387,5 +403,220 @@ describe("AgentRunner", () => {
 			(capturedHistories[0] as Array<{ parts: Array<{ text: string }> }>)[0]
 				?.parts[0]?.text,
 		).toContain("Always read the plan first.");
+	});
+
+	it("rejects done after run_shell until persistence and read-only verification succeed", async () => {
+		const responses = [
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Edit the file.", "Return control."],
+				next_step: "Edit the file.",
+				actions: [{ type: "run_shell", command: "printf ok >> file.txt" }],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Edit the file.", "Return control."],
+				next_step: "Return control.",
+				actions: [],
+				task_status: "done",
+				final_response: "Finished locally.",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Persist the file.", "Verify the branch.", "Return control."],
+				next_step: "Persist the file.",
+				actions: [{ type: "persist_work" }],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Persist the file.", "Verify the branch.", "Return control."],
+				next_step: "Verify the branch.",
+				actions: [
+					{
+						type: "run_ro_shell",
+						command: "git show origin/bot/issue-35:file.txt",
+					},
+				],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Persist the file.", "Verify the branch.", "Return control."],
+				next_step: "Return control.",
+				actions: [],
+				task_status: "done",
+				final_response: "Persisted and verified the change.",
+			}),
+		];
+
+		const sentMessages: string[] = [];
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage(message: string) {
+						sentMessages.push(message);
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner(
+			makeFakeShell(async (_command, executionMode) => ({
+				stdout:
+					executionMode === "read_only"
+						? "persisted contents"
+						: "local write ok",
+				stderr: "",
+				exitCode: 0,
+			})),
+		);
+		const result = await runner.runAutonomousLoop(
+			gemini as never,
+			"System instruction",
+			"Initial message",
+			8,
+			{
+				shellAccess: "read_write",
+				maxActionsPerTurn: 1,
+				persistWork: async () => ({
+					ok: true,
+					branch: "bot/issue-35",
+					commit_sha: "abc123",
+					changed_files: ["file.txt"],
+					message: "Persisted successfully.",
+				}),
+			},
+		);
+
+		expect(result.finalResponse).toBe("Persisted and verified the change.");
+		expect(sentMessages[2]).toContain('task_status "done" is not allowed');
+		expect(sentMessages[3]).toContain(
+			"Persistence succeeded. Run a read-only verification",
+		);
+	});
+
+	it("repairs repeated no-progress cycles and aborts after continued repetition", async () => {
+		const repeatingResponse = JSON.stringify({
+			version: AGENT_PROTOCOL_VERSION,
+			plan: ["Inspect package.json.", "Return control."],
+			next_step: "Inspect package.json.",
+			actions: [{ type: "run_ro_shell", command: "cat package.json" }],
+			task_status: "in_progress",
+		});
+		const responses = Array.from({ length: 6 }, () => repeatingResponse);
+		const sentMessages: string[] = [];
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage(message: string) {
+						sentMessages.push(message);
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner(
+			makeFakeShell(async () => ({
+				stdout: "same output",
+				stderr: "",
+				exitCode: 0,
+			})),
+		);
+		const result = await runner.runAutonomousLoop(
+			gemini as never,
+			"System instruction",
+			"Initial message",
+			8,
+			{
+				shellAccess: "read_only",
+				maxActionsPerTurn: 1,
+			},
+		);
+
+		expect(result.finalResponse).toContain(
+			"Stopped after repeated no-progress loops",
+		);
+		expect(
+			sentMessages.some((message) => message.includes("LOOP DETECTED:")),
+		).toBe(true);
+	});
+
+	it("rejects responses that exceed the configured action limit", async () => {
+		const responses = [
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect files.", "Return control."],
+				next_step: "Inspect files.",
+				actions: [
+					{ type: "run_ro_shell", command: "pwd" },
+					{ type: "run_ro_shell", command: "ls" },
+				],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect files.", "Return control."],
+				next_step: "Inspect files.",
+				actions: [{ type: "run_ro_shell", command: "pwd" }],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect files.", "Return control."],
+				next_step: "Return control.",
+				actions: [],
+				task_status: "done",
+				final_response: "Completed safely.",
+			}),
+		];
+
+		const sentMessages: string[] = [];
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage(message: string) {
+						sentMessages.push(message);
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner(
+			makeFakeShell(async () => ({
+				stdout: "ok",
+				stderr: "",
+				exitCode: 0,
+			})),
+		);
+		const result = await runner.runAutonomousLoop(
+			gemini as never,
+			"System instruction",
+			"Initial message",
+			6,
+			{
+				shellAccess: "read_only",
+				maxActionsPerTurn: 1,
+			},
+		);
+
+		expect(result.finalResponse).toBe("Completed safely.");
+		expect(sentMessages[1]).toContain("actions may contain at most 1 item");
 	});
 });
