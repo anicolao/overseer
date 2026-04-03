@@ -21,9 +21,11 @@
           ];
 
           shellHook = ''
-            echo "Overseer Development Environment Initialized"
-            node --version
-            gh --version
+            if [ -t 1 ]; then
+              echo "Overseer Development Environment Initialized"
+              node --version
+              gh --version
+            fi
           '';
         };
       }

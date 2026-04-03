@@ -94,6 +94,7 @@ describe("AgentRunner", () => {
 		expect(sentMessages[0]).toBe("Initial message");
 		expect(sentMessages[1]).toContain("ORIGINAL TASK:");
 		expect(sentMessages[1]).toContain("Initial message");
+		expect(sentMessages[1]).toContain("CURRENT ITERATION: 1");
 		expect(sentMessages[1]).toContain("MOST RECENT STRUCTURED RESPONSE:");
 		expect(sentMessages[1]).toContain(
 			'"next_step":"Inspect the repository root."',
