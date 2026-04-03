@@ -163,7 +163,7 @@ describe("AgentRunner", () => {
 		expect(result.log).toContain('"commit_sha": "abc123"');
 	});
 
-	it("posts optional github_comment updates during the loop", async () => {
+	it("does not post github_comment status updates during the loop", async () => {
 		const responses = [
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
@@ -208,21 +208,11 @@ describe("AgentRunner", () => {
 			"System instruction",
 			"Initial message",
 			5,
-			{
-				appendGithubComment: async (markdown) => {
-					postedComments.push(markdown);
-				},
-			},
 		);
 
-		expect(postedComments).toEqual([
-			expect.stringContaining("<!-- overseer:status-update -->"),
-		]);
-		expect(postedComments[0]).toContain(
-			"Started work and am inspecting repository guidance.",
-		);
+		expect(postedComments).toEqual([]);
 		expect(result.finalResponse).toBe("Completed the requested work.");
-		expect(result.log).toContain("GITHUB COMMENT APPENDED");
+		expect(result.log).not.toContain("GITHUB COMMENT APPENDED");
 	});
 
 	it("rejects run_shell for read-only personas", async () => {

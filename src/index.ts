@@ -26,25 +26,21 @@ const personas = {
 	productArchitect: new TaskPersona(
 		getBotOrThrow(botRegistry, "product-architect"),
 		gemini,
-		github,
 		persistence,
 	),
 	planner: new TaskPersona(
 		getBotOrThrow(botRegistry, "planner"),
 		gemini,
-		github,
 		persistence,
 	),
 	developerTester: new TaskPersona(
 		getBotOrThrow(botRegistry, "developer-tester"),
 		gemini,
-		github,
 		persistence,
 	),
 	quality: new TaskPersona(
 		getBotOrThrow(botRegistry, "quality"),
 		gemini,
-		github,
 		persistence,
 	),
 };

@@ -8,7 +8,6 @@ import {
 	type ParsedAgentProtocolResponse,
 	parseAgentProtocolResponse,
 } from "./agent_protocol.js";
-import { prependStatusUpdateSentinel } from "./comment_markers.js";
 import type { GeminiService } from "./gemini.js";
 import type { PersistWorkResult } from "./persistence.js";
 import type { ShellExecutionMode } from "./shell.js";
@@ -19,11 +18,11 @@ export interface IterationResult {
 	finalResponse: string;
 	handoffTo?: AgentHandoffTarget;
 	log: string;
+	suppressFinalComment?: boolean;
 }
 
 export interface AgentRunnerOptions {
 	persistWork?: () => Promise<PersistWorkResult>;
-	appendGithubComment?: (markdown: string) => Promise<void>;
 	requireDoneHandoff?: boolean;
 	modelName?: string;
 	shellAccess?: ShellExecutionMode;
@@ -141,14 +140,6 @@ export class AgentRunner {
 			});
 			this.log(`PROTOCOL RESPONSE: ${parsedResponse.rawJson}\n`);
 
-			if (parsedResponse.protocol.github_comment) {
-				await this.appendGithubComment(
-					parsedResponse.protocol.github_comment,
-					options,
-					iteration,
-				);
-			}
-
 			if (parsedResponse.protocol.task_status === "done") {
 				if (options.requireDoneHandoff && !parsedResponse.protocol.handoff_to) {
 					const error =
@@ -259,33 +250,6 @@ export class AgentRunner {
 		}
 
 		return outputs.join("\n");
-	}
-
-	private async appendGithubComment(
-		markdown: string,
-		options: AgentRunnerOptions,
-		iteration: number,
-	): Promise<void> {
-		if (!options.appendGithubComment) {
-			logTrace("agent.iteration.githubComment.skipped", {
-				iteration,
-				reason: "appendGithubComment not configured",
-				githubComment: textStats(markdown),
-				githubCommentRaw: markdown,
-			});
-			return;
-		}
-
-		const commentBody = prependStatusUpdateSentinel(markdown);
-		await options.appendGithubComment(commentBody);
-		logTrace("agent.iteration.githubComment.posted", {
-			iteration,
-			githubComment: textStats(markdown),
-			githubCommentRaw: markdown,
-			commentBody: textStats(commentBody),
-			commentBodyRaw: commentBody,
-		});
-		this.log(`GITHUB COMMENT APPENDED: ${markdown}\n`);
 	}
 
 	private loadRepositoryGuidance(): {

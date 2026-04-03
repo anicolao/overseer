@@ -82,12 +82,6 @@ export async function isLimitReached(
 	const limit = limitMatch ? Number.parseInt(limitMatch[1], 10) : 100;
 
 	if (commentCount >= limit) {
-		await github.addCommentToIssue(
-			owner,
-			repo,
-			issueNumber,
-			`I am the ${personaName}. I have reached the safety limit of ${limit} comments on this issue. Please use \`${personaHandle} setlimit <number>\` to increase the limit if you wish for me to continue.`,
-		);
 		return true;
 	}
 

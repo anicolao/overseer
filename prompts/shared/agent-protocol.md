@@ -21,7 +21,6 @@ Required top-level fields:
 Optional top-level fields:
 
 - `"final_response": "<required when task_status is done>"`
-- `"github_comment": "<markdown progress update to append to the issue thread>"`
 - `"handoff_to": "@planner"` or another explicit next recipient when a done response needs a structured handoff
 
 Rules:
@@ -32,7 +31,6 @@ Rules:
 {{AVAILABLE_ACTIONS_BULLETS}}
 {{SHELL_ACTION_RULES}}
 - If the task is complete, return `"task_status": "done"`, `"actions": []`, and a non-empty `final_response`.
-- `github_comment`, when present, is for in-progress status only. It is not a substitute for `final_response` and must not contain the final delegation.
 - `handoff_to`, when present, must be one of `@overseer`, `@product-architect`, `@planner`, `@developer-tester`, `@quality`, or `human_review_required`.
 - If you set `handoff_to`, the dispatcher will append the standardized `Next step: ...` line when it posts your final GitHub comment.
 - Do not use markdown fences or prose outside the JSON object.
@@ -50,8 +48,7 @@ Example in-progress response object:
   ],
   "next_step": "Read WORKFLOW.md and the referenced plan file before changing code.",
   "actions": {{IN_PROGRESS_EXAMPLE_ACTIONS}},
-  "task_status": "in_progress",
-  "github_comment": "Started work on the assigned task and am reading the required repository guidance first."
+  "task_status": "in_progress"
 }
 ```
 
