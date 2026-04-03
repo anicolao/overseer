@@ -49,6 +49,7 @@ export interface ParsedAgentProtocolResponse {
 export interface ContinuationContext {
 	originalTask: string;
 	iteration: number;
+	previousPlan: string[];
 	previousResponseJson: string;
 	previousGithubComment?: string;
 	actionOutput: string;
@@ -99,6 +100,7 @@ export function buildProtocolRepairMessage(
 export function buildContinuationMessage({
 	originalTask,
 	iteration,
+	previousPlan,
 	previousResponseJson,
 	previousGithubComment,
 	actionOutput,
@@ -109,6 +111,9 @@ export function buildContinuationMessage({
 		"",
 		`CURRENT ITERATION: ${iteration}`,
 		"",
+		"MOST RECENT PLAN:",
+		...previousPlan.map((step) => `- ${step}`),
+		"",
 		"MOST RECENT STRUCTURED RESPONSE:",
 		previousResponseJson,
 		"",
@@ -117,6 +122,9 @@ export function buildContinuationMessage({
 			: []),
 		"LATEST ACTION OUTPUT:",
 		actionOutput,
+		"",
+		"Compare the LATEST ACTION OUTPUT against the MOST RECENT PLAN.",
+		"If an action yielded the data you need, do not repeat it. Advance to the next step in your plan.",
 		"",
 		"Continue the same task. Do not restart or reinterpret the assignment.",
 		"Use the original task and your most recent structured response to decide the next step.",

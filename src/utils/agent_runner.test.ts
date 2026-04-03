@@ -89,12 +89,19 @@ describe("AgentRunner", () => {
 		expect(result.handoffTo).toBeUndefined();
 		expect(result.log).toContain("hello");
 		expect(result.log).toContain("world");
+		expect(result.log).toContain("[COMMAND: printf 'hello']");
+		expect(result.log).toContain("[COMMAND: printf 'world']");
+		expect(result.log).not.toContain("--- EXECUTING:");
+		expect(result.log).not.toContain("STDOUT:");
+		expect(result.log).not.toContain("EXIT CODE: 0");
 		expect(result.log).toContain("PROTOCOL RESPONSE");
 		expect(sentMessages).toHaveLength(2);
 		expect(sentMessages[0]).toBe("Initial message");
 		expect(sentMessages[1]).toContain("ORIGINAL TASK:");
 		expect(sentMessages[1]).toContain("Initial message");
 		expect(sentMessages[1]).toContain("CURRENT ITERATION: 1");
+		expect(sentMessages[1]).toContain("MOST RECENT PLAN:");
+		expect(sentMessages[1]).toContain("- Inspect the repository root.");
 		expect(sentMessages[1]).toContain("MOST RECENT STRUCTURED RESPONSE:");
 		expect(sentMessages[1]).toContain(
 			'"next_step":"Inspect the repository root."',
@@ -161,7 +168,9 @@ describe("AgentRunner", () => {
 
 		expect(result.finalResponse).toContain("Persisted the plan");
 		expect(result.handoffTo).toBeUndefined();
+		expect(result.log).toContain("--- PERSIST WORK ---");
 		expect(result.log).toContain('"commit_sha": "abc123"');
+		expect(result.log).toContain("--- END PERSIST ---");
 	});
 
 	it("does not post github_comment status updates during the loop", async () => {

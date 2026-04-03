@@ -189,6 +189,7 @@ I will comply.
 		const message = buildContinuationMessage({
 			originalTask: "Developer Task:\nTask ID: issue-55",
 			iteration: 3,
+			previousPlan: ["Read the plan", "Implement the change"],
 			previousResponseJson: JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
 				plan: ["Read the plan", "Implement the change"],
@@ -206,7 +207,12 @@ I will comply.
 		expect(message).toContain("ORIGINAL TASK:");
 		expect(message).toContain("Task ID: issue-55");
 		expect(message).toContain("CURRENT ITERATION: 3");
+		expect(message).toContain("MOST RECENT PLAN:");
+		expect(message).toContain("- Read the plan");
 		expect(message).toContain("MOST RECENT STRUCTURED RESPONSE:");
+		expect(message).toContain(
+			"If an action yielded the data you need, do not repeat it.",
+		);
 		expect(message).toContain('"next_step":"Read the plan"');
 		expect(message).toContain("MOST RECENT GITHUB STATUS COMMENT:");
 		expect(message).toContain("Reading the plan before changing code.");

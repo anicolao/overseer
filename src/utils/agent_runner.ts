@@ -173,6 +173,7 @@ export class AgentRunner {
 			currentMessage = buildContinuationMessage({
 				originalTask,
 				iteration,
+				previousPlan: parsedResponse.protocol.plan,
 				previousResponseJson: parsedResponse.rawJson,
 				previousGithubComment: parsedResponse.protocol.github_comment,
 				actionOutput,
@@ -206,7 +207,8 @@ export class AgentRunner {
 
 		for (const action of actions) {
 			if (action.type === "run_ro_shell") {
-				outputs.push(await this.shell.executeActions([action]));
+				const rawOutput = await this.shell.executeActions([action]);
+				outputs.push(this.formatActionOutput(action.command, rawOutput));
 				continue;
 			}
 
@@ -227,7 +229,8 @@ export class AgentRunner {
 					continue;
 				}
 
-				outputs.push(await this.shell.executeActions([action]));
+				const rawOutput = await this.shell.executeActions([action]);
+				outputs.push(this.formatActionOutput(action.command, rawOutput));
 				continue;
 			}
 
@@ -247,10 +250,36 @@ export class AgentRunner {
 			}
 
 			const result = await options.persistWork();
-			outputs.push(JSON.stringify(result, null, 2));
+			outputs.push(
+				`--- PERSIST WORK ---\n${JSON.stringify(result, null, 2)}\n--- END PERSIST ---`,
+			);
 		}
 
-		return outputs.join("\n");
+		return outputs.join("\n\n");
+	}
+
+	private formatActionOutput(command: string, rawOutput: string): string {
+		// The shell service returns:
+		// --- EXECUTING: command ---
+		// STDOUT:
+		// ...
+		// EXIT CODE: n
+
+		let cleaned = rawOutput
+			.replace(/^--- EXECUTING: .* ---/m, "")
+			.replace(/^STDOUT:\s*/m, "")
+			.trim();
+
+		// If it's a zero exit code, hide it to reduce noise.
+		// If it's non-zero, keep it so the bot knows something failed.
+		const exitCodeMatch = cleaned.match(/EXIT CODE: (\d+)$/);
+		if (exitCodeMatch) {
+			if (exitCodeMatch[1] === "0") {
+				cleaned = cleaned.replace(/\n?EXIT CODE: 0$/, "").trim();
+			}
+		}
+
+		return `[COMMAND: ${command}]\n${cleaned || "(no output)"}`;
 	}
 
 	private loadRepositoryGuidance(): {
