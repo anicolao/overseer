@@ -25,10 +25,15 @@ export interface PersistWorkAction {
 	type: "persist_work";
 }
 
+export interface PersistQaAction {
+	type: "persist_qa";
+}
+
 export type AgentAction =
 	| RunReadOnlyShellAction
 	| RunShellAction
-	| PersistWorkAction;
+	| PersistWorkAction
+	| PersistQaAction;
 
 export interface AgentProtocolResponse {
 	version: typeof AGENT_PROTOCOL_VERSION;
@@ -69,7 +74,7 @@ Work to this workflow on every turn:
 - You may include \`handoff_to\` on \`"done"\` responses to make the next recipient explicit. Valid values: ${AGENT_HANDOFF_TARGETS.map((target) => `\`${target}\``).join(", ")}.
 - If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and at least one action.
 - \`actions\` is an ordered list executed sequentially by the dispatcher.
-- Available actions: \`{"type":"run_ro_shell","command":"..."}\`, \`{"type":"run_shell","command":"..."}\`, and \`{"type":"persist_work"}\`.
+- Available actions: \`{"type":"run_ro_shell","command":"..."}\`, \`{"type":"run_shell","command":"..."}\`, \`{"type":"persist_work"}\`, and \`{"type":"persist_qa"}\`.
 - Use \`{"type":"run_ro_shell","command":"..."}\` for repository inspection and verification. It runs in a disposable read-only clone. Changes made here will be LOST.
 - Use \`{"type":"run_shell","command":"..."}\` for repository file edits and tool execution in the live checkout.
 - Use \`{"type":"persist_work"}\` to commit and push all changes made via \`run_shell\` to the issue branch. Your work is not saved until you call this.
@@ -390,8 +395,14 @@ function parseAction(value: unknown, index: number): AgentAction {
 		};
 	}
 
+	if (type === "persist_qa") {
+		return {
+			type: "persist_qa",
+		};
+	}
+
 	throw new Error(
-		`actions[${index}].type must be "run_ro_shell", "run_shell", or "persist_work"`,
+		`actions[${index}].type must be "run_ro_shell", "run_shell", "persist_work", or "persist_qa"`,
 	);
 }
 
