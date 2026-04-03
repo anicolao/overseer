@@ -35,6 +35,7 @@ Rules:
 - If the task is complete, return `"task_status": "done"`, `"actions": []`, and a non-empty `final_response`.
 - `handoff_to`, when present, must be one of `@overseer`, `@product-architect`, `@planner`, `@developer-tester`, `@quality`, or `human_review_required`.
 - If you set `handoff_to`, the dispatcher will append the standardized `Next step: ...` line when it posts your final GitHub comment.
+- For incremental implementation tasks, `"done"` means the assigned increment is complete and ready for review, not that the whole issue is finished.
 - Do not use markdown fences or prose outside the JSON object.
 - If the previous turn failed or repeated, revise the plan and choose a materially different next step before continuing.
 
@@ -61,15 +62,15 @@ Example done response object:
 {
   "version": "{{AGENT_PROTOCOL_VERSION}}",
   "plan": [
-    "Inspect the relevant plan and implementation files.",
-    "Make the minimal code change required by the task.",
-    "Run targeted verification.",
-    "Persist the work and confirm it exists on the issue branch."
+    "Read the named plan and implementation files to understand the current increment.",
+    "Make the smallest code change that completes this increment.",
+    "Run targeted verification and persist the work.",
+    "Return control with a progress update."
   ],
-  "next_step": "Return control to the dispatcher.",
+  "next_step": "Return control with an incremental progress summary.",
   "actions": [],
   "task_status": "done",
-  "handoff_to": "@planner",
-  "final_response": "Identified the relevant implementation touchpoints and prepared the planner handoff."
+  "handoff_to": "@overseer",
+  "final_response": "Completed the current increment, verified the focused check, and persisted the change. Remaining work should continue in the next Overseer-assigned increment."
 }
 ```

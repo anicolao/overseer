@@ -20,7 +20,7 @@ describe("bot_config", () => {
 			"You are operating inside a repository checkout on GitHub Actions",
 		);
 		expect(developer.prompt.concatenatedPrompt).toContain(
-			"You implement code and verification for the assigned task.",
+			"You implement code and verification for one small assigned increment.",
 		);
 		expect(developer.prompt.concatenatedPrompt).toContain(
 			'"type":"run_ro_shell"',

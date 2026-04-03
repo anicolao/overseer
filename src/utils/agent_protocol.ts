@@ -121,8 +121,9 @@ export function buildContinuationMessage({
 		actionOutput,
 		"",
 		...(reminder ? ["IMPORTANT REMINDER:", reminder, ""] : []),
-		"Continue the same task. Do not restart or reinterpret the assignment.",
-		"Use the original task and your most recent structured response to decide the next step.",
+		"Continue the same assigned increment. Do not restart or expand the assignment.",
+		"Use the original task packet and your most recent structured response to decide the next immediate step.",
+		"If the current increment is complete, return control with a concise progress update instead of starting the next increment.",
 		`Continue the task using protocol "${AGENT_PROTOCOL_VERSION}".`,
 		"Return exactly one JSON object.",
 	].join("\n");
