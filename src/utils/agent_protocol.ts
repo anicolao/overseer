@@ -1,3 +1,5 @@
+import { truncate } from "./text.js";
+
 export const AGENT_PROTOCOL_VERSION = "overseer/v1";
 export const AGENT_HANDOFF_TARGETS = [
 	"@overseer",
@@ -53,6 +55,8 @@ export interface ContinuationContext {
 	actionOutput: string;
 }
 
+const MAX_CONTINUATION_ACTION_OUTPUT_CHARS = 8000;
+
 export const AGENT_PROTOCOL_PROMPT = `
 RESPONSE PROTOCOL:
 Work to this workflow on every turn:
@@ -101,6 +105,11 @@ export function buildContinuationMessage({
 	previousGithubComment,
 	actionOutput,
 }: ContinuationContext): string {
+	const actionOutputForModel = truncate(
+		actionOutput,
+		MAX_CONTINUATION_ACTION_OUTPUT_CHARS,
+	);
+
 	return [
 		"ORIGINAL TASK:",
 		originalTask,
@@ -112,7 +121,7 @@ export function buildContinuationMessage({
 			? ["MOST RECENT GITHUB STATUS COMMENT:", previousGithubComment, ""]
 			: []),
 		"LATEST ACTION OUTPUT:",
-		actionOutput,
+		actionOutputForModel,
 		"",
 		"Continue the same task. Do not restart or reinterpret the assignment.",
 		"Use the original task and your most recent structured response to decide the next step.",

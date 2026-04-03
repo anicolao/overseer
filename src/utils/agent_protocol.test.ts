@@ -214,4 +214,23 @@ I will comply.
 			'Continue the task using protocol "overseer/v1".',
 		);
 	});
+
+	it("truncates oversized action output in continuation messages", () => {
+		const longOutput = `STDOUT:\n${"x".repeat(12000)}`;
+		const message = buildContinuationMessage({
+			originalTask: "Planner Task:\nTask ID: issue-61",
+			previousResponseJson: JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Read files", "Write the plan"],
+				next_step: "Read files",
+				actions: [{ type: "run_ro_shell", command: "cat src/utils/foo.ts" }],
+				task_status: "in_progress",
+			}),
+			actionOutput: longOutput,
+		});
+
+		expect(message).toContain("LATEST ACTION OUTPUT:");
+		expect(message).toContain("[TRUNCATED");
+		expect(message.length).toBeLessThan(longOutput.length);
+	});
 });
