@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import type { Content } from "@google/generative-ai";
 import {
 	type AgentHandoffTarget,
@@ -227,6 +227,58 @@ export class AgentRunner {
 				}
 
 				outputs.push(await this.shell.executeActions([action]));
+				continue;
+			}
+
+			if (action.type === "persist_qa") {
+				const normalizedPath = action.path.replace(/\\/g, "/");
+				if (!normalizedPath.startsWith("docs/qa/")) {
+					outputs.push(
+						JSON.stringify(
+							{
+								ok: false,
+								error_code: "invalid_path",
+								message:
+									"persist_qa only allowed for paths starting with docs/qa/",
+							},
+							null,
+							2,
+						),
+					);
+					continue;
+				}
+
+				try {
+					const fullPath = resolve(process.cwd(), normalizedPath);
+					const dir = dirname(fullPath);
+					if (!existsSync(dir)) {
+						mkdirSync(dir, { recursive: true });
+					}
+					writeFileSync(fullPath, action.content, "utf8");
+					outputs.push(
+						JSON.stringify(
+							{
+								ok: true,
+								path: normalizedPath,
+								message: `Successfully persisted QA documentation to ${normalizedPath}`,
+							},
+							null,
+							2,
+						),
+					);
+				} catch (error) {
+					outputs.push(
+						JSON.stringify(
+							{
+								ok: false,
+								error_code: "write_failed",
+								message: `Failed to write QA documentation: ${error instanceof Error ? error.message : String(error)}`,
+							},
+							null,
+							2,
+						),
+					);
+				}
 				continue;
 			}
 

@@ -25,10 +25,17 @@ export interface PersistWorkAction {
 	type: "persist_work";
 }
 
+export interface PersistQAAction {
+	type: "persist_qa";
+	path: string;
+	content: string;
+}
+
 export type AgentAction =
 	| RunReadOnlyShellAction
 	| RunShellAction
-	| PersistWorkAction;
+	| PersistWorkAction
+	| PersistQAAction;
 
 export interface AgentProtocolResponse {
 	version: typeof AGENT_PROTOCOL_VERSION;
@@ -67,10 +74,11 @@ Work to this workflow on every turn:
 - You may include \`handoff_to\` on \`"done"\` responses to make the next recipient explicit. Valid values: ${AGENT_HANDOFF_TARGETS.map((target) => `\`${target}\``).join(", ")}.
 - If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and at least one action.
 - \`actions\` is an ordered list executed sequentially by the dispatcher.
-- Available actions: \`{"type":"run_ro_shell","command":"..."}\`, \`{"type":"run_shell","command":"..."}\`, and \`{"type":"persist_work"}\`.
+- Available actions: \`{"type":"run_ro_shell","command":"..."}\`, \`{"type":"run_shell","command":"..."}\`, \`{"type":"persist_work"}\`, and \`{"type":"persist_qa","path":"docs/qa/...","content":"..."}\`.
 - Use \`{"type":"run_ro_shell","command":"..."}\` for repository inspection and verification commands.
 - Use \`{"type":"run_shell","command":"..."}\` for repository file edits and verification commands when your persona is authorized to modify the live checkout.
 - Use \`{"type":"persist_work"}\` only when your persona is authorized to publish repo changes and you want the dispatcher-owned persistence mechanism to commit and push your work.
+- Use \`{"type":"persist_qa","path":"docs/qa/...","content":"..."}\` to persist detailed QA observations. This is allowed even for personas with read-only shell access, but the path must be inside \`docs/qa/\`.
 - If you set \`handoff_to\`, the dispatcher will append the standardized \`Next step: ...\` line when it posts your final GitHub comment.
 - If the task is complete, respond with \`"task_status": "done"\`, \`"actions": []\`, and \`final_response\` containing the concise human-facing summary that should be posted back to GitHub.
 - Do not use \`[RUN:command]\`, markdown fences, or prose outside the JSON object.
@@ -354,8 +362,19 @@ function parseAction(value: unknown, index: number): AgentAction {
 		};
 	}
 
+	if (type === "persist_qa") {
+		return {
+			type: "persist_qa",
+			path: requireNonEmptyString(record.path, `actions[${index}].path`),
+			content: requireNonEmptyString(
+				record.content,
+				`actions[${index}].content`,
+			),
+		};
+	}
+
 	throw new Error(
-		`actions[${index}].type must be "run_ro_shell", "run_shell", or "persist_work"`,
+		`actions[${index}].type must be "run_ro_shell", "run_shell", "persist_work", or "persist_qa"`,
 	);
 }
 
