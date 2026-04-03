@@ -25,6 +25,7 @@ export interface IterationResult {
 
 export interface AgentRunnerOptions {
 	persistWork?: () => Promise<PersistWorkResult>;
+	persistQa?: () => Promise<PersistWorkResult>;
 	requireDoneHandoff?: boolean;
 	loopAbortHandoffTo?: AgentHandoffTarget;
 	modelName?: string;
@@ -355,29 +356,59 @@ export class AgentRunner {
 				continue;
 			}
 
-			if (!options.persistWork) {
-				const denial = {
-					ok: false,
-					branch: "unavailable",
-					error_code: "persist_not_available",
-					message: "persist_work is not available for this persona.",
-				};
+			if (action.type === "persist_work") {
+				if (!options.persistWork) {
+					const denial = {
+						ok: false,
+						branch: "unavailable",
+						error_code: "persist_not_available",
+						message: "persist_work is not available for this persona.",
+					};
+					executedActions.push({
+						type: action.type,
+						ok: false,
+						persistResult: denial,
+					});
+					outputs.push(JSON.stringify(denial, null, 2));
+					continue;
+				}
+
+				const result = await options.persistWork();
 				executedActions.push({
 					type: action.type,
-					ok: false,
-					persistResult: denial,
+					ok: result.ok,
+					persistResult: result,
 				});
-				outputs.push(JSON.stringify(denial, null, 2));
+				outputs.push(JSON.stringify(result, null, 2));
 				continue;
 			}
 
-			const result = await options.persistWork();
-			executedActions.push({
-				type: action.type,
-				ok: result.ok,
-				persistResult: result,
-			});
-			outputs.push(JSON.stringify(result, null, 2));
+			if (action.type === "persist_qa") {
+				if (!options.persistQa) {
+					const denial = {
+						ok: false,
+						branch: "unavailable",
+						error_code: "persist_not_available",
+						message: "persist_qa is not available for this persona.",
+					};
+					executedActions.push({
+						type: action.type,
+						ok: false,
+						persistResult: denial,
+					});
+					outputs.push(JSON.stringify(denial, null, 2));
+					continue;
+				}
+
+				const result = await options.persistQa();
+				executedActions.push({
+					type: action.type,
+					ok: result.ok,
+					persistResult: result,
+				});
+				outputs.push(JSON.stringify(result, null, 2));
+				continue;
+			}
 		}
 
 		return {
