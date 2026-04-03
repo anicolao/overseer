@@ -306,10 +306,6 @@ function buildAvailableActionsBullets(context: {
 		);
 	}
 
-	bullets.push(
-		'- `{"type":"persist_qa","path":"docs/qa/...","content":"..."}` to persist detailed QA observations. This is allowed even for personas with read-only shell access, but the path must be inside `docs/qa/`.',
-	);
-
 	return bullets.join("\n");
 }
 
@@ -351,7 +347,6 @@ function buildShellActionRules(context: {
 		return [
 			"- `run_ro_shell` is the default choice for inspection and verification.",
 			"- Use `run_shell` only when you intentionally need to modify repository files or run write-dependent project tooling.",
-			"- If you need to persist QA documentation, use `persist_qa` with a path inside `docs/qa/`.",
 			"- If the environment is missing a tool you need, edit `flake.nix` and then continue using the shell actions above.",
 		].join("\n");
 	}
@@ -359,7 +354,6 @@ function buildShellActionRules(context: {
 	return [
 		"- Use `run_ro_shell` for inspection and verification only.",
 		"- `run_shell` is unavailable to this bot.",
-		"- If you need to persist QA documentation, use `persist_qa` with a path inside `docs/qa/`.",
 		"- If the environment is missing a tool you need, note that in your output instead of trying to modify the repository or tooling configuration yourself.",
 	].join("\n");
 }
