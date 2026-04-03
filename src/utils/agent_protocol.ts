@@ -64,7 +64,6 @@ Work to this workflow on every turn:
 - Return exactly one JSON object and nothing else.
 - Use \`"version": "${AGENT_PROTOCOL_VERSION}"\`.
 - Always include \`plan\`, \`next_step\`, \`actions\`, and \`task_status\`.
-- You may include \`github_comment\` as a concise markdown progress update to append to the GitHub issue thread.
 - You may include \`handoff_to\` on \`"done"\` responses to make the next recipient explicit. Valid values: ${AGENT_HANDOFF_TARGETS.map((target) => `\`${target}\``).join(", ")}.
 - If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and at least one action.
 - \`actions\` is an ordered list executed sequentially by the dispatcher.
@@ -72,13 +71,12 @@ Work to this workflow on every turn:
 - Use \`{"type":"run_ro_shell","command":"..."}\` for repository inspection and verification commands.
 - Use \`{"type":"run_shell","command":"..."}\` for repository file edits and verification commands when your persona is authorized to modify the live checkout.
 - Use \`{"type":"persist_work"}\` only when your persona is authorized to publish repo changes and you want the dispatcher-owned persistence mechanism to commit and push your work.
-- \`github_comment\` is for in-progress status only. Do not put delegation or the final handoff there.
 - If you set \`handoff_to\`, the dispatcher will append the standardized \`Next step: ...\` line when it posts your final GitHub comment.
 - If the task is complete, respond with \`"task_status": "done"\`, \`"actions": []\`, and \`final_response\` containing the concise human-facing summary that should be posted back to GitHub.
 - Do not use \`[RUN:command]\`, markdown fences, or prose outside the JSON object.
 
 Example in-progress response:
-{"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Read the relevant files before editing.","actions":[{"type":"run_ro_shell","command":"cd /project && ls -la"},{"type":"run_shell","command":"cd /project && cat WORKFLOW.md"}],"task_status":"in_progress","github_comment":"Started work and am inspecting the relevant files."}
+{"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Read the relevant files before editing.","actions":[{"type":"run_ro_shell","command":"cd /project && ls -la"},{"type":"run_shell","command":"cd /project && cat WORKFLOW.md"}],"task_status":"in_progress"}
 
 Example done response:
 {"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Return control to the dispatcher.","actions":[],"task_status":"done","handoff_to":"@planner","final_response":"Identified the relevant implementation touchpoints and prepared the planner handoff."}

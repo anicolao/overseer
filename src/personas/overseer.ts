@@ -8,7 +8,7 @@ import type {
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { GitHubService } from "../utils/github.js";
-import { getAttribution, isLimitReached } from "../utils/persona_helper.js";
+import { isLimitReached } from "../utils/persona_helper.js";
 import { logTrace, textStats } from "../utils/trace.js";
 
 export class OverseerPersona {
@@ -29,9 +29,9 @@ export class OverseerPersona {
 	}
 
 	private buildRunnerOptions(
-		owner: string,
-		repo: string,
-		issueNumber: number,
+		_owner: string,
+		_repo: string,
+		_issueNumber: number,
 	): AgentRunnerOptions {
 		return {
 			requireDoneHandoff: true,
@@ -42,10 +42,6 @@ export class OverseerPersona {
 				displayName: this.bot.displayName,
 				llm: this.bot.llm,
 				...summarizePromptAssembly(this.bot.prompt),
-			},
-			appendGithubComment: async (markdown: string) => {
-				const body = `${getAttribution(this.bot.displayName, issueNumber)}${markdown}`;
-				await this.github.addCommentToIssue(owner, repo, issueNumber, body);
 			},
 		};
 	}
@@ -70,7 +66,11 @@ export class OverseerPersona {
 				body,
 			)
 		) {
-			return { finalResponse: "", log: "Limit reached" };
+			return {
+				finalResponse: "",
+				log: "Limit reached",
+				suppressFinalComment: true,
+			};
 		}
 
 		const taskBody = `ISSUE TITLE: ${title}\n\nISSUE BODY:\n${body || "No body provided."}`;
@@ -115,7 +115,11 @@ export class OverseerPersona {
 				body,
 			)
 		) {
-			return { finalResponse: "", log: "Limit reached" };
+			return {
+				finalResponse: "",
+				log: "Limit reached",
+				suppressFinalComment: true,
+			};
 		}
 
 		const fullContext = await this.github.getFullIssueContext(

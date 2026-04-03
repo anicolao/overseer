@@ -57,25 +57,21 @@ async function run() {
 		productArchitect: new TaskPersona(
 			getBotOrThrow(botRegistry, "product-architect"),
 			gemini,
-			github,
 			persistence,
 		),
 		planner: new TaskPersona(
 			getBotOrThrow(botRegistry, "planner"),
 			gemini,
-			github,
 			persistence,
 		),
 		developerTester: new TaskPersona(
 			getBotOrThrow(botRegistry, "developer-tester"),
 			gemini,
-			github,
 			persistence,
 		),
 		quality: new TaskPersona(
 			getBotOrThrow(botRegistry, "quality"),
 			gemini,
-			github,
 			persistence,
 		),
 	};
@@ -400,6 +396,15 @@ async function finalizeRun(
 	// 1. Save Session Log as Artifact
 	const logPath = `session_${persona}_${Date.now()}.log`;
 	fs.writeFileSync(logPath, result.log);
+
+	if (result.suppressFinalComment) {
+		logTrace("dispatcher.finalize.commentSuppressed", {
+			persona,
+			reason: "iteration_result_requested_suppression",
+			log: textStats(result.log),
+		});
+		return;
+	}
 
 	// 2. Determine Next Persona
 	const nextPersona = resolveNextPersona(persona, result.handoffTo);

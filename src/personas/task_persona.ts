@@ -7,34 +7,29 @@ import type {
 } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
-import type { GitHubService } from "../utils/github.js";
 import type { PersistenceService } from "../utils/persistence.js";
-import { getAttribution } from "../utils/persona_helper.js";
 import { logTrace, textStats } from "../utils/trace.js";
 
 export class TaskPersona {
 	private bot: LoadedBotDefinition;
 	private gemini: GeminiService;
-	private github: GitHubService;
 	private persistence: PersistenceService;
 	private runner: AgentRunner;
 
 	constructor(
 		bot: LoadedBotDefinition,
 		gemini: GeminiService,
-		github: GitHubService,
 		persistence: PersistenceService,
 	) {
 		this.bot = bot;
 		this.gemini = gemini;
-		this.github = github;
 		this.persistence = persistence;
 		this.runner = new AgentRunnerClass();
 	}
 
 	async handleTask(
-		owner: string,
-		repo: string,
+		_owner: string,
+		_repo: string,
 		issueNumber: number,
 		taskBody: string,
 	): Promise<IterationResult> {
@@ -67,10 +62,6 @@ export class TaskPersona {
 			persistWork: this.bot.allowPersistWork
 				? () => this.persistence.persistWork(issueNumber, this.bot.id)
 				: undefined,
-			appendGithubComment: async (markdown: string) => {
-				const body = `${getAttribution(this.bot.displayName, issueNumber)}${markdown}`;
-				await this.github.addCommentToIssue(owner, repo, issueNumber, body);
-			},
 		};
 
 		return this.runner.runAutonomousLoop(
