@@ -2,6 +2,7 @@ import { exec } from "node:child_process";
 import {
 	chmodSync,
 	cpSync,
+	existsSync,
 	lstatSync,
 	mkdirSync,
 	readdirSync,
@@ -24,10 +25,14 @@ export interface ShellResult {
 }
 
 export class ShellService {
+	private currentDirectory: string;
+
 	constructor(
 		private repoRoot: string = process.cwd(),
 		private commandWrapper: (command: string) => string = wrapInNixDevelop,
-	) {}
+	) {
+		this.currentDirectory = repoRoot;
+	}
 
 	async executeCommand(
 		command: string,
@@ -41,7 +46,9 @@ export class ShellService {
 	}
 
 	private async executeLiveCommand(command: string): Promise<ShellResult> {
-		const wrappedCommand = this.commandWrapper(command);
+		// Append pwd to the command to track directory changes.
+		const trackingCommand = `cd ${shellSingleQuote(this.currentDirectory)} && ( ${command} ) && pwd`;
+		const wrappedCommand = this.commandWrapper(trackingCommand);
 		console.log(`Executing shell command: ${command}`);
 		const startedAt = Date.now();
 		logTrace("shell.command.begin", {
@@ -53,16 +60,26 @@ export class ShellService {
 			const { stdout, stderr } = await execAsync(wrappedCommand, {
 				cwd: this.repoRoot,
 			});
+
+			const lines = stdout.trim().split("\n");
+			const newDirectory = lines.pop()?.trim();
+			const actualStdout = lines.join("\n").trim();
+
+			if (newDirectory && existsSync(newDirectory)) {
+				this.currentDirectory = newDirectory;
+			}
+
 			logTrace("shell.command.success", {
 				command,
 				wrappedCommand,
 				executionMode: "read_write",
 				durationMs: Date.now() - startedAt,
-				stdout: textStats(stdout.trim()),
+				stdout: textStats(actualStdout),
 				stderr: textStats(stderr.trim()),
+				currentDirectory: this.currentDirectory,
 			});
 			return {
-				stdout: stdout.trim(),
+				stdout: actualStdout,
 				stderr: stderr.trim(),
 				exitCode: 0,
 			};
@@ -90,7 +107,12 @@ export class ShellService {
 
 	private async executeReadOnlyCommand(command: string): Promise<ShellResult> {
 		const sandbox = createReadOnlySandbox(this.repoRoot);
-		const wrappedCommand = this.commandWrapper(command);
+		// Note: sandbox.repoDir is always the starting point for read-only commands.
+		// We could track CWD within sandbox too if we wanted multi-command read-only actions
+		// to behave like a single session, but usually each turn starts fresh.
+		// For now, let's just make it consistent with the cd/pwd wrapper.
+		const trackingCommand = `cd ${shellSingleQuote(sandbox.repoDir)} && ( ${command} ) && pwd`;
+		const wrappedCommand = this.commandWrapper(trackingCommand);
 		console.log(`Executing read-only shell command: ${command}`);
 		const startedAt = Date.now();
 		logTrace("shell.command.begin", {
@@ -112,16 +134,21 @@ export class ShellService {
 					GIT_OPTIONAL_LOCKS: "0",
 				},
 			});
+
+			const lines = stdout.trim().split("\n");
+			const _newDirectory = lines.pop()?.trim();
+			const actualStdout = lines.join("\n").trim();
+
 			logTrace("shell.command.success", {
 				command,
 				wrappedCommand,
 				executionMode: "read_only",
 				durationMs: Date.now() - startedAt,
-				stdout: textStats(stdout.trim()),
+				stdout: textStats(actualStdout),
 				stderr: textStats(stderr.trim()),
 			});
 			return {
-				stdout: stdout.trim(),
+				stdout: actualStdout,
 				stderr: stderr.trim(),
 				exitCode: 0,
 			};

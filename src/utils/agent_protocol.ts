@@ -55,34 +55,70 @@ export interface ContinuationContext {
 	actionOutput: string;
 }
 
-export const AGENT_PROTOCOL_PROMPT = `
-RESPONSE PROTOCOL:
-Work to this workflow on every turn:
-1. Keep a concrete plan in mind.
-2. Return that plan explicitly in \`plan\`.
-2. State the immediate next step in \`next_step\`.
-3. Either take one or more ordered actions or finish the task.
-4. Observe the result and loop.
-- Return exactly one JSON object and nothing else.
-- Use \`"version": "${AGENT_PROTOCOL_VERSION}"\`.
-- Always include \`plan\`, \`next_step\`, \`actions\`, and \`task_status\`.
-- You may include \`handoff_to\` on \`"done"\` responses to make the next recipient explicit. Valid values: ${AGENT_HANDOFF_TARGETS.map((target) => `\`${target}\``).join(", ")}.
-- If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and at least one action.
-- \`actions\` is an ordered list executed sequentially by the dispatcher.
-- Available actions: \`{"type":"run_ro_shell","command":"..."}\`, \`{"type":"run_shell","command":"..."}\`, and \`{"type":"persist_work"}\`.
-- Use \`{"type":"run_ro_shell","command":"..."}\` for repository inspection and verification. It runs in a disposable read-only clone. Changes made here will be LOST.
-- Use \`{"type":"run_shell","command":"..."}\` for repository file edits and tool execution in the live checkout.
-- Use \`{"type":"persist_work"}\` to commit and push all changes made via \`run_shell\` to the issue branch. Your work is not saved until you call this.
-- If you set \`handoff_to\`, the dispatcher will append the standardized \`Next step: ...\` line when it posts your final GitHub comment.
-- If the task is complete, respond with \`"task_status": "done"\`, \`"actions": []\`, and \`final_response\` containing the concise human-facing summary that should be posted back to GitHub.
-- Do not use \`[RUN:command]\`, markdown fences, or prose outside the JSON object.
-
-Example in-progress response:
-{"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Read the relevant files before editing.","actions":[{"type":"run_ro_shell","command":"cd /project && ls -la"},{"type":"run_shell","command":"cd /project && cat WORKFLOW.md"}],"task_status":"in_progress"}
-
-Example done response:
-{"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Return control to the dispatcher.","actions":[],"task_status":"done","handoff_to":"@planner","final_response":"Identified the relevant implementation touchpoints and prepared the planner handoff."}
-`;
+export const AGENT_PROTOCOL_PROMPT =
+	"RESPONSE PROTOCOL:\n" +
+	"Work to this workflow on every turn:\n" +
+	"1. Keep a concrete plan in mind.\n" +
+	"2. Return that plan explicitly following the `PLAN:` marker.\n" +
+	"3. State the immediate next step following the `NEXT_STEP:` marker.\n" +
+	"4. Either take one or more ordered actions or finish the task.\n" +
+	"5. Observe the result and loop.\n" +
+	"\n" +
+	"Your response MUST follow this structure:\n" +
+	"\n" +
+	"PLAN:\n" +
+	"<your step-by-step plan>\n" +
+	"\n" +
+	"NEXT_STEP:\n" +
+	"<the immediate next step you intend to take>\n" +
+	"\n" +
+	"ACTIONS:\n" +
+	"```json\n" +
+	"[\n" +
+	'  {"type": "run_ro_shell", "command": "..."},\n' +
+	'  {"type": "run_shell", "command": "..."}\n' +
+	"]\n" +
+	"```\n" +
+	"\n" +
+	"TASK_STATUS:\n" +
+	'<"in_progress" or "done">\n' +
+	"\n" +
+	"GITHUB_COMMENT:\n" +
+	"<optional status update for the issue>\n" +
+	"\n" +
+	"FINAL_RESPONSE:\n" +
+	"<required when task_status is done; concise summary of work>\n" +
+	"\n" +
+	"HANDOFF_TO:\n" +
+	'<optional when task_status is done; e.g., "@planner">\n' +
+	"\n" +
+	"Rules:\n" +
+	"- `ACTIONS` must be a valid JSON array of action objects.\n" +
+	'- Available actions: `{"type":"run_ro_shell","command":"..."}`, `{"type":"run_shell","command":"..."}`, and `{"type":"persist_work"}`.\n' +
+	'- Use `{"type":"run_ro_shell","command":"..."}` for repository inspection and verification. It runs in a disposable read-only clone. Changes made here will be LOST.\n' +
+	'- Use `{"type":"run_shell","command":"..."}` for repository file edits and tool execution in the live checkout.\n' +
+	"- Environment state (like the current directory) is persistent between `run_shell` actions within the same turn and across turns.\n" +
+	'- Use `{"type":"persist_work"}` to commit and push all changes made via `run_shell` to the issue branch. Your work is not saved until you call this.\n' +
+	"- If you set `HANDOFF_TO`, the dispatcher will append the standardized `Next step: ...` line.\n" +
+	"- If the task is complete, respond with `TASK_STATUS: done`, an empty `ACTIONS` array, and a `FINAL_RESPONSE`.\n" +
+	"\n" +
+	"Example in-progress response:\n" +
+	"PLAN:\n" +
+	"1. Inspect files.\n" +
+	"2. Fix bug.\n" +
+	"\n" +
+	"NEXT_STEP:\n" +
+	"Read the relevant files before editing.\n" +
+	"\n" +
+	"ACTIONS:\n" +
+	"```json\n" +
+	"[\n" +
+	'  {"type": "run_ro_shell", "command": "ls -la"}\n' +
+	"]\n" +
+	"```\n" +
+	"\n" +
+	"TASK_STATUS:\n" +
+	"in_progress\n";
 
 export function buildProtocolRepairMessage(
 	error: string,
@@ -136,171 +172,61 @@ export function buildContinuationMessage({
 export function parseAgentProtocolResponse(
 	responseText: string,
 ): ParsedAgentProtocolResponse {
-	const rawJson = extractJsonObject(responseText);
-	let parsed: unknown;
+	const plan = extractMarker(responseText, "PLAN");
+	const nextStep = extractMarker(responseText, "NEXT_STEP");
+	const taskStatusRaw = extractMarker(responseText, "TASK_STATUS");
+	const finalResponse = extractMarker(responseText, "FINAL_RESPONSE");
+	const githubComment = extractMarker(responseText, "GITHUB_COMMENT");
+	const handoffToRaw = extractMarker(responseText, "HANDOFF_TO");
 
-	try {
-		parsed = JSON.parse(rawJson);
-	} catch (error) {
-		throw new Error(
-			`response was not valid JSON: ${
-				error instanceof Error ? error.message : String(error)
-			}`,
-		);
-	}
-
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error("top-level JSON value must be an object");
-	}
-
-	const record = parsed as Record<string, unknown>;
-	const version = requireNonEmptyString(record.version, "version");
-	if (version !== AGENT_PROTOCOL_VERSION) {
-		throw new Error(
-			`version must be "${AGENT_PROTOCOL_VERSION}", received "${version}"`,
-		);
-	}
-
-	const nextStep = requireNonEmptyString(record.next_step, "next_step");
-	const plan = parseRequiredPlan(record.plan);
-	const taskStatus = parseTaskStatus(record.task_status);
-	const actions = parseActions(record.actions);
-	const finalResponse = parseOptionalNonEmptyString(
-		record.final_response,
-		"final_response",
-	);
-	const githubComment = parseOptionalNonEmptyString(
-		record.github_comment,
-		"github_comment",
-	);
-	const handoffTo = parseOptionalHandoffTarget(record.handoff_to);
-
-	if (taskStatus === "in_progress" && actions.length === 0) {
-		throw new Error(
-			'task_status "in_progress" requires at least one action in actions[]',
-		);
-	}
-	if (taskStatus !== "done" && handoffTo) {
-		throw new Error('handoff_to is only valid when task_status is "done"');
-	}
-
-	if (taskStatus === "done") {
-		if (actions.length !== 0) {
-			throw new Error('task_status "done" requires actions to be empty');
-		}
-		if (!finalResponse) {
+	const actionsRaw = extractMarker(responseText, "ACTIONS");
+	let actions: AgentAction[] = [];
+	if (actionsRaw) {
+		const jsonMatch = actionsRaw.match(/```json\s*([\s\S]*?)\s*```/i);
+		const jsonToParse = jsonMatch ? jsonMatch[1].trim() : actionsRaw.trim();
+		try {
+			actions = parseActions(JSON.parse(jsonToParse));
+		} catch (error) {
 			throw new Error(
-				'task_status "done" requires a non-empty final_response string',
+				`ACTIONS must be a valid JSON array: ${error instanceof Error ? error.message : String(error)}`,
 			);
 		}
 	}
 
+	const taskStatus = parseTaskStatus(taskStatusRaw?.trim());
+	const handoffTo = parseOptionalHandoffTarget(handoffToRaw?.trim());
+
+	if (!plan) throw new Error("Missing PLAN: marker");
+	if (!nextStep) throw new Error("Missing NEXT_STEP: marker");
+	if (!taskStatus) throw new Error("Missing TASK_STATUS: marker");
+
+	if (taskStatus === "in_progress" && actions.length === 0) {
+		throw new Error('TASK_STATUS "in_progress" requires at least one action');
+	}
+
+	if (taskStatus === "done" && !finalResponse) {
+		throw new Error('TASK_STATUS "done" requires a FINAL_RESPONSE');
+	}
+
 	return {
-		rawJson,
+		rawJson: responseText, // Keeping original for history compatibility
 		protocol: {
 			version: AGENT_PROTOCOL_VERSION,
-			plan,
-			next_step: nextStep,
+			plan: plan.split("\n").filter((line) => line.trim().length > 0),
+			next_step: nextStep.trim(),
 			actions,
 			task_status: taskStatus,
-			final_response: finalResponse,
-			github_comment: githubComment,
+			final_response: finalResponse?.trim(),
+			github_comment: githubComment?.trim(),
 			handoff_to: handoffTo,
 		},
 	};
 }
 
-function extractJsonObject(responseText: string): string {
-	const trimmed = responseText.trim();
-	if (!trimmed) {
-		throw new Error("response was empty");
-	}
-
-	const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-	if (fencedMatch?.[1]) {
-		return fencedMatch[1].trim();
-	}
-
-	if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-		return trimmed;
-	}
-
-	const embeddedObject = extractBalancedObject(trimmed);
-	if (embeddedObject) {
-		return embeddedObject;
-	}
-
-	throw new Error("could not find a JSON object in the response");
-}
-
-function extractBalancedObject(text: string): string | null {
-	let startIndex = -1;
-	let depth = 0;
-	let inString = false;
-	let isEscaped = false;
-
-	for (let index = 0; index < text.length; index++) {
-		const char = text[index];
-		if (!char) {
-			continue;
-		}
-
-		if (isEscaped) {
-			isEscaped = false;
-			continue;
-		}
-
-		if (char === "\\") {
-			isEscaped = true;
-			continue;
-		}
-
-		if (char === '"') {
-			inString = !inString;
-			continue;
-		}
-
-		if (inString) {
-			continue;
-		}
-
-		if (char === "{") {
-			if (depth === 0) {
-				startIndex = index;
-			}
-			depth++;
-			continue;
-		}
-
-		if (char === "}") {
-			if (depth === 0) {
-				continue;
-			}
-			depth--;
-			if (depth === 0 && startIndex >= 0) {
-				return text.slice(startIndex, index + 1);
-			}
-		}
-	}
-
-	return null;
-}
-
-function requireNonEmptyString(value: unknown, fieldName: string): string {
-	if (typeof value !== "string" || value.trim().length === 0) {
-		throw new Error(`${fieldName} must be a non-empty string`);
-	}
-	return value.trim();
-}
-
-function parseOptionalNonEmptyString(
-	value: unknown,
-	fieldName: string,
-): string | undefined {
-	if (value === undefined) {
-		return undefined;
-	}
-	return requireNonEmptyString(value, fieldName);
+function extractMarker(text: string, marker: string): string | undefined {
+	const regex = new RegExp(`${marker}:\\s*([\\s\\S]*?)(?=\\n[A-Z_]+:|$)`, "i");
+	const match = text.match(regex);
+	return match ? match[1].trim() : undefined;
 }
 
 function parseTaskStatus(value: unknown): AgentTaskStatus {
@@ -313,10 +239,14 @@ function parseTaskStatus(value: unknown): AgentTaskStatus {
 function parseOptionalHandoffTarget(
 	value: unknown,
 ): AgentHandoffTarget | undefined {
-	if (value === undefined) {
+	if (
+		value === undefined ||
+		value === null ||
+		(typeof value === "string" && value.trim() === "")
+	) {
 		return undefined;
 	}
-	const handoffTo = requireNonEmptyString(value, "handoff_to");
+	const handoffTo = (typeof value === "string" ? value : String(value)).trim();
 	if (!(AGENT_HANDOFF_TARGETS as readonly string[]).includes(handoffTo)) {
 		throw new Error(
 			`handoff_to must be one of: ${AGENT_HANDOFF_TARGETS.join(", ")}`,
@@ -339,24 +269,30 @@ function parseAction(value: unknown, index: number): AgentAction {
 	}
 
 	const record = value as Record<string, unknown>;
-	const type = requireNonEmptyString(record.type, `actions[${index}].type`);
+	const type = record.type;
+	if (typeof type !== "string") {
+		throw new Error(`actions[${index}].type must be a string`);
+	}
+
 	if (type === "run_ro_shell") {
+		const command = record.command;
+		if (typeof command !== "string" || command.trim().length === 0) {
+			throw new Error(`actions[${index}].command must be a non-empty string`);
+		}
 		return {
 			type: "run_ro_shell",
-			command: requireNonEmptyString(
-				record.command,
-				`actions[${index}].command`,
-			),
+			command: command.trim(),
 		};
 	}
 
 	if (type === "run_shell") {
+		const command = record.command;
+		if (typeof command !== "string" || command.trim().length === 0) {
+			throw new Error(`actions[${index}].command must be a non-empty string`);
+		}
 		return {
 			type: "run_shell",
-			command: requireNonEmptyString(
-				record.command,
-				`actions[${index}].command`,
-			),
+			command: command.trim(),
 		};
 	}
 
@@ -368,18 +304,5 @@ function parseAction(value: unknown, index: number): AgentAction {
 
 	throw new Error(
 		`actions[${index}].type must be "run_ro_shell", "run_shell", or "persist_work"`,
-	);
-}
-
-function parseRequiredPlan(value: unknown): string[] {
-	if (!Array.isArray(value)) {
-		throw new Error("plan must be an array of strings");
-	}
-	if (value.length === 0) {
-		throw new Error("plan must contain at least one step");
-	}
-
-	return value.map((entry, index) =>
-		requireNonEmptyString(entry, `plan[${index}]`),
 	);
 }
