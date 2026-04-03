@@ -35,10 +35,10 @@ describe("bot_config", () => {
 
 		expect(getBotOrThrow(registry, "overseer").kind).toBe("overseer");
 		expect(getBotOrThrow(registry, "quality").shellAccess).toBe("read_only");
-		expect(getBotOrThrow(registry, "quality").allowPersistWork).toBe(false);
+		expect(getBotOrThrow(registry, "quality").allowPersistWork).toBe(true);
 		expect(
 			getBotOrThrow(registry, "quality").prompt.concatenatedPrompt,
-		).toContain("Do not use `run_shell`.");
+		).toContain("`run_shell` is unavailable to this bot.");
 		expect(registry.all).toHaveLength(5);
 	});
 });

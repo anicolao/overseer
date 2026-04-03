@@ -65,12 +65,13 @@
       "display_name": "Quality",
       "kind": "task",
       "shell_access": "read_only",
-      "allow_persist_work": false,
+      "allow_persist_work": true,
       "prompt_files": [
         "prompts/shared/task-agent.md",
-        "prompts/shared/read-only-agent.md",
+        "prompts/shared/persisting-agent.md",
         "prompts/quality.md"
       ]
     }
+
   ]
 }
