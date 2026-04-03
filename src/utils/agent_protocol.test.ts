@@ -86,6 +86,28 @@ I will comply.
 		expect(parsed.protocol.actions).toEqual([{ type: "persist_work" }]);
 	});
 
+	it("parses persist_qa actions", () => {
+		const parsed = parseAgentProtocolResponse(
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Persist QA results."],
+				next_step: "Persist QA results.",
+				actions: [
+					{
+						type: "persist_qa",
+						path: "docs/qa/test.md",
+						content: "QA Content",
+					},
+				],
+				task_status: "in_progress",
+			}),
+		);
+
+		expect(parsed.protocol.actions).toEqual([
+			{ type: "persist_qa", path: "docs/qa/test.md", content: "QA Content" },
+		]);
+	});
+
 	it("parses optional github_comment and plan fields", () => {
 		const parsed = parseAgentProtocolResponse(
 			JSON.stringify({
@@ -188,6 +210,7 @@ I will comply.
 	it("builds continuation messages that restate task and prior response", () => {
 		const message = buildContinuationMessage({
 			originalTask: "Developer Task:\nTask ID: issue-55",
+			iteration: 3,
 			previousResponseJson: JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
 				plan: ["Read the plan", "Implement the change"],
@@ -204,6 +227,7 @@ I will comply.
 
 		expect(message).toContain("ORIGINAL TASK:");
 		expect(message).toContain("Task ID: issue-55");
+		expect(message).toContain("CURRENT ITERATION: 3");
 		expect(message).toContain("MOST RECENT STRUCTURED RESPONSE:");
 		expect(message).toContain('"next_step":"Read the plan"');
 		expect(message).toContain("MOST RECENT GITHUB STATUS COMMENT:");

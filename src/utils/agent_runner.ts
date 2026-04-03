@@ -172,6 +172,7 @@ export class AgentRunner {
 			this.log(`ACTION OUTPUT: ${actionOutput}\n`);
 			currentMessage = buildContinuationMessage({
 				originalTask,
+				iteration,
 				previousResponseJson: parsedResponse.rawJson,
 				previousGithubComment: parsedResponse.protocol.github_comment,
 				actionOutput,

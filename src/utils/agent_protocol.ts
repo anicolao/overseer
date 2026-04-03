@@ -55,6 +55,7 @@ export interface ParsedAgentProtocolResponse {
 
 export interface ContinuationContext {
 	originalTask: string;
+	iteration: number;
 	previousResponseJson: string;
 	previousGithubComment?: string;
 	actionOutput: string;
@@ -75,10 +76,10 @@ Work to this workflow on every turn:
 - If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and at least one action.
 - \`actions\` is an ordered list executed sequentially by the dispatcher.
 - Available actions: \`{"type":"run_ro_shell","command":"..."}\`, \`{"type":"run_shell","command":"..."}\`, \`{"type":"persist_work"}\`, and \`{"type":"persist_qa","path":"docs/qa/...","content":"..."}\`.
-- Use \`{"type":"run_ro_shell","command":"..."}\` for repository inspection and verification commands.
-- Use \`{"type":"run_shell","command":"..."}\` for repository file edits and verification commands when your persona is authorized to modify the live checkout.
-- Use \`{"type":"persist_work"}\` only when your persona is authorized to publish repo changes and you want the dispatcher-owned persistence mechanism to commit and push your work.
-- Use \`{"type":"persist_qa","path":"docs/qa/...","content":"..."}\` to persist detailed QA observations. This is allowed even for personas with read-only shell access, but the path must be inside \`docs/qa/\`.
+- Use \`{"type":"run_ro_shell","command":"..."}\` for repository inspection and verification. It runs in a disposable read-only clone. Changes made here will be LOST.
+- Use \`{"type":"run_shell","command":"..."}\` for repository file edits and tool execution in the live checkout.
+- Use \`{"type":"persist_work"}\` to commit and push all changes made via \`run_shell\` to the issue branch. Your work is not saved until you call this.
+- Use \`{"type":"persist_qa","path":"docs/qa/...","content":"..."}\` to persist detailed QA observations to \`docs/qa/\`.
 - If you set \`handoff_to\`, the dispatcher will append the standardized \`Next step: ...\` line when it posts your final GitHub comment.
 - If the task is complete, respond with \`"task_status": "done"\`, \`"actions": []\`, and \`final_response\` containing the concise human-facing summary that should be posted back to GitHub.
 - Do not use \`[RUN:command]\`, markdown fences, or prose outside the JSON object.
@@ -105,6 +106,7 @@ export function buildProtocolRepairMessage(
 
 export function buildContinuationMessage({
 	originalTask,
+	iteration,
 	previousResponseJson,
 	previousGithubComment,
 	actionOutput,
@@ -112,6 +114,8 @@ export function buildContinuationMessage({
 	return [
 		"ORIGINAL TASK:",
 		originalTask,
+		"",
+		`CURRENT ITERATION: ${iteration}`,
 		"",
 		"MOST RECENT STRUCTURED RESPONSE:",
 		previousResponseJson,
