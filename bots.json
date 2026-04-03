@@ -9,7 +9,7 @@
       "prompts/shared/github-actions.md",
       "prompts/shared/agent-protocol.md"
     ],
-    "max_iterations": 50
+    "max_iterations": 20
   },
   "bots": [
     {

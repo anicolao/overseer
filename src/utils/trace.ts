@@ -197,11 +197,21 @@ export function installFetchInstrumentation() {
 		const startedAt = Date.now();
 		const isGeminiRequest = url.includes("generativelanguage.googleapis.com");
 
+		let requestBody: string | undefined;
+		if (isGeminiRequest && init?.body) {
+			if (typeof init.body === "string") {
+				requestBody = init.body;
+			} else {
+				requestBody = "[non-string request body]";
+			}
+		}
+
 		if (isGeminiRequest) {
 			logTrace("fetch.begin", {
 				fetchCallId,
 				url,
 				method,
+				requestBody,
 				hasAbortSignal: Boolean(init?.signal),
 				signalAborted: init?.signal?.aborted || false,
 			});
@@ -210,6 +220,14 @@ export function installFetchInstrumentation() {
 		try {
 			const response = await originalFetch(input, init);
 			if (isGeminiRequest) {
+				const responseClone = response.clone();
+				let responseBody: string | undefined;
+				try {
+					responseBody = await responseClone.text();
+				} catch (e) {
+					responseBody = `[failed to read response body: ${e instanceof Error ? e.message : String(e)}]`;
+				}
+
 				logTrace("fetch.response", {
 					fetchCallId,
 					url,
@@ -217,6 +235,7 @@ export function installFetchInstrumentation() {
 					durationMs: Date.now() - startedAt,
 					status: response.status,
 					statusText: response.statusText,
+					responseBody,
 					ok: response.ok,
 					retryAfter: response.headers.get("retry-after"),
 					contentType: response.headers.get("content-type"),
