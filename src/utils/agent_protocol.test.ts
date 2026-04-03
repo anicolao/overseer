@@ -86,28 +86,6 @@ I will comply.
 		expect(parsed.protocol.actions).toEqual([{ type: "persist_work" }]);
 	});
 
-	it("parses persist_qa actions", () => {
-		const parsed = parseAgentProtocolResponse(
-			JSON.stringify({
-				version: AGENT_PROTOCOL_VERSION,
-				plan: ["Persist QA results."],
-				next_step: "Persist QA results.",
-				actions: [
-					{
-						type: "persist_qa",
-						path: "docs/qa/test.md",
-						content: "QA Content",
-					},
-				],
-				task_status: "in_progress",
-			}),
-		);
-
-		expect(parsed.protocol.actions).toEqual([
-			{ type: "persist_qa", path: "docs/qa/test.md", content: "QA Content" },
-		]);
-	});
-
 	it("parses optional github_comment and plan fields", () => {
 		const parsed = parseAgentProtocolResponse(
 			JSON.stringify({
