@@ -66,6 +66,7 @@ export function renderBotDetailMarkdown(bot: LoadedBotDefinition): string {
 		`- Model: \`${bot.llm.model}\``,
 		`- Persist Work: ${bot.allowPersistWork ? "yes" : "no"}`,
 		`- Max Iterations: ${bot.maxIterations}`,
+		`- Max Actions Per Turn: ${bot.maxActionsPerTurn}`,
 		"",
 		"## Prompt Files",
 		"",

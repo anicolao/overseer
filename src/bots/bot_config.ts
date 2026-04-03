@@ -15,6 +15,7 @@ interface RawBotManifest {
 		};
 		prompt_files?: string[];
 		max_iterations?: number;
+		max_actions_per_turn?: number;
 	};
 	bots?: RawBotDefinition[];
 }
@@ -31,6 +32,7 @@ interface RawBotDefinition {
 	prompt_files?: string[];
 	allow_persist_work?: boolean;
 	max_iterations?: number;
+	max_actions_per_turn?: number;
 }
 
 export interface LoadedPromptAssembly {
@@ -50,6 +52,7 @@ export interface LoadedBotDefinition {
 	shellAccess: ShellAccess;
 	allowPersistWork: boolean;
 	maxIterations: number;
+	maxActionsPerTurn: number;
 	prompt: LoadedPromptAssembly;
 }
 
@@ -77,6 +80,7 @@ export function loadBotRegistry(
 	const defaultProvider = defaults.llm?.provider;
 	const defaultModel = defaults.llm?.model;
 	const defaultMaxIterations = defaults.max_iterations ?? 50;
+	const defaultMaxActionsPerTurn = defaults.max_actions_per_turn ?? 1;
 
 	const all = rawManifest.bots.map((rawBot) =>
 		loadBotDefinition(repoRoot, rawBot, {
@@ -84,6 +88,7 @@ export function loadBotRegistry(
 			defaultProvider,
 			defaultModel,
 			defaultMaxIterations,
+			defaultMaxActionsPerTurn,
 		}),
 	);
 
@@ -119,6 +124,7 @@ function loadBotDefinition(
 		defaultProvider?: string;
 		defaultModel?: string;
 		defaultMaxIterations: number;
+		defaultMaxActionsPerTurn: number;
 	},
 ): LoadedBotDefinition {
 	const id = requireNonEmptyString(rawBot.id, "bot.id");
@@ -141,6 +147,10 @@ function loadBotDefinition(
 		rawBot.max_iterations ?? defaults.defaultMaxIterations,
 		`${id}.max_iterations`,
 	);
+	const maxActionsPerTurn = parsePositiveInteger(
+		rawBot.max_actions_per_turn ?? defaults.defaultMaxActionsPerTurn,
+		`${id}.max_actions_per_turn`,
+	);
 	const promptFiles = [
 		...defaults.defaultPromptFiles,
 		...(rawBot.prompt_files || []),
@@ -160,9 +170,11 @@ function loadBotDefinition(
 		shellAccess,
 		allowPersistWork,
 		maxIterations,
+		maxActionsPerTurn,
 		prompt: loadPromptAssembly(repoRoot, promptFiles, {
 			shellAccess,
 			allowPersistWork,
+			maxActionsPerTurn,
 		}),
 	};
 }
@@ -173,6 +185,7 @@ function loadPromptAssembly(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		maxActionsPerTurn: number;
 	},
 ): LoadedPromptAssembly {
 	const duplicatePromptFiles = findDuplicates(promptFiles);
@@ -205,6 +218,7 @@ function renderPromptTemplate(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		maxActionsPerTurn: number;
 	},
 ): string {
 	return content
@@ -217,7 +231,12 @@ function renderPromptTemplate(
 			"{{IN_PROGRESS_EXAMPLE_ACTIONS}}",
 			buildExampleActionsJson(context),
 		)
-		.replaceAll("{{SHELL_ACTION_RULES}}", buildShellActionRules(context));
+		.replaceAll("{{SHELL_ACTION_RULES}}", buildShellActionRules(context))
+		.replaceAll("{{MAX_ACTIONS_PER_TURN}}", String(context.maxActionsPerTurn))
+		.replaceAll(
+			"{{ACTION_COUNT_RULES}}",
+			buildActionCountRules(context.maxActionsPerTurn),
+		);
 }
 
 function parseKind(value: string | undefined, fieldPrefix: string): BotKind {
@@ -312,31 +331,32 @@ function buildAvailableActionsBullets(context: {
 function buildExampleActionsJson(context: {
 	shellAccess: ShellAccess;
 	allowPersistWork: boolean;
+	maxActionsPerTurn: number;
 }): string {
 	const actions =
 		context.shellAccess === "read_write"
-			? `[
-    {
-      "type": "run_ro_shell",
-      "command": "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
-    },
-    {
-      "type": "run_shell",
-      "command": "cat docs/plans/current-plan.md"
-    }
-  ]`
-			: `[
-    {
-      "type": "run_ro_shell",
-      "command": "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
-    },
-    {
-      "type": "run_ro_shell",
-      "command": "cat docs/plans/current-plan.md"
-    }
-  ]`;
+			? [
+					{
+						type: "run_ro_shell",
+						command: "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true",
+					},
+					{
+						type: "run_shell",
+						command: "cat docs/plans/current-plan.md",
+					},
+				]
+			: [
+					{
+						type: "run_ro_shell",
+						command: "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true",
+					},
+					{
+						type: "run_ro_shell",
+						command: "cat docs/plans/current-plan.md",
+					},
+				];
 
-	return actions;
+	return JSON.stringify(actions.slice(0, context.maxActionsPerTurn), null, 2);
 }
 
 function buildShellActionRules(context: {
@@ -355,6 +375,15 @@ function buildShellActionRules(context: {
 		"- Use `run_ro_shell` for inspection and verification only.",
 		"- `run_shell` is unavailable to this bot.",
 		"- If the environment is missing a tool you need, note that in your output instead of trying to modify the repository or tooling configuration yourself.",
+	].join("\n");
+}
+
+function buildActionCountRules(maxActionsPerTurn: number): string {
+	const actionWord = maxActionsPerTurn === 1 ? "action" : "actions";
+	return [
+		`- You may return at most ${maxActionsPerTurn} ${actionWord} in a single response.`,
+		"- Prefer exactly one action per turn unless bundling is clearly necessary to complete one immediate step.",
+		"- Do not repeat the same action on consecutive turns unless the repository state changed or your previous output explains why the retry is materially different.",
 	].join("\n");
 }
 

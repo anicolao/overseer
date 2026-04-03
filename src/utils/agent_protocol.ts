@@ -52,6 +52,7 @@ export interface ContinuationContext {
 	previousResponseJson: string;
 	previousGithubComment?: string;
 	actionOutput: string;
+	reminder?: string;
 }
 
 export const AGENT_PROTOCOL_PROMPT = `
@@ -102,6 +103,7 @@ export function buildContinuationMessage({
 	previousResponseJson,
 	previousGithubComment,
 	actionOutput,
+	reminder,
 }: ContinuationContext): string {
 	return [
 		"ORIGINAL TASK:",
@@ -118,10 +120,39 @@ export function buildContinuationMessage({
 		"LATEST ACTION OUTPUT:",
 		actionOutput,
 		"",
+		...(reminder ? ["IMPORTANT REMINDER:", reminder, ""] : []),
 		"Continue the same task. Do not restart or reinterpret the assignment.",
 		"Use the original task and your most recent structured response to decide the next step.",
 		`Continue the task using protocol "${AGENT_PROTOCOL_VERSION}".`,
 		"Return exactly one JSON object.",
+	].join("\n");
+}
+
+export function buildLoopRepairMessage(input: {
+	originalTask: string;
+	iteration: number;
+	previousResponseJson: string;
+	actionOutput: string;
+	repeatedCycleCount: number;
+}): string {
+	return [
+		"LOOP DETECTED:",
+		`You have repeated the same plan/action pattern ${input.repeatedCycleCount} times without meaningful progress.`,
+		"",
+		"ORIGINAL TASK:",
+		input.originalTask,
+		"",
+		`CURRENT ITERATION: ${input.iteration}`,
+		"",
+		"MOST RECENT STRUCTURED RESPONSE:",
+		input.previousResponseJson,
+		"",
+		"LATEST ACTION OUTPUT:",
+		input.actionOutput,
+		"",
+		"Do not repeat the same action again unless the repository state has changed.",
+		"Revise the plan and choose a materially different next step, or finish with a concise blocker summary if the task cannot progress safely.",
+		`Return exactly one JSON object using protocol "${AGENT_PROTOCOL_VERSION}".`,
 	].join("\n");
 }
 

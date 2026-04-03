@@ -35,8 +35,10 @@ export class OverseerPersona {
 	): AgentRunnerOptions {
 		return {
 			requireDoneHandoff: true,
+			loopAbortHandoffTo: "human_review_required",
 			modelName: this.bot.llm.model,
 			shellAccess: this.bot.shellAccess,
+			maxActionsPerTurn: this.bot.maxActionsPerTurn,
 			promptDefinition: {
 				botId: this.bot.id,
 				displayName: this.bot.displayName,

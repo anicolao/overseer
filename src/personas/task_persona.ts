@@ -8,6 +8,10 @@ import type {
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
 import type { PersistenceService } from "../utils/persistence.js";
+import {
+	parseTaskPacket,
+	renderTaskPacketForPrompt,
+} from "../utils/task_packet.js";
 import { logTrace, textStats } from "../utils/trace.js";
 
 export class TaskPersona {
@@ -36,6 +40,8 @@ export class TaskPersona {
 		console.log(
 			`${this.bot.displayName} handling task for issue #${issueNumber}`,
 		);
+		const taskPacket = parseTaskPacket(taskBody);
+		const canonicalTaskBody = renderTaskPacketForPrompt(taskPacket);
 
 		logTrace("persona.task.promptPrepared", {
 			botId: this.bot.id,
@@ -43,9 +49,13 @@ export class TaskPersona {
 			issueNumber,
 			taskBody: textStats(taskBody),
 			taskBodyRaw: taskBody,
+			taskPacket,
+			canonicalTaskBody: textStats(canonicalTaskBody),
+			canonicalTaskBodyRaw: canonicalTaskBody,
 			shellAccess: this.bot.shellAccess,
 			allowPersistWork: this.bot.allowPersistWork,
 			maxIterations: this.bot.maxIterations,
+			maxActionsPerTurn: this.bot.maxActionsPerTurn,
 			llm: this.bot.llm,
 			prompt: summarizePromptAssembly(this.bot.prompt),
 		});
@@ -53,6 +63,7 @@ export class TaskPersona {
 		const runnerOptions: AgentRunnerOptions = {
 			modelName: this.bot.llm.model,
 			shellAccess: this.bot.shellAccess,
+			maxActionsPerTurn: this.bot.maxActionsPerTurn,
 			promptDefinition: {
 				botId: this.bot.id,
 				displayName: this.bot.displayName,
@@ -67,7 +78,7 @@ export class TaskPersona {
 		return this.runner.runAutonomousLoop(
 			this.gemini,
 			this.bot.prompt.concatenatedPrompt,
-			taskBody,
+			canonicalTaskBody,
 			this.bot.maxIterations,
 			runnerOptions,
 		);

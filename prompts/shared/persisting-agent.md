@@ -6,6 +6,11 @@ When your work is ready, call `{"type":"persist_work"}`.
 
 Do not run `git commit` or `git push` yourself.
 
-If persistence fails, inspect the reported error, fix what you can in the repository, and try again until it succeeds.
+If persistence fails, inspect the reported error, change something material, and then try again. Do not retry the same failing persistence step without a new fix.
 
-You are not done when a local file exists. You are done only after persistence succeeds and you verify with read-only git commands that `origin/bot/issue-<n>` contains the intended change.
+Completion requirements after any successful `run_shell` action:
+
+- you are not done when a local file exists
+- you are not done when local tests pass
+- you are done only after `persist_work` succeeds
+- after persistence, run at least one `run_ro_shell` verification command that inspects `origin/bot/issue-<n>` or the persisted file contents before concluding

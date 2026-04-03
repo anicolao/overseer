@@ -25,6 +25,7 @@ describe("inspect_bots", () => {
 
 		expect(markdown).toContain("# Developer/Tester");
 		expect(markdown).toContain("Shell Access: `read_write`");
+		expect(markdown).toContain("Max Actions Per Turn: 1");
 		expect(markdown).toContain("## Prompt Files");
 		expect(markdown).toContain("`prompts/shared/developer-guidance.md`");
 		expect(markdown).toContain("## Concatenated Prompt");

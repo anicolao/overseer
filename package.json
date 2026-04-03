@@ -9,7 +9,8 @@
     "prepare": "husky",
     "lint": "biome check src/",
     "format": "biome format --write src/",
-    "bots:inspect": "tsx src/scripts/inspect_bots.ts"
+    "bots:inspect": "tsx src/scripts/inspect_bots.ts",
+    "runs:inspect": "tsx src/scripts/inspect_run.ts"
   },
   "repository": {
     "type": "git",
