@@ -7,9 +7,14 @@ export interface TaskPacket {
 	taskId?: string;
 	planFile?: string;
 	filesToRead: string[];
+	currentStep?: string;
+	smallestUsefulIncrement?: string;
+	stopAfter?: string;
 	taskSummary: string;
 	doneWhen?: string;
+	progressEvidence: string[];
 	verificationCommands: string[];
+	likelyNextStep?: string;
 	supplementalContext?: string;
 }
 
@@ -17,9 +22,14 @@ type StructuredTaskFields = {
 	taskId?: string;
 	planFile?: string;
 	filesToRead: string[];
+	currentStep?: string;
+	smallestUsefulIncrement?: string;
+	stopAfter?: string;
 	taskSummary?: string;
 	doneWhen?: string;
+	progressEvidence: string[];
 	verificationCommands: string[];
+	likelyNextStep?: string;
 };
 
 export function parseTaskPacket(body: string): TaskPacket {
@@ -33,6 +43,7 @@ export function parseTaskPacket(body: string): TaskPacket {
 			hasStructuredHandoff: false,
 			filesToRead: [],
 			taskSummary: directedTask,
+			progressEvidence: [],
 			verificationCommands: [],
 		};
 	}
@@ -61,11 +72,20 @@ export function parseTaskPacket(body: string): TaskPacket {
 		taskId: normalizeOptionalValue(parsed.taskId),
 		planFile: normalizeOptionalValue(parsed.planFile),
 		filesToRead,
+		currentStep: normalizeOptionalValue(parsed.currentStep),
+		smallestUsefulIncrement: normalizeOptionalValue(
+			parsed.smallestUsefulIncrement,
+		),
+		stopAfter: normalizeOptionalValue(parsed.stopAfter),
 		taskSummary,
 		doneWhen: normalizeOptionalValue(parsed.doneWhen),
+		progressEvidence: parsed.progressEvidence
+			.map((value) => value.trim())
+			.filter(Boolean),
 		verificationCommands: parsed.verificationCommands
 			.map((command) => command.trim())
 			.filter(Boolean),
+		likelyNextStep: normalizeOptionalValue(parsed.likelyNextStep),
 		supplementalContext: supplementalContext || undefined,
 	};
 }
@@ -77,13 +97,22 @@ export function renderTaskPacketForPrompt(packet: TaskPacket): string {
 		`- Task ID: ${packet.taskId || "none"}`,
 		`- Plan File: ${packet.planFile || "none"}`,
 		`- Files To Read: ${packet.filesToRead.length > 0 ? packet.filesToRead.join(", ") : "none"}`,
+		`- Current Step: ${packet.currentStep || "none"}`,
+		`- Smallest Useful Increment: ${packet.smallestUsefulIncrement || "none"}`,
+		`- Stop After: ${packet.stopAfter || "none"}`,
 		`- Task Summary: ${packet.taskSummary}`,
 		`- Done When: ${packet.doneWhen || "none"}`,
+		`- Progress Evidence: ${
+			packet.progressEvidence.length > 0
+				? packet.progressEvidence.join(" | ")
+				: "none"
+		}`,
 		`- Verification: ${
 			packet.verificationCommands.length > 0
 				? packet.verificationCommands.join(" | ")
 				: "none"
 		}`,
+		`- Likely Next Step: ${packet.likelyNextStep || "none"}`,
 	];
 
 	if (packet.supplementalContext) {
@@ -97,11 +126,23 @@ export function renderTaskPacketForPrompt(packet: TaskPacket): string {
 function parseStructuredTaskFields(block: string): StructuredTaskFields {
 	const result: StructuredTaskFields = {
 		filesToRead: [],
+		progressEvidence: [],
 		verificationCommands: [],
 	};
 	const lines = block.split(/\r?\n/);
-	let activeListKey: "filesToRead" | "verificationCommands" | null = null;
-	let activeScalarKey: "taskSummary" | "doneWhen" | null = null;
+	let activeListKey:
+		| "filesToRead"
+		| "progressEvidence"
+		| "verificationCommands"
+		| null = null;
+	let activeScalarKey:
+		| "currentStep"
+		| "smallestUsefulIncrement"
+		| "stopAfter"
+		| "taskSummary"
+		| "doneWhen"
+		| "likelyNextStep"
+		| null = null;
 
 	for (const line of lines) {
 		const trimmed = line.trim();
@@ -121,7 +162,7 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 		}
 
 		const keyMatch = trimmed.match(
-			/^(Task ID|Plan File|Files To Read|Task Summary|Done When|Verification):\s*(.*)$/i,
+			/^(Task ID|Plan File|Files To Read|Current Step|Smallest Useful Increment|Stop After|Task Summary|Done When|Progress Evidence|Verification|Likely Next Step):\s*(.*)$/i,
 		);
 		if (keyMatch) {
 			activeListKey = null;
@@ -143,6 +184,21 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 				activeListKey = rawValue.trim().length === 0 ? "filesToRead" : null;
 				continue;
 			}
+			if (rawKey === "current step") {
+				result.currentStep = rawValue.trim();
+				activeScalarKey = "currentStep";
+				continue;
+			}
+			if (rawKey === "smallest useful increment") {
+				result.smallestUsefulIncrement = rawValue.trim();
+				activeScalarKey = "smallestUsefulIncrement";
+				continue;
+			}
+			if (rawKey === "stop after") {
+				result.stopAfter = rawValue.trim();
+				activeScalarKey = "stopAfter";
+				continue;
+			}
 			if (rawKey === "task summary") {
 				result.taskSummary = rawValue.trim();
 				activeScalarKey = "taskSummary";
@@ -153,6 +209,15 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 				activeScalarKey = "doneWhen";
 				continue;
 			}
+			if (rawKey === "progress evidence") {
+				const value = normalizeOptionalValue(rawValue);
+				if (value) {
+					result.progressEvidence.push(value);
+				}
+				activeListKey =
+					rawValue.trim().length === 0 ? "progressEvidence" : null;
+				continue;
+			}
 			if (rawKey === "verification") {
 				const value = normalizeOptionalValue(rawValue);
 				if (value) {
@@ -160,6 +225,11 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 				}
 				activeListKey =
 					rawValue.trim().length === 0 ? "verificationCommands" : null;
+				continue;
+			}
+			if (rawKey === "likely next step") {
+				result.likelyNextStep = rawValue.trim();
+				activeScalarKey = "likelyNextStep";
 			}
 			continue;
 		}
@@ -174,6 +244,11 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 	}
 
 	result.filesToRead = Array.from(new Set(result.filesToRead));
+	result.progressEvidence = Array.from(
+		new Set(
+			result.progressEvidence.map((value) => value.trim()).filter(Boolean),
+		),
+	);
 	result.verificationCommands = Array.from(
 		new Set(
 			result.verificationCommands.map((value) => value.trim()).filter(Boolean),

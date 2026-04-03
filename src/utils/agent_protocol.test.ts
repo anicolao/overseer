@@ -212,6 +212,8 @@ I will comply.
 		expect(message).toContain("Reading the plan before changing code.");
 		expect(message).toContain("LATEST ACTION OUTPUT:");
 		expect(message).toContain("Plan contents");
+		expect(message).toContain("Continue the same assigned increment.");
+		expect(message).toContain("return control with a concise progress update");
 		expect(message).toContain(
 			'Continue the task using protocol "overseer/v1".',
 		);
