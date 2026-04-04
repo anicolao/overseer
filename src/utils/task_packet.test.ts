@@ -2,12 +2,49 @@ import { describe, expect, it } from "vitest";
 import { parseTaskPacket, renderTaskPacketForPrompt } from "./task_packet.js";
 
 describe("task_packet", () => {
+	it("parses the structured Architect Task handoff", () => {
+		const body = [
+			"I am the **Overseer**, and I am responding to issue #42 from @alice.",
+			"",
+			"Architect Task:",
+			"Task ID: parser-design",
+			"Design File: docs/architecture/parser-v2.md",
+			"Design Approval Status: needs_revision",
+			"Files To Read:",
+			"- src/parser.ts",
+			"- src/parser.test.ts",
+			"Current Step: Repair the design so it matches the current parser pipeline.",
+			"Task Summary: Update the parser design doc to reflect the real implementation seams before planning further work.",
+			"Done When: docs/architecture/parser-v2.md matches the source layout and calls out open decisions for human review.",
+			"Verification:",
+			"- git diff -- docs/architecture/parser-v2.md",
+			"Likely Next Step: Ask for human approval on the revised design before planning implementation.",
+			"",
+			"Next step: @product-architect to take action",
+		].join("\n");
+
+		const packet = parseTaskPacket(body);
+
+		expect(packet.hasStructuredHandoff).toBe(true);
+		expect(packet.handoffType).toBe("architect");
+		expect(packet.designFile).toBe("docs/architecture/parser-v2.md");
+		expect(packet.designApprovalStatus).toBe("needs_revision");
+		expect(packet.filesToRead).toEqual([
+			"docs/architecture/parser-v2.md",
+			"src/parser.ts",
+			"src/parser.test.ts",
+		]);
+		expect(packet.taskSummary).toContain("parser design doc");
+	});
+
 	it("parses the structured Developer Task handoff", () => {
 		const body = [
 			"I am the **Overseer**, and I am responding to issue #42 from @alice.",
 			"",
 			"Developer Task:",
 			"Task ID: auth-fix",
+			"Design File: docs/architecture/auth-flow.md",
+			"Design Approval Status: approved",
 			"Plan File: docs/plans/auth-fix.md",
 			"Files To Read:",
 			"- src/auth.ts",
@@ -29,9 +66,13 @@ describe("task_packet", () => {
 		const packet = parseTaskPacket(body);
 
 		expect(packet.hasStructuredHandoff).toBe(true);
+		expect(packet.handoffType).toBe("developer");
 		expect(packet.taskId).toBe("auth-fix");
+		expect(packet.designFile).toBe("docs/architecture/auth-flow.md");
+		expect(packet.designApprovalStatus).toBe("approved");
 		expect(packet.planFile).toBe("docs/plans/auth-fix.md");
 		expect(packet.filesToRead).toEqual([
+			"docs/architecture/auth-flow.md",
 			"docs/plans/auth-fix.md",
 			"src/auth.ts",
 			"src/auth.test.ts",
@@ -70,6 +111,8 @@ describe("task_packet", () => {
 				[
 					"Developer Task:",
 					"Task ID: none",
+					"Design File: docs/architecture/parser.md",
+					"Design Approval Status: approved",
 					"Plan File: docs/plans/one.md",
 					"Files To Read: src/one.ts, src/two.ts",
 					"Current Step: Update the parser incrementally.",
@@ -85,8 +128,11 @@ describe("task_packet", () => {
 		);
 
 		expect(rendered).toContain("CANONICAL TASK PACKET:");
+		expect(rendered).toContain("Handoff Type: developer");
+		expect(rendered).toContain("Design File: docs/architecture/parser.md");
+		expect(rendered).toContain("Design Approval Status: approved");
 		expect(rendered).toContain(
-			"Files To Read: docs/plans/one.md, src/one.ts, src/two.ts",
+			"Files To Read: docs/architecture/parser.md, docs/plans/one.md, src/one.ts, src/two.ts",
 		);
 		expect(rendered).toContain(
 			"Smallest Useful Increment: Teach the parser about one new token.",

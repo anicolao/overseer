@@ -21,7 +21,10 @@ describe("bot_config", () => {
 			"You are operating inside a repository checkout on GitHub Actions",
 		);
 		expect(developer.prompt.concatenatedPrompt).toContain(
-			"You implement code and verification for one small assigned increment.",
+			"You implement one small increment of an approved design.",
+		);
+		expect(developer.prompt.concatenatedPrompt).toContain(
+			"if `Design Approval Status` is not `approved`, stop and hand back to Overseer instead of implementing",
 		);
 		expect(developer.prompt.concatenatedPrompt).toContain(
 			'"type":"run_ro_shell"',

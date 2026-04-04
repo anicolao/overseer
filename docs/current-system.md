@@ -28,9 +28,9 @@ Configured in [`bots.json`](../bots.json):
 | Bot | Kind | Shell Access | Persist Work | Primary Role |
 | --- | --- | --- | --- | --- |
 | `overseer` | `overseer` | `read_only` | no | orchestration and handoff decisions |
-| `product-architect` | `task` | `read_write` | yes | requirements and high-level design artifacts |
-| `planner` | `task` | `read_write` | yes | planning artifacts and task decomposition |
-| `developer-tester` | `task` | `read_write` | yes | small-step implementation and verification |
+| `product-architect` | `task` | `read_write` | yes | create or repair design artifacts |
+| `planner` | `task` | `read_write` | yes | decompose approved designs into implementation increments |
+| `developer-tester` | `task` | `read_write` | yes | implement one increment of an approved design |
 | `quality` | `task` | `read_only` | no | review and verification |
 
 Persona prompts are assembled from ordered markdown files under `prompts/`. The prompt loader is [`src/bots/bot_config.ts`](../src/bots/bot_config.ts).
@@ -52,7 +52,10 @@ Shared prompt files under `prompts/shared/` define:
 
 Task bots do not receive raw issue comments directly. [`src/utils/task_packet.ts`](../src/utils/task_packet.ts) parses Overseer handoffs into a normalized packet with fields like:
 
+- `Handoff Type`
 - `Task ID`
+- `Design File`
+- `Design Approval Status`
 - `Plan File`
 - `Files To Read`
 - `Current Step`
@@ -64,6 +67,12 @@ Task bots do not receive raw issue comments directly. [`src/utils/task_packet.ts
 - `Likely Next Step`
 
 [`src/personas/task_persona.ts`](../src/personas/task_persona.ts) renders that packet back into a canonical prompt payload before entering the agent loop.
+
+The intended workflow is now design-first:
+
+1. Overseer asks `product-architect` to create or repair a design doc.
+2. A human approves that design in the issue thread.
+3. Overseer asks `planner` and then `developer-tester` to execute against the approved design.
 
 ## JSON Agent Protocol
 

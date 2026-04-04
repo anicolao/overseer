@@ -4,7 +4,10 @@ export interface TaskPacket {
 	rawBody: string;
 	directedTask: string;
 	hasStructuredHandoff: boolean;
+	handoffType?: "architect" | "planner" | "developer";
 	taskId?: string;
+	designFile?: string;
+	designApprovalStatus?: string;
 	planFile?: string;
 	filesToRead: string[];
 	currentStep?: string;
@@ -20,6 +23,8 @@ export interface TaskPacket {
 
 type StructuredTaskFields = {
 	taskId?: string;
+	designFile?: string;
+	designApprovalStatus?: string;
 	planFile?: string;
 	filesToRead: string[];
 	currentStep?: string;
@@ -34,9 +39,8 @@ type StructuredTaskFields = {
 
 export function parseTaskPacket(body: string): TaskPacket {
 	const directedTask = extractDirectedTask(body);
-	const marker = "Developer Task:";
-	const markerIndex = directedTask.indexOf(marker);
-	if (markerIndex < 0) {
+	const handoffMatch = findStructuredHandoffMarker(directedTask);
+	if (!handoffMatch) {
 		return {
 			rawBody: body,
 			directedTask,
@@ -48,14 +52,14 @@ export function parseTaskPacket(body: string): TaskPacket {
 		};
 	}
 
-	const supplementalContext = directedTask.slice(0, markerIndex).trim();
+	const supplementalContext = directedTask.slice(0, handoffMatch.index).trim();
 	const structuredBlock = directedTask
-		.slice(markerIndex + marker.length)
+		.slice(handoffMatch.index + handoffMatch.marker.length)
 		.trim();
 	const parsed = parseStructuredTaskFields(structuredBlock);
 	const filesToRead = Array.from(
 		new Set(
-			[parsed.planFile, ...parsed.filesToRead]
+			[parsed.designFile, parsed.planFile, ...parsed.filesToRead]
 				.map(normalizeOptionalValue)
 				.filter((value): value is string => Boolean(value)),
 		),
@@ -69,7 +73,10 @@ export function parseTaskPacket(body: string): TaskPacket {
 		rawBody: body,
 		directedTask,
 		hasStructuredHandoff: true,
+		handoffType: handoffMatch.handoffType,
 		taskId: normalizeOptionalValue(parsed.taskId),
+		designFile: normalizeOptionalValue(parsed.designFile),
+		designApprovalStatus: normalizeOptionalValue(parsed.designApprovalStatus),
 		planFile: normalizeOptionalValue(parsed.planFile),
 		filesToRead,
 		currentStep: normalizeOptionalValue(parsed.currentStep),
@@ -94,7 +101,10 @@ export function renderTaskPacketForPrompt(packet: TaskPacket): string {
 	const lines = [
 		"CANONICAL TASK PACKET:",
 		`- Structured handoff: ${packet.hasStructuredHandoff ? "yes" : "no"}`,
+		`- Handoff Type: ${packet.handoffType || "none"}`,
 		`- Task ID: ${packet.taskId || "none"}`,
+		`- Design File: ${packet.designFile || "none"}`,
+		`- Design Approval Status: ${packet.designApprovalStatus || "none"}`,
 		`- Plan File: ${packet.planFile || "none"}`,
 		`- Files To Read: ${packet.filesToRead.length > 0 ? packet.filesToRead.join(", ") : "none"}`,
 		`- Current Step: ${packet.currentStep || "none"}`,
@@ -162,7 +172,7 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 		}
 
 		const keyMatch = trimmed.match(
-			/^(Task ID|Plan File|Files To Read|Current Step|Smallest Useful Increment|Stop After|Task Summary|Done When|Progress Evidence|Verification|Likely Next Step):\s*(.*)$/i,
+			/^(Task ID|Design File|Design Approval Status|Plan File|Files To Read|Current Step|Smallest Useful Increment|Stop After|Task Summary|Done When|Progress Evidence|Verification|Likely Next Step):\s*(.*)$/i,
 		);
 		if (keyMatch) {
 			activeListKey = null;
@@ -172,6 +182,14 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 
 			if (rawKey === "task id") {
 				result.taskId = rawValue.trim();
+				continue;
+			}
+			if (rawKey === "design file") {
+				result.designFile = rawValue.trim();
+				continue;
+			}
+			if (rawKey === "design approval status") {
+				result.designApprovalStatus = rawValue.trim();
 				continue;
 			}
 			if (rawKey === "plan file") {
@@ -255,6 +273,35 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 		),
 	);
 	return result;
+}
+
+function findStructuredHandoffMarker(directedTask: string): {
+	marker: string;
+	index: number;
+	handoffType: "architect" | "planner" | "developer";
+} | null {
+	const candidates = [
+		{
+			marker: "Architect Task:",
+			handoffType: "architect" as const,
+		},
+		{
+			marker: "Planner Task:",
+			handoffType: "planner" as const,
+		},
+		{
+			marker: "Developer Task:",
+			handoffType: "developer" as const,
+		},
+	]
+		.map((candidate) => ({
+			...candidate,
+			index: directedTask.indexOf(candidate.marker),
+		}))
+		.filter((candidate) => candidate.index >= 0)
+		.sort((left, right) => left.index - right.index);
+
+	return candidates[0] || null;
 }
 
 function splitFilesToRead(value: string): string[] {

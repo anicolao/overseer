@@ -138,3 +138,9 @@ The current debugging toolchain is artifact-based and post-hoc:
 - there is no external dashboard
 - there is no durable database of runs
 - run reports summarize traces, but session logs are still the authoritative source for step-by-step debugging
+
+The current approval gate is prompt-driven rather than hard-enforced in code:
+
+- Overseer is instructed to require human approval on design docs before planning or implementation
+- planner and developer prompts are instructed to refuse unapproved designs
+- the repository does not currently persist a separate machine-readable approval record beyond issue-thread context
