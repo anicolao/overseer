@@ -30,6 +30,7 @@ export interface AgentRunnerOptions {
 	modelName?: string;
 	shellAccess?: ShellExecutionMode;
 	maxActionsPerTurn?: number;
+	requirePostPersistVerification?: boolean;
 	promptDefinition?: {
 		botId: string;
 		displayName: string;
@@ -196,7 +197,10 @@ export class AgentRunner {
 					currentMessage = buildProtocolRepairMessage(error, responseText);
 					continue;
 				}
-				const doneValidationError = this.validateDoneResponse(progressState);
+				const doneValidationError = this.validateDoneResponse(
+					progressState,
+					options.requirePostPersistVerification ?? true,
+				);
 				if (doneValidationError) {
 					logTrace("agent.iteration.protocolError", {
 						iteration,
@@ -268,7 +272,10 @@ export class AgentRunner {
 				continue;
 			}
 
-			const reminder = this.buildProgressReminder(progressState);
+			const reminder = this.buildProgressReminder(
+				progressState,
+				options.requirePostPersistVerification ?? true,
+			);
 			currentMessage = buildContinuationMessage({
 				originalTask,
 				iteration,
@@ -432,7 +439,10 @@ export class AgentRunner {
 		}
 	}
 
-	private validateDoneResponse(state: RunnerProgressState): string | null {
+	private validateDoneResponse(
+		state: RunnerProgressState,
+		requirePostPersistVerification: boolean,
+	): string | null {
 		if (!state.usedRunShell) {
 			return null;
 		}
@@ -441,7 +451,7 @@ export class AgentRunner {
 			return 'task_status "done" is not allowed after a successful run_shell action until persist_work succeeds';
 		}
 
-		if (!state.verifiedAfterPersist) {
+		if (requirePostPersistVerification && !state.verifiedAfterPersist) {
 			return 'task_status "done" is not allowed after persist_work until you verify the persisted branch state with run_ro_shell';
 		}
 
@@ -450,6 +460,7 @@ export class AgentRunner {
 
 	private buildProgressReminder(
 		state: RunnerProgressState,
+		requirePostPersistVerification: boolean,
 	): string | undefined {
 		if (!state.usedRunShell) {
 			return undefined;
@@ -457,7 +468,7 @@ export class AgentRunner {
 		if (!state.persistSucceededAfterWrite) {
 			return "You have used run_shell successfully in this task. Do not finish until persist_work succeeds.";
 		}
-		if (!state.verifiedAfterPersist) {
+		if (requirePostPersistVerification && !state.verifiedAfterPersist) {
 			return "Persistence succeeded. Run a read-only verification against the persisted branch or file contents before finishing.";
 		}
 		return undefined;

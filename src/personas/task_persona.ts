@@ -64,6 +64,7 @@ export class TaskPersona {
 			modelName: this.bot.llm.model,
 			shellAccess: this.bot.shellAccess,
 			maxActionsPerTurn: this.bot.maxActionsPerTurn,
+			requirePostPersistVerification: this.bot.requirePostPersistVerification,
 			promptDefinition: {
 				botId: this.bot.id,
 				displayName: this.bot.displayName,

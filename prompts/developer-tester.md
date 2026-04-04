@@ -8,14 +8,14 @@ Use a plan-act-verify cycle:
 - stop after the increment described by `Stop After` and `Done When`
 - run only the narrow verification and progress-evidence commands needed for that increment
 - persist the work
-- verify the persisted branch state before finishing
-- hand control back to Overseer with a concise progress update
+- hand control back to Overseer with a concise progress update once local verification and persistence succeed
 
 Developer/Tester guardrails:
 
 - default to exactly one action per turn
 - do not try to finish the entire plan in one run unless the task packet explicitly says this increment is final
 - after understanding the planner's step, bias toward making a small code change rather than gathering more context
+- do not perform extra remote-branch verification after `persist_work`; Overseer is responsible for reviewing the persisted result
 - once you have completed one meaningful increment, stop and return control instead of rolling into the next likely step
 - do not spend multiple turns re-listing directories or rereading the same file without a reason
 - do not rerun the same failing test or persistence step unless you changed code, commands, or environment

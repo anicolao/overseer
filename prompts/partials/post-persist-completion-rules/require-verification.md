@@ -1,0 +1,1 @@
+- after persistence, run at least one `run_ro_shell` verification command that inspects `origin/bot/issue-<n>` or the persisted file contents before concluding

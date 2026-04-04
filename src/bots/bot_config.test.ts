@@ -9,6 +9,7 @@ describe("bot_config", () => {
 		expect(developer.kind).toBe("task");
 		expect(developer.shellAccess).toBe("read_write");
 		expect(developer.allowPersistWork).toBe(true);
+		expect(developer.requirePostPersistVerification).toBe(false);
 		expect(developer.maxActionsPerTurn).toBe(1);
 		expect(developer.prompt.promptFiles).toContain(
 			"prompts/shared/agent-protocol.md",
@@ -40,6 +41,9 @@ describe("bot_config", () => {
 		expect(getBotOrThrow(registry, "overseer").kind).toBe("overseer");
 		expect(getBotOrThrow(registry, "quality").shellAccess).toBe("read_only");
 		expect(getBotOrThrow(registry, "quality").allowPersistWork).toBe(false);
+		expect(
+			getBotOrThrow(registry, "quality").requirePostPersistVerification,
+		).toBe(true);
 		expect(getBotOrThrow(registry, "overseer").maxActionsPerTurn).toBe(2);
 		expect(
 			getBotOrThrow(registry, "quality").prompt.concatenatedPrompt,

@@ -60,6 +60,7 @@
       "kind": "task",
       "shell_access": "read_write",
       "allow_persist_work": true,
+      "require_post_persist_verification": false,
       "max_iterations": 50,
       "max_actions_per_turn": 1,
       "prompt_files": [
