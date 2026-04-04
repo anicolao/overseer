@@ -1,24 +1,39 @@
 # Overseer
 
-Overseer is a GitHub-native agent coordination system designed to enable AI agents to collaborate autonomously as a virtual engineering team.
+Overseer is a GitHub Actions based multi-agent dispatcher for one repository. It reacts to issues and issue comments, routes work between a small set of personas, executes Gemini-driven task loops through a strict JSON protocol, and persists bot-authored changes onto issue branches like `bot/issue-73`.
 
-## Overview
+## What Exists Today
 
-Overseer leverages the full capabilities of the GitHub platform (Issues, PRs, Projects v2, GitHub Apps) alongside Gemini's multimodal Live API to orchestrate a distributed team of specialized agent personas. The system is designed to handle complex development tasks across multiple repositories with minimal human intervention.
+- A GitHub Actions workflow in `.github/workflows/overseer.yml` that checks out the repo, prepares the issue branch, runs `src/dispatch.ts`, uploads session logs and trace artifacts, and invokes a persistence backstop.
+- Five configured personas in `bots.json`: `overseer`, `product-architect`, `planner`, `developer-tester`, and `quality`.
+- Prompt assembly from ordered markdown files in `prompts/` via `src/bots/bot_config.ts`.
+- A shared task loop in `src/utils/agent_runner.ts` with three supported actions: `run_ro_shell`, `run_shell`, and `persist_work`.
+- Dispatcher-owned persistence in `src/utils/persistence.ts`.
+- JSONL tracing plus report-generation scripts in `src/utils/trace.ts`, `src/scripts/inspect_bots.ts`, and `src/scripts/inspect_run.ts`.
 
-## Key Features
+## What Does Not Exist
 
-- **GitHub-Native Orchestration:** Uses GitHub as the primary communication and state management layer.
-- **Autonomous Agent Personas:** Specialized agents (Overseer, Product, Architect, UX Design, Planning, Developer, Tester, Quality) collaborate through mentions and task hand-offs.
-- **Unified Global View:** Aggregates activity across multiple repositories using a single GitHub Project (v2).
-- **Real-Time Voice & Multimodal Interaction:** Integrates Gemini's Live API for low-latency conversations with the Overseer persona to understand system state and provide direction.
-- **Structured Development Workflow:** A rigorous process from vision and product definition to design, planning, and execution.
+The current codebase does not implement the larger historical designs that used to be documented here. In particular, there is no:
 
-## Documentation
+- GitHub Project v2 control plane
+- separate GitHub App per persona
+- event bus or background worker fleet
+- database or vector-store memory layer
+- multimodal or voice Live API control surface
+- `persist_qa` action
 
-- [Vision](./VISION.md) - The project's "why" and its long-term goals.
-- [Design Overview](./OVERSEER_DESIGN_OVERVIEW.md) - Technical architecture and implementation details.
+## Docs
+
+- [docs/current-system.md](docs/current-system.md): current architecture, runtime model, file map, and supported behavior
+- [docs/operations.md](docs/operations.md): workflows, artifacts, persistence backstop, and inspection commands
+
+## Useful Commands
+
+- `npm test`
+- `npm run lint`
+- `npm run bots:inspect`
+- `npm run runs:inspect -- <run-id>`
 
 ## License
 
-This project is licensed under the GPLv3 license. See the [LICENSE](./LICENSE) file for details.
+This project is licensed under the GPLv3 license. See [LICENSE](./LICENSE).
