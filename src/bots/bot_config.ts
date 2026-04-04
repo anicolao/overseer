@@ -31,6 +31,7 @@ interface RawBotDefinition {
 	};
 	prompt_files?: string[];
 	allow_persist_work?: boolean;
+	allow_persist_qa?: boolean;
 	max_iterations?: number;
 	max_actions_per_turn?: number;
 }
@@ -51,6 +52,7 @@ export interface LoadedBotDefinition {
 	};
 	shellAccess: ShellAccess;
 	allowPersistWork: boolean;
+	allowPersistQa: boolean;
 	maxIterations: number;
 	maxActionsPerTurn: number;
 	prompt: LoadedPromptAssembly;
@@ -143,6 +145,7 @@ function loadBotDefinition(
 		`${id}.llm.model`,
 	);
 	const allowPersistWork = Boolean(rawBot.allow_persist_work);
+	const allowPersistQa = Boolean(rawBot.allow_persist_qa);
 	const maxIterations = parsePositiveInteger(
 		rawBot.max_iterations ?? defaults.defaultMaxIterations,
 		`${id}.max_iterations`,
@@ -169,11 +172,13 @@ function loadBotDefinition(
 		},
 		shellAccess,
 		allowPersistWork,
+		allowPersistQa,
 		maxIterations,
 		maxActionsPerTurn,
 		prompt: loadPromptAssembly(repoRoot, promptFiles, {
 			shellAccess,
 			allowPersistWork,
+			allowPersistQa,
 			maxActionsPerTurn,
 		}),
 	};
@@ -185,6 +190,7 @@ function loadPromptAssembly(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		allowPersistQa: boolean;
 		maxActionsPerTurn: number;
 	},
 ): LoadedPromptAssembly {
@@ -218,6 +224,7 @@ function renderPromptTemplate(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		allowPersistQa: boolean;
 		maxActionsPerTurn: number;
 	},
 ): string {
@@ -300,6 +307,7 @@ function findDuplicates(values: string[]): string[] {
 function buildAvailableActionsBullets(context: {
 	shellAccess: ShellAccess;
 	allowPersistWork: boolean;
+	allowPersistQa: boolean;
 }): string {
 	const bullets = [
 		'- `{"type":"run_ro_shell","command":"..."}` for repository inspection and verification commands inside a disposable read-only clone of the repository. This command runs inside the repository\'s default `nix develop -c` environment automatically.',
@@ -325,12 +333,21 @@ function buildAvailableActionsBullets(context: {
 		);
 	}
 
+	if (context.allowPersistQa) {
+		bullets.push(
+			'- `{"type":"persist_qa"}` for dispatcher-owned persistence when your bot is authorized to publish a QA report to the issue branch.',
+		);
+	} else {
+		bullets.push("- `persist_qa` is not available to this bot.");
+	}
+
 	return bullets.join("\n");
 }
 
 function buildExampleActionsJson(context: {
 	shellAccess: ShellAccess;
 	allowPersistWork: boolean;
+	allowPersistQa: boolean;
 	maxActionsPerTurn: number;
 }): string {
 	const actions =
@@ -362,6 +379,7 @@ function buildExampleActionsJson(context: {
 function buildShellActionRules(context: {
 	shellAccess: ShellAccess;
 	allowPersistWork: boolean;
+	allowPersistQa: boolean;
 }): string {
 	if (context.shellAccess === "read_write") {
 		return [
