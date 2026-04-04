@@ -1,33 +1,25 @@
 # Overseer
 
-Overseer is a multi-agent software delivery system intended to coordinate planning, implementation, and verification work inside a repository. The long-term goal has not changed: use specialized agents with clear responsibilities to move work forward safely and transparently, with GitHub as the collaboration surface and the repository as the source of truth.
+Overseer is a GitHub-native agent coordination system designed to enable AI agents to collaborate autonomously as a virtual engineering team.
 
-This repository currently contains an MVP that focuses on proving the risky parts of that design: structured handoffs, agent execution loops, shell access, persistence, and artifact-driven debugging in a real repository workflow.
+## Overview
 
-## Current MVP
+Overseer leverages the GitHub platform as the primary collaboration surface for a distributed team of specialized agent personas. The long-term system is meant to support complex development workflows with minimal human intervention while preserving visibility, traceability, and repository-native control.
 
-The checked-in system today includes:
+The code currently in this repository is an MVP focused on proving the risky parts of that design: structured handoffs, agent execution loops, controlled shell access, persistence onto issue branches, and artifact-driven debugging inside a real repository workflow.
 
-- A GitHub Actions workflow in `.github/workflows/overseer.yml` that reacts to issue activity, prepares an issue branch, runs the dispatcher, and uploads artifacts.
-- Five configured personas in `bots.json`: `overseer`, `product-architect`, `planner`, `developer-tester`, and `quality`.
-- Prompt assembly from markdown files in `prompts/` via `src/bots/bot_config.ts`.
-- A shared JSON-based agent loop in `src/utils/agent_runner.ts` with controlled shell access and dispatcher-owned persistence.
-- Diagnostics through session logs, JSONL traces, and report-generation scripts.
+## Key Features
 
-The MVP is intentionally narrower than the full vision. It is the currently implemented slice, not the final architectural boundary of the project.
+- **GitHub-Native Orchestration:** Uses GitHub as the primary communication and state management layer.
+- **Autonomous Agent Personas:** Specialized agents collaborate through structured hand-offs and clear role boundaries.
+- **Repository-Centered Execution:** Planning, implementation, verification, and persistence all happen against the repository itself.
+- **Structured Development Workflow:** The system is designed to support a rigorous process from product definition and planning through code changes and review.
 
-## Docs
+## Documentation
 
-- [docs/current-system.md](docs/current-system.md): the implemented system as it exists in code today
-- [docs/operations.md](docs/operations.md): workflows, artifacts, persistence backstop, and inspection commands
-
-## Useful Commands
-
-- `npm test`
-- `npm run lint`
-- `npm run bots:inspect`
-- `npm run runs:inspect -- <run-id>`
+- [Current System](./docs/current-system.md) - The implemented MVP as it exists in code today.
+- [Operations](./docs/operations.md) - Workflow behavior, artifacts, persistence backstop, and inspection commands.
 
 ## License
 
-This project is licensed under the GPLv3 license. See [LICENSE](./LICENSE).
+This project is licensed under the GPLv3 license. See the [LICENSE](./LICENSE) file for details.
