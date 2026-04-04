@@ -102,6 +102,21 @@ export class PersistenceService {
 		issueNumber: number,
 		persona: string,
 	): Promise<PersistWorkResult> {
+		return this.persistInternal(issueNumber, persona, "work");
+	}
+
+	async persistQA(
+		issueNumber: number,
+		persona: string,
+	): Promise<PersistWorkResult> {
+		return this.persistInternal(issueNumber, persona, "qa");
+	}
+
+	private async persistInternal(
+		issueNumber: number,
+		persona: string,
+		mode: "work" | "qa",
+	): Promise<PersistWorkResult> {
 		const branch = this.getBranchName(issueNumber);
 		try {
 			await this.runGit(
@@ -140,7 +155,11 @@ export class PersistenceService {
 		const aheadCount = await this.getAheadCount(branch);
 
 		try {
-			await this.stageRelevantChanges(branch);
+			if (mode === "qa") {
+				await this.stageQARelevantChanges(branch);
+			} else {
+				await this.stageRelevantChanges(branch);
+			}
 		} catch (error) {
 			return this.makeErrorResult(
 				branch,
@@ -197,7 +216,7 @@ export class PersistenceService {
 			};
 		}
 
-		const commitMessage = `${persona}: issue #${issueNumber} persist work`;
+		const commitMessage = `${persona}: issue #${issueNumber} persist ${mode}`;
 		const commitResult = await this.runGitAllowFailure(
 			["commit", "-m", commitMessage],
 			"persistence.commit",
@@ -276,7 +295,6 @@ export class PersistenceService {
 			message: `Persisted ${changedFiles.length} file(s) to ${branch}.`,
 		};
 	}
-
 	private getBranchName(issueNumber: number): string {
 		return `bot/issue-${issueNumber}`;
 	}
@@ -292,6 +310,21 @@ export class PersistenceService {
 				":(glob,exclude)session_*.log",
 			],
 			"persistence.stage",
+			{ branch },
+		);
+	}
+
+	private async stageQARelevantChanges(branch: string): Promise<void> {
+		await this.runGit(
+			[
+				"add",
+				"-A",
+				"--",
+				"docs/qa/",
+				":(glob,exclude).backstop/**",
+				":(glob,exclude)session_*.log",
+			],
+			"persistence.stageQA",
 			{ branch },
 		);
 	}
