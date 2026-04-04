@@ -1,6 +1,6 @@
 # Current System
 
-This document describes the code that exists in the repository today. It is intentionally narrower than the older architecture/design notes that were removed.
+This document describes the code that exists in the repository today. It is intentionally narrower than the broader project vision: it documents the implemented MVP and current runtime behavior, not the full intended end-state of Overseer.
 
 ## Overview
 
