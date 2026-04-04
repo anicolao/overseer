@@ -19,6 +19,7 @@ The code currently in this repository is an MVP focused on proving the risky par
 
 - [Current System](./docs/current-system.md) - The implemented MVP as it exists in code today.
 - [Operations](./docs/operations.md) - Workflow behavior, artifacts, persistence backstop, and inspection commands.
+- [Vision](./VISION.md) - The long-term project direction and intended end state.
 
 ## License
 
