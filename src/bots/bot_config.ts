@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { AGENT_PROTOCOL_VERSION } from "../utils/agent_protocol.js";
+import { loadPromptFile, renderPromptFile } from "../utils/prompt_files.js";
 import { textStats } from "../utils/trace.js";
 
 export type BotKind = "overseer" | "task";
@@ -200,6 +201,7 @@ function loadPromptAssembly(
 		const absolutePath = resolve(repoRoot, promptFile);
 		const content = renderPromptTemplate(
 			readFileSync(absolutePath, "utf8"),
+			repoRoot,
 			context,
 		);
 		promptFileContents[promptFile] = content;
@@ -215,6 +217,7 @@ function loadPromptAssembly(
 
 function renderPromptTemplate(
 	content: string,
+	repoRoot: string,
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
@@ -225,17 +228,20 @@ function renderPromptTemplate(
 		.replaceAll("{{AGENT_PROTOCOL_VERSION}}", AGENT_PROTOCOL_VERSION)
 		.replaceAll(
 			"{{AVAILABLE_ACTIONS_BULLETS}}",
-			buildAvailableActionsBullets(context),
+			buildAvailableActionsBullets(repoRoot, context),
 		)
 		.replaceAll(
 			"{{IN_PROGRESS_EXAMPLE_ACTIONS}}",
-			buildExampleActionsJson(context),
+			buildExampleActionsJson(repoRoot, context),
 		)
-		.replaceAll("{{SHELL_ACTION_RULES}}", buildShellActionRules(context))
+		.replaceAll(
+			"{{SHELL_ACTION_RULES}}",
+			buildShellActionRules(repoRoot, context),
+		)
 		.replaceAll("{{MAX_ACTIONS_PER_TURN}}", String(context.maxActionsPerTurn))
 		.replaceAll(
 			"{{ACTION_COUNT_RULES}}",
-			buildActionCountRules(context.maxActionsPerTurn),
+			buildActionCountRules(repoRoot, context.maxActionsPerTurn),
 		);
 }
 
@@ -297,94 +303,107 @@ function findDuplicates(values: string[]): string[] {
 	return [...duplicates];
 }
 
-function buildAvailableActionsBullets(context: {
-	shellAccess: ShellAccess;
-	allowPersistWork: boolean;
-}): string {
+function buildAvailableActionsBullets(
+	repoRoot: string,
+	context: {
+		shellAccess: ShellAccess;
+		allowPersistWork: boolean;
+	},
+): string {
 	const bullets = [
-		'- `{"type":"run_ro_shell","command":"..."}` for repository inspection and verification commands inside a disposable read-only clone of the repository. This command runs inside the repository\'s default `nix develop -c` environment automatically.',
+		loadPromptFile(
+			"prompts/partials/available-actions/run-ro-shell.md",
+			repoRoot,
+		).trim(),
 	];
 
 	if (context.shellAccess === "read_write") {
 		bullets.push(
-			'- `{"type":"run_shell","command":"..."}` for repository edits and verification commands in the live repository checkout. This command also runs inside the repository\'s default `nix develop -c` environment automatically.',
+			loadPromptFile(
+				"prompts/partials/available-actions/run-shell-enabled.md",
+				repoRoot,
+			).trim(),
 		);
 	} else {
 		bullets.push(
-			"- `run_shell` is not available to this bot. Stay inside `run_ro_shell` and do not attempt repository writes.",
+			loadPromptFile(
+				"prompts/partials/available-actions/run-shell-disabled.md",
+				repoRoot,
+			).trim(),
 		);
 	}
 
 	if (context.allowPersistWork) {
 		bullets.push(
-			'- `{"type":"persist_work"}` for dispatcher-owned persistence when your bot is authorized to publish repository changes.',
+			loadPromptFile(
+				"prompts/partials/available-actions/persist-enabled.md",
+				repoRoot,
+			).trim(),
 		);
 	} else {
 		bullets.push(
-			"- `persist_work` is not available to this bot unless the dispatcher explicitly enables it.",
+			loadPromptFile(
+				"prompts/partials/available-actions/persist-disabled.md",
+				repoRoot,
+			).trim(),
 		);
 	}
 
 	return bullets.join("\n");
 }
 
-function buildExampleActionsJson(context: {
-	shellAccess: ShellAccess;
-	allowPersistWork: boolean;
-	maxActionsPerTurn: number;
-}): string {
-	const actions =
+function buildExampleActionsJson(
+	repoRoot: string,
+	context: {
+		shellAccess: ShellAccess;
+		allowPersistWork: boolean;
+		maxActionsPerTurn: number;
+	},
+): string {
+	const examplePath =
 		context.shellAccess === "read_write"
-			? [
-					{
-						type: "run_ro_shell",
-						command: "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true",
-					},
-					{
-						type: "run_shell",
-						command: "cat docs/plans/current-plan.md",
-					},
-				]
-			: [
-					{
-						type: "run_ro_shell",
-						command: "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true",
-					},
-					{
-						type: "run_ro_shell",
-						command: "cat docs/plans/current-plan.md",
-					},
-				];
+			? "prompts/partials/example-actions/read-write.json"
+			: "prompts/partials/example-actions/read-only.json";
+	const actions = JSON.parse(loadPromptFile(examplePath, repoRoot)) as Array<{
+		type: string;
+		command: string;
+	}>;
 
 	return JSON.stringify(actions.slice(0, context.maxActionsPerTurn), null, 2);
 }
 
-function buildShellActionRules(context: {
-	shellAccess: ShellAccess;
-	allowPersistWork: boolean;
-}): string {
+function buildShellActionRules(
+	repoRoot: string,
+	context: {
+		shellAccess: ShellAccess;
+		allowPersistWork: boolean;
+	},
+): string {
 	if (context.shellAccess === "read_write") {
-		return [
-			"- `run_ro_shell` is the default choice for inspection and verification.",
-			"- Use `run_shell` only when you intentionally need to modify repository files or run write-dependent project tooling.",
-			"- If the environment is missing a tool you need, edit `flake.nix` and then continue using the shell actions above.",
-		].join("\n");
+		return loadPromptFile(
+			"prompts/partials/shell-action-rules/read-write.md",
+			repoRoot,
+		).trim();
 	}
 
-	return [
-		"- Use `run_ro_shell` for inspection and verification only.",
-		"- `run_shell` is unavailable to this bot.",
-		"- If the environment is missing a tool you need, note that in your output instead of trying to modify the repository or tooling configuration yourself.",
-	].join("\n");
+	return loadPromptFile(
+		"prompts/partials/shell-action-rules/read-only.md",
+		repoRoot,
+	).trim();
 }
 
-function buildActionCountRules(maxActionsPerTurn: number): string {
-	const actionWord = maxActionsPerTurn === 1 ? "action" : "actions";
-	return [
-		`- You may return at most ${maxActionsPerTurn} ${actionWord} in a single response.`,
-		"- Prefer exactly one action per turn unless bundling is clearly necessary to complete one immediate step.",
-		"- Do not repeat the same action on consecutive turns unless the repository state changed or your previous output explains why the retry is materially different.",
-	].join("\n");
+function buildActionCountRules(
+	repoRoot: string,
+	maxActionsPerTurn: number,
+): string {
+	return renderPromptFile(
+		"prompts/partials/action-count-rules.md",
+		{
+			MAX_ACTIONS_PER_TURN: String(maxActionsPerTurn),
+			ACTION_WORD: maxActionsPerTurn === 1 ? "action" : "actions",
+		},
+		repoRoot,
+	).trim();
 }
 
 export function summarizePromptAssembly(prompt: LoadedPromptAssembly) {

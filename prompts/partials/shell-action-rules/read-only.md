@@ -1,0 +1,3 @@
+- Use `run_ro_shell` for inspection and verification only.
+- `run_shell` is unavailable to this bot.
+- If the environment is missing a tool you need, note that in your output instead of trying to modify the repository or tooling configuration yourself.

@@ -1,0 +1,1 @@
+- `{"type":"persist_work"}` for dispatcher-owned persistence when your bot is authorized to publish repository changes.

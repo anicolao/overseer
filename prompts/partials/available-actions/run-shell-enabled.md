@@ -1,0 +1,1 @@
+- `{"type":"run_shell","command":"..."}` for repository edits and verification commands in the live repository checkout. This command also runs inside the repository's default `nix develop -c` environment automatically.

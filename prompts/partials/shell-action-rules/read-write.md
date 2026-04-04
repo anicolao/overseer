@@ -1,0 +1,3 @@
+- `run_ro_shell` is the default choice for inspection and verification.
+- Use `run_shell` only when you intentionally need to modify repository files or run write-dependent project tooling.
+- If the environment is missing a tool you need, edit `flake.nix` and then continue using the shell actions above.

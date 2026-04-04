@@ -1,3 +1,5 @@
+import { renderPromptFile } from "./prompt_files.js";
+
 export const AGENT_PROTOCOL_VERSION = "overseer/v1";
 export const AGENT_HANDOFF_TARGETS = [
 	"@overseer",
@@ -55,46 +57,15 @@ export interface ContinuationContext {
 	reminder?: string;
 }
 
-export const AGENT_PROTOCOL_PROMPT = `
-RESPONSE PROTOCOL:
-Work to this workflow on every turn:
-1. Keep a concrete plan in mind.
-2. Return that plan explicitly in \`plan\`.
-2. State the immediate next step in \`next_step\`.
-3. Either take one or more ordered actions or finish the task.
-4. Observe the result and loop.
-- Return exactly one JSON object and nothing else.
-- Use \`"version": "${AGENT_PROTOCOL_VERSION}"\`.
-- Always include \`plan\`, \`next_step\`, \`actions\`, and \`task_status\`.
-- You may include \`handoff_to\` on \`"done"\` responses to make the next recipient explicit. Valid values: ${AGENT_HANDOFF_TARGETS.map((target) => `\`${target}\``).join(", ")}.
-- If you need to inspect or modify the repository, respond with \`"task_status": "in_progress"\` and at least one action.
-- \`actions\` is an ordered list executed sequentially by the dispatcher.
-- Available actions: \`{"type":"run_ro_shell","command":"..."}\`, \`{"type":"run_shell","command":"..."}\`, and \`{"type":"persist_work"}\`.
-- Use \`{"type":"run_ro_shell","command":"..."}\` for repository inspection and verification. It runs in a disposable read-only clone. Changes made here will be LOST.
-- Use \`{"type":"run_shell","command":"..."}\` for repository file edits and tool execution in the live checkout.
-- Use \`{"type":"persist_work"}\` to commit and push all changes made via \`run_shell\` to the issue branch. Your work is not saved until you call this.
-- If you set \`handoff_to\`, the dispatcher will append the standardized \`Next step: ...\` line when it posts your final GitHub comment.
-- If the task is complete, respond with \`"task_status": "done"\`, \`"actions": []\`, and \`final_response\` containing the concise human-facing summary that should be posted back to GitHub.
-- Do not use \`[RUN:command]\`, markdown fences, or prose outside the JSON object.
-
-Example in-progress response:
-{"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Read the relevant files before editing.","actions":[{"type":"run_ro_shell","command":"cd /project && ls -la"},{"type":"run_shell","command":"cd /project && cat WORKFLOW.md"}],"task_status":"in_progress"}
-
-Example done response:
-{"version":"${AGENT_PROTOCOL_VERSION}","plan":["Inspect the relevant files.","Make the minimal required change.","Run targeted verification."],"next_step":"Return control to the dispatcher.","actions":[],"task_status":"done","handoff_to":"@planner","final_response":"Identified the relevant implementation touchpoints and prepared the planner handoff."}
-`;
-
 export function buildProtocolRepairMessage(
 	error: string,
 	previousResponse: string,
 ): string {
-	return [
-		`Your previous response was invalid: ${error}`,
-		`Return exactly one JSON object matching protocol "${AGENT_PROTOCOL_VERSION}".`,
-		"Do not use markdown fences or any prose outside the JSON object.",
-		"Previous response:",
-		previousResponse,
-	].join("\n\n");
+	return renderPromptFile("prompts/runtime/protocol-repair.md", {
+		ERROR: error,
+		PREVIOUS_RESPONSE: previousResponse,
+		AGENT_PROTOCOL_VERSION,
+	});
 }
 
 export function buildContinuationMessage({
@@ -105,28 +76,29 @@ export function buildContinuationMessage({
 	actionOutput,
 	reminder,
 }: ContinuationContext): string {
-	return [
-		"ORIGINAL TASK:",
-		originalTask,
-		"",
-		`CURRENT ITERATION: ${iteration}`,
-		"",
-		"MOST RECENT STRUCTURED RESPONSE:",
-		previousResponseJson,
-		"",
-		...(previousGithubComment
-			? ["MOST RECENT GITHUB STATUS COMMENT:", previousGithubComment, ""]
-			: []),
-		"LATEST ACTION OUTPUT:",
-		actionOutput,
-		"",
-		...(reminder ? ["IMPORTANT REMINDER:", reminder, ""] : []),
-		"Continue the same assigned increment. Do not restart or expand the assignment.",
-		"Use the original task packet and your most recent structured response to decide the next immediate step.",
-		"If the current increment is complete, return control with a concise progress update instead of starting the next increment.",
-		`Continue the task using protocol "${AGENT_PROTOCOL_VERSION}".`,
-		"Return exactly one JSON object.",
-	].join("\n");
+	const previousGithubCommentSection = previousGithubComment
+		? renderPromptFile(
+				"prompts/runtime/continuation-github-comment-section.md",
+				{
+					PREVIOUS_GITHUB_COMMENT: previousGithubComment,
+				},
+			)
+		: "";
+	const reminderSection = reminder
+		? renderPromptFile("prompts/runtime/continuation-reminder-section.md", {
+				REMINDER: reminder,
+			})
+		: "";
+
+	return renderPromptFile("prompts/runtime/continuation.md", {
+		ORIGINAL_TASK: originalTask,
+		ITERATION: String(iteration),
+		PREVIOUS_RESPONSE_JSON: previousResponseJson,
+		PREVIOUS_GITHUB_COMMENT_SECTION: previousGithubCommentSection,
+		ACTION_OUTPUT: actionOutput,
+		REMINDER_SECTION: reminderSection,
+		AGENT_PROTOCOL_VERSION,
+	});
 }
 
 export function buildLoopRepairMessage(input: {
@@ -136,25 +108,14 @@ export function buildLoopRepairMessage(input: {
 	actionOutput: string;
 	repeatedCycleCount: number;
 }): string {
-	return [
-		"LOOP DETECTED:",
-		`You have repeated the same plan/action pattern ${input.repeatedCycleCount} times without meaningful progress.`,
-		"",
-		"ORIGINAL TASK:",
-		input.originalTask,
-		"",
-		`CURRENT ITERATION: ${input.iteration}`,
-		"",
-		"MOST RECENT STRUCTURED RESPONSE:",
-		input.previousResponseJson,
-		"",
-		"LATEST ACTION OUTPUT:",
-		input.actionOutput,
-		"",
-		"Do not repeat the same action again unless the repository state has changed.",
-		"Revise the plan and choose a materially different next step, or finish with a concise blocker summary if the task cannot progress safely.",
-		`Return exactly one JSON object using protocol "${AGENT_PROTOCOL_VERSION}".`,
-	].join("\n");
+	return renderPromptFile("prompts/runtime/loop-repair.md", {
+		REPEATED_CYCLE_COUNT: String(input.repeatedCycleCount),
+		ORIGINAL_TASK: input.originalTask,
+		ITERATION: String(input.iteration),
+		PREVIOUS_RESPONSE_JSON: input.previousResponseJson,
+		ACTION_OUTPUT: input.actionOutput,
+		AGENT_PROTOCOL_VERSION,
+	});
 }
 
 export function parseAgentProtocolResponse(

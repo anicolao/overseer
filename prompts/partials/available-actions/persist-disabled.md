@@ -1,0 +1,1 @@
+- `persist_work` is not available to this bot unless the dispatcher explicitly enables it.

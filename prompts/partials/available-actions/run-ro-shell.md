@@ -1,0 +1,1 @@
+- `{"type":"run_ro_shell","command":"..."}` for repository inspection and verification commands inside a disposable read-only clone of the repository. This command runs inside the repository's default `nix develop -c` environment automatically.

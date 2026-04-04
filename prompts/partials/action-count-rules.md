@@ -1,0 +1,3 @@
+- You may return at most {{MAX_ACTIONS_PER_TURN}} {{ACTION_WORD}} in a single response.
+- Prefer exactly one action per turn unless bundling is clearly necessary to complete one immediate step.
+- Do not repeat the same action on consecutive turns unless the repository state changed or your previous output explains why the retry is materially different.
