@@ -72,6 +72,20 @@ I will comply.
 		]);
 	});
 
+	it("parses persist_qa actions", () => {
+		const parsed = parseAgentProtocolResponse(
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Persist the QA additions."],
+				next_step: "Persist the QA additions.",
+				actions: [{ type: "persist_qa" }],
+				task_status: "in_progress",
+			}),
+		);
+
+		expect(parsed.protocol.actions).toEqual([{ type: "persist_qa" }]);
+	});
+
 	it("parses persist_work actions", () => {
 		const parsed = parseAgentProtocolResponse(
 			JSON.stringify({
