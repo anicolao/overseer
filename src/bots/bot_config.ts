@@ -32,6 +32,7 @@ interface RawBotDefinition {
 	};
 	prompt_files?: string[];
 	allow_persist_work?: boolean;
+	require_post_persist_verification?: boolean;
 	max_iterations?: number;
 	max_actions_per_turn?: number;
 }
@@ -52,6 +53,7 @@ export interface LoadedBotDefinition {
 	};
 	shellAccess: ShellAccess;
 	allowPersistWork: boolean;
+	requirePostPersistVerification: boolean;
 	maxIterations: number;
 	maxActionsPerTurn: number;
 	prompt: LoadedPromptAssembly;
@@ -144,6 +146,8 @@ function loadBotDefinition(
 		`${id}.llm.model`,
 	);
 	const allowPersistWork = Boolean(rawBot.allow_persist_work);
+	const requirePostPersistVerification =
+		rawBot.require_post_persist_verification ?? true;
 	const maxIterations = parsePositiveInteger(
 		rawBot.max_iterations ?? defaults.defaultMaxIterations,
 		`${id}.max_iterations`,
@@ -170,11 +174,13 @@ function loadBotDefinition(
 		},
 		shellAccess,
 		allowPersistWork,
+		requirePostPersistVerification,
 		maxIterations,
 		maxActionsPerTurn,
 		prompt: loadPromptAssembly(repoRoot, promptFiles, {
 			shellAccess,
 			allowPersistWork,
+			requirePostPersistVerification,
 			maxActionsPerTurn,
 		}),
 	};
@@ -186,6 +192,7 @@ function loadPromptAssembly(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		requirePostPersistVerification: boolean;
 		maxActionsPerTurn: number;
 	},
 ): LoadedPromptAssembly {
@@ -221,6 +228,7 @@ function renderPromptTemplate(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		requirePostPersistVerification: boolean;
 		maxActionsPerTurn: number;
 	},
 ): string {
@@ -237,6 +245,10 @@ function renderPromptTemplate(
 		.replaceAll(
 			"{{SHELL_ACTION_RULES}}",
 			buildShellActionRules(repoRoot, context),
+		)
+		.replaceAll(
+			"{{POST_PERSIST_COMPLETION_RULES}}",
+			buildPostPersistCompletionRules(repoRoot, context),
 		)
 		.replaceAll("{{MAX_ACTIONS_PER_TURN}}", String(context.maxActionsPerTurn))
 		.replaceAll(
@@ -308,6 +320,7 @@ function buildAvailableActionsBullets(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		requirePostPersistVerification: boolean;
 	},
 ): string {
 	const bullets = [
@@ -357,6 +370,7 @@ function buildExampleActionsJson(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		requirePostPersistVerification: boolean;
 		maxActionsPerTurn: number;
 	},
 ): string {
@@ -377,6 +391,7 @@ function buildShellActionRules(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		requirePostPersistVerification: boolean;
 	},
 ): string {
 	if (context.shellAccess === "read_write") {
@@ -388,6 +403,31 @@ function buildShellActionRules(
 
 	return loadPromptFile(
 		"prompts/partials/shell-action-rules/read-only.md",
+		repoRoot,
+	).trim();
+}
+
+function buildPostPersistCompletionRules(
+	repoRoot: string,
+	context: {
+		shellAccess: ShellAccess;
+		allowPersistWork: boolean;
+		requirePostPersistVerification: boolean;
+	},
+): string {
+	if (!context.allowPersistWork) {
+		return "";
+	}
+
+	if (context.requirePostPersistVerification) {
+		return loadPromptFile(
+			"prompts/partials/post-persist-completion-rules/require-verification.md",
+			repoRoot,
+		).trim();
+	}
+
+	return loadPromptFile(
+		"prompts/partials/post-persist-completion-rules/handoff-to-overseer.md",
 		repoRoot,
 	).trim();
 }

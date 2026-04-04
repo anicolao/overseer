@@ -502,6 +502,84 @@ describe("AgentRunner", () => {
 		);
 	});
 
+	it("allows done after persist_work without read-only verification when configured", async () => {
+		const responses = [
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Edit the file.", "Persist the file.", "Return control."],
+				next_step: "Edit the file.",
+				actions: [{ type: "run_shell", command: "printf ok >> file.txt" }],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Edit the file.", "Persist the file.", "Return control."],
+				next_step: "Persist the file.",
+				actions: [{ type: "persist_work" }],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Edit the file.", "Persist the file.", "Return control."],
+				next_step: "Return control.",
+				actions: [],
+				task_status: "done",
+				final_response: "Persisted the change and handed back to Overseer.",
+			}),
+		];
+
+		const sentMessages: string[] = [];
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage(message: string) {
+						sentMessages.push(message);
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner(
+			makeFakeShell(async () => ({
+				stdout: "ok",
+				stderr: "",
+				exitCode: 0,
+			})),
+		);
+		const result = await runner.runAutonomousLoop(
+			gemini as never,
+			"System instruction",
+			"Initial message",
+			6,
+			{
+				shellAccess: "read_write",
+				maxActionsPerTurn: 1,
+				requirePostPersistVerification: false,
+				persistWork: async () => ({
+					ok: true,
+					branch: "bot/issue-35",
+					commit_sha: "abc123",
+					changed_files: ["file.txt"],
+					message: "Persisted successfully.",
+				}),
+			},
+		);
+
+		expect(result.finalResponse).toBe(
+			"Persisted the change and handed back to Overseer.",
+		);
+		expect(
+			sentMessages.some((message) =>
+				message.includes("Persistence succeeded. Run a read-only verification"),
+			),
+		).toBe(false);
+	});
+
 	it("repairs repeated no-progress cycles and aborts after continued repetition", async () => {
 		const repeatingResponse = JSON.stringify({
 			version: AGENT_PROTOCOL_VERSION,

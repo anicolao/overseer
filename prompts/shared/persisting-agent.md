@@ -13,4 +13,4 @@ Completion requirements after any successful `run_shell` action:
 - you are not done when a local file exists
 - you are not done when local tests pass
 - you are done only after `persist_work` succeeds
-- after persistence, run at least one `run_ro_shell` verification command that inspects `origin/bot/issue-<n>` or the persisted file contents before concluding
+{{POST_PERSIST_COMPLETION_RULES}}
