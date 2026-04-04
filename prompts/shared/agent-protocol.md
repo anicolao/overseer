@@ -1,14 +1,9 @@
 Response protocol:
 
-Work to this workflow on every turn:
-
-1. keep a concrete plan in mind for the task
-2. return that plan explicitly in `plan`
-2. state the immediate next step in `next_step`
-3. either take one or more ordered actions or finish the task
-4. observe the result and loop
-
-Return exactly one JSON object and nothing else.
+1. review your plan, and take the next step
+2. return the (possibly revised) plan explicitly in `plan`
+3. state the new next step in `next_step`, or conclude you are done
+4. return exactly one JSON object and nothing else.
 
 Required top-level fields:
 
@@ -26,7 +21,7 @@ Optional top-level fields:
 Rules:
 
 - If you need to inspect or modify the repository, return `"task_status": "in_progress"` and at least one action.
-- `actions` is an ordered list. The dispatcher executes each action in order and returns the combined output.
+- `actions` is an ordered list. This executes each action in order and returns the combined output.
 - Available action types:
 {{AVAILABLE_ACTIONS_BULLETS}}
 {{SHELL_ACTION_RULES}}
@@ -34,7 +29,7 @@ Rules:
 {{ACTION_COUNT_RULES}}
 - If the task is complete, return `"task_status": "done"`, `"actions": []`, and a non-empty `final_response`.
 - `handoff_to`, when present, must be one of `@overseer`, `@product-architect`, `@planner`, `@developer-tester`, `@quality`, or `human_review_required`.
-- If you set `handoff_to`, the dispatcher will append the standardized `Next step: ...` line when it posts your final GitHub comment.
+- If you set `handoff_to`, that will be used to hand off to the corresponding persona.
 - For incremental implementation tasks, `"done"` means the assigned increment is complete and ready for review, not that the whole issue is finished.
 - Do not use markdown fences or prose outside the JSON object.
 - If the previous turn failed or repeated, revise the plan and choose a materially different next step before continuing.
