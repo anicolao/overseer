@@ -10,10 +10,13 @@
 - Add `persist_qa` to the `ActionType` union and schema.
 - Make sure `persist_qa` has proper documentation in the Zod schema.
 
-### 2.2 Update Runner (`src/agent_runner.ts`)
-- Implement the execution logic for the `persist_qa` action, mirroring how `persist_work` is implemented (running `git add` for `docs/qa/`, committing, and pushing).
+### 2.2 Update Runner Implementation (`src/agent_runner.ts`)
+- Implement the execution logic for the `persist_qa` action in `src/agent_runner.ts`, mirroring how `persist_work` is implemented (running `git add` for `docs/qa/`, committing, and pushing).
 
-### 2.3 Authorize Bot for `persist_qa`
+### 2.3 Update Runner Tests (`src/agent_runner.test.ts`)
+- Update the test suite in `src/agent_runner.test.ts` to cover the execution logic for the new `persist_qa` action.
+
+### 2.4 Authorize Bot for `persist_qa`
 - Update permissions to authorize the `quality` bot to use `persist_qa` (e.g., in `src/prompts.ts`, `prompts/` files, or dispatcher configuration).
 
 ## 3. Update `prompts/quality.md`
