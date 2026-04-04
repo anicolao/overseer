@@ -23,6 +23,10 @@ export interface RunShellAction {
 	command: string;
 }
 
+export interface PersistQAAction {
+	type: "persist_qa";
+}
+
 export interface PersistWorkAction {
 	type: "persist_work";
 }
@@ -30,7 +34,8 @@ export interface PersistWorkAction {
 export type AgentAction =
 	| RunReadOnlyShellAction
 	| RunShellAction
-	| PersistWorkAction;
+	| PersistWorkAction
+	| PersistQAAction;
 
 export interface AgentProtocolResponse {
 	version: typeof AGENT_PROTOCOL_VERSION;
@@ -345,6 +350,12 @@ function parseAction(value: unknown, index: number): AgentAction {
 		};
 	}
 
+	if (type === "persist_qa") {
+		return {
+			type: "persist_qa",
+		};
+	}
+
 	if (type === "persist_work") {
 		return {
 			type: "persist_work",
@@ -352,7 +363,7 @@ function parseAction(value: unknown, index: number): AgentAction {
 	}
 
 	throw new Error(
-		`actions[${index}].type must be "run_ro_shell", "run_shell", or "persist_work"`,
+		`actions[${index}].type must be "run_ro_shell", "run_shell", "persist_work", or "persist_qa"`,
 	);
 }
 
