@@ -469,11 +469,11 @@ export class AgentRunner {
 		}
 
 		if (!state.persistSucceededAfterWrite) {
-			return 'task_status "done" is not allowed after a successful run_shell action until persist_work succeeds';
+			return 'task_status "done" is not allowed after a successful run_shell action until persist_work or persist_qa succeeds';
 		}
 
 		if (!state.verifiedAfterPersist) {
-			return 'task_status "done" is not allowed after persist_work until you verify the persisted branch state with run_ro_shell';
+			return 'task_status "done" is not allowed after persist_work or persist_qa until you verify the persisted branch state with run_ro_shell';
 		}
 
 		return null;
@@ -486,7 +486,7 @@ export class AgentRunner {
 			return undefined;
 		}
 		if (!state.persistSucceededAfterWrite) {
-			return "You have used run_shell successfully in this task. Do not finish until persist_work succeeds.";
+			return "You have used run_shell successfully in this task. Do not finish until persist_work or persist_qa succeeds.";
 		}
 		if (!state.verifiedAfterPersist) {
 			return "Persistence succeeded. Run a read-only verification against the persisted branch or file contents before finishing.";
