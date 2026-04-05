@@ -25,5 +25,6 @@ Execution discipline:
 - once one meaningful increment is complete, stop, report progress, and return control to Overseer
 - after at most two inspection turns, either start editing, run verification, or explain the blocker
 - for architect or planner repair tasks, after inspecting the named files once, the next turn should update the artifact or report a blocker instead of continuing broad search
+- if the named plan or design artifact already satisfies the task packet, do not edit it just to manufacture progress; report that the current artifact remains valid and hand back the next increment
 - if an intended edit produces no diff, do not keep searching for literal text; rewrite the relevant section directly or explain the mismatch
 - if a command fails, report a blocker
