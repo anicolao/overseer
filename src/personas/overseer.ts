@@ -11,6 +11,20 @@ import type { GitHubService } from "../utils/github.js";
 import { isLimitReached } from "../utils/persona_helper.js";
 import { logTrace, textStats } from "../utils/trace.js";
 
+export function extractRepoPathMentions(text: string): string[] {
+	const matches = text.matchAll(
+		/(?:^|[`(\s])((?:src|prompts|docs)\/[A-Za-z0-9_./-]+|bots\.json|AGENTS\.md)(?=$|[`),.\s])/g,
+	);
+	const paths = new Set<string>();
+	for (const match of matches) {
+		const path = match[1]?.trim();
+		if (path) {
+			paths.add(path);
+		}
+	}
+	return [...paths];
+}
+
 export class OverseerPersona {
 	private bot: LoadedBotDefinition;
 	private gemini: GeminiService;
@@ -138,11 +152,21 @@ export class OverseerPersona {
 		const sameResponderGuardrail = retryingSameSpecialistIsAllowed
 			? `- Do not assign the next step back to ${latestResponder} unless the latest response is a blocker, timeout, or repair request that still belongs with that specialist after you fix the task packet.`
 			: `- Do not assign the next step back to ${latestResponder}.`;
+		const explicitRepoPaths = extractRepoPathMentions(body);
+		const explicitRepoPathsSection =
+			explicitRepoPaths.length > 0
+				? `\nExplicit repo paths mentioned in the latest comment:\n${explicitRepoPaths
+						.map((path) => `- ${path}`)
+						.join(
+							"\n",
+						)}\n- Preserve these paths in the next handoff when they are relevant to the correction or blocker.`
+				: "";
 		const taskBody = `The issue has been updated. The latest response came from ${latestResponder}. Review the full context and decide the next micro-task.
 
 Guardrails:
 ${sameResponderGuardrail}
 - If ${latestResponder} claims to have created or updated files, read those files before deciding the next action.
+- If the latest comment names specific repository files or corrects the execution seam, preserve those corrections in the next handoff's Files To Read and Current Step instead of falling back to generic related files.${explicitRepoPathsSection}
 
 CONTEXT:
 ${fullContext}`;
