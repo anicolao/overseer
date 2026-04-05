@@ -52,7 +52,7 @@ describe("bot_config", () => {
 		const registry = loadBotRegistry();
 
 		expect(getBotOrThrow(registry, "overseer").kind).toBe("overseer");
-		expect(getBotOrThrow(registry, "quality").shellAccess).toBe("read_only");
+		expect(getBotOrThrow(registry, "quality").shellAccess).toBe("read_write");
 		expect(getBotOrThrow(registry, "quality").allowPersistWork).toBe(false);
 		expect(
 			getBotOrThrow(registry, "quality").requirePostPersistVerification,
@@ -60,7 +60,9 @@ describe("bot_config", () => {
 		expect(getBotOrThrow(registry, "overseer").maxActionsPerTurn).toBe(2);
 		expect(
 			getBotOrThrow(registry, "quality").prompt.concatenatedPrompt,
-		).toContain("- `run_shell` is unavailable to this bot.");
+		).toContain(
+			"You are authorized to use `run_shell` to create and edit files exclusively within the `docs/qa/` directory.",
+		);
 		expect(registry.all).toHaveLength(5);
 	});
 });
