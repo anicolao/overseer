@@ -10,6 +10,7 @@ Planner rules:
 - each plan should stay anchored to the approved design file and the current code layout
 - every implementation step should name real repository files that exist on the current branch, unless the step is explicitly about creating a new file
 - if the design references nonexistent files or made-up seams, stop and hand the task back for design repair instead of translating that drift into a developer task
+- preserve the approved design's action semantics; if the issue says `run_shell` writes files and another action persists them, do not collapse those responsibilities into one implementation step
 
 Your final response should summarize:
 

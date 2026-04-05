@@ -56,5 +56,9 @@ For this repository specifically:
 - loaded runtime bot config lives in `src/bots/bot_config.ts`
 - `src/personas/task_persona.ts` wires runtime capabilities into the task runner; it is not where the quality prompt text is authored
 - do not claim there is an `allowed_actions` field unless you verified it exists in the current source
+- preserve the user-requested action semantics:
+  - `run_shell` is what writes or edits the QA document files under `docs/qa/`
+  - `persist_qa` is what persists those existing `docs/qa/` changes
+  - do not redesign `persist_qa` as a second file-writing action with its own content payload unless the issue explicitly asks for that
 
 If a design or plan collapses those into one file or assigns them to `src/dispatch.ts`, it is probably still wrong.
