@@ -375,6 +375,9 @@ export function validateTaskPacketForExecution(packet: TaskPacket): {
 		) {
 			return false;
 		}
+		if (packet.handoffType === "planner" && packet.planFile === path) {
+			return false;
+		}
 		return true;
 	});
 

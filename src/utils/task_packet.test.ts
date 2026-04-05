@@ -201,4 +201,24 @@ describe("task_packet", () => {
 		expect(validation.ok).toBe(true);
 		expect(validation.missingFiles).toEqual([]);
 	});
+
+	it("allows planners to create a missing plan file", () => {
+		const packet = parseTaskPacket(
+			[
+				"Planner Task:",
+				"Task ID: create-plan",
+				"Design File: README.md",
+				"Design Approval Status: approved",
+				"Plan File: docs/plans/new-feature.md",
+				"Files To Read:",
+				"- README.md",
+				"Task Summary: Draft the implementation plan.",
+			].join("\n"),
+		);
+
+		const validation = validateTaskPacketForExecution(packet);
+
+		expect(validation.ok).toBe(true);
+		expect(validation.missingFiles).toEqual([]);
+	});
 });
