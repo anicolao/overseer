@@ -40,6 +40,13 @@ describe("bot_config", () => {
 		expect(developer.prompt.concatenatedPrompt).not.toContain(
 			"BEGIN PROMPT FILE:",
 		);
+		expect(getBotOrThrow(registry, "product-architect").maxActionsPerTurn).toBe(
+			2,
+		);
+		expect(getBotOrThrow(registry, "planner").maxActionsPerTurn).toBe(2);
+		expect(
+			getBotOrThrow(registry, "product-architect").prompt.concatenatedPrompt,
+		).toContain("treat the blocker as a semantic mismatch");
 		expect(overseer.prompt.concatenatedPrompt).toContain(
 			"You are a router of tasks, not a solver of technical subtasks.",
 		);
@@ -51,6 +58,9 @@ describe("bot_config", () => {
 		);
 		expect(overseer.prompt.concatenatedPrompt).toContain(
 			"you may send a repaired task back to that same specialist instead of escalating immediately to human review",
+		);
+		expect(overseer.prompt.concatenatedPrompt).toContain(
+			"do not frame design repair as a literal search-and-replace task unless you have verified the stale text actually appears in the artifact",
 		);
 	});
 
