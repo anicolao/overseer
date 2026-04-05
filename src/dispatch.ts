@@ -58,6 +58,12 @@ function extractDesignDocPathForDirectRepair(text: string): string | null {
 	return match?.[1]?.trim().replace(/[.,:;]+$/, "") || null;
 }
 
+function buildPlanPathFromDesignFile(designFile: string): string {
+	return designFile
+		.replace(/^docs\/design\//, "docs/plans/")
+		.replace(/^docs\/architecture\//, "docs/plans/");
+}
+
 function shouldBypassOverseerForDirectDesignRepair(body: string): boolean {
 	return (
 		hasExplicitPersonaMention(body, "@overseer") &&
@@ -65,6 +71,15 @@ function shouldBypassOverseerForDirectDesignRepair(body: string): boolean {
 		/(still do not approve|do not approve|not approved|design-repair task|route this directly back to the product architect)/i.test(
 			body,
 		)
+	);
+}
+
+function shouldBypassOverseerForApprovedDesign(body: string): boolean {
+	return (
+		hasExplicitPersonaMention(body, "@overseer") &&
+		/design/i.test(body) &&
+		/\bapprove(?:d)?\b/i.test(body) &&
+		!/(do not approve|still do not approve|not approved)/i.test(body)
 	);
 }
 
@@ -97,6 +112,37 @@ function buildDirectDesignRepairIterationResult(body: string): IterationResult {
 		finalResponse,
 		handoffTo: "@product-architect",
 		log: `DIRECT DISPATCH DESIGN REPAIR\n\n${finalResponse}`,
+	};
+}
+
+function buildDirectDesignApprovalIterationResult(
+	body: string,
+): IterationResult {
+	const designFile =
+		extractDesignDocPathForDirectRepair(body) || "docs/design/persist-qa.md";
+	const planFile = buildPlanPathFromDesignFile(designFile);
+	const finalResponse = [
+		"The human has explicitly approved the current design. I am routing the approved artifact directly to the Planner.",
+		"",
+		"Planner Task:",
+		"Task ID: MVP validation: persist_qa end-to-end",
+		`Design File: ${designFile}`,
+		"Design Approval Status: approved",
+		`Plan File: ${planFile}`,
+		"Files To Read:",
+		`- ${designFile}`,
+		"Current Step: Create the implementation plan for the approved design.",
+		`Task Summary: Decompose ${designFile} into small implementation increments that can be delegated one at a time.`,
+		`Done When: ${planFile} exists and describes the implementation steps needed to realize the approved design.`,
+		"Verification:",
+		`- cat ${planFile}`,
+		"Likely Next Step: Delegate the first implementation increment to @developer-tester.",
+	].join("\n");
+
+	return {
+		finalResponse,
+		handoffTo: "@planner",
+		log: `DIRECT DISPATCH DESIGN APPROVAL\n\n${finalResponse}`,
 	};
 }
 
@@ -286,6 +332,26 @@ async function run() {
 				issueNumber,
 				"overseer",
 				buildDirectDesignRepairIterationResult(body),
+				personaNameMap,
+				sender,
+				commentUrl,
+			);
+			return;
+		}
+		if (
+			!isAutomatedComment &&
+			activePersona === null &&
+			shouldBypassOverseerForApprovedDesign(body)
+		) {
+			appendGithubOutput("persona_executed", "true");
+			appendGithubOutput("executed_persona", "overseer");
+			await finalizeRun(
+				github,
+				owner,
+				repo,
+				issueNumber,
+				"overseer",
+				buildDirectDesignApprovalIterationResult(body),
 				personaNameMap,
 				sender,
 				commentUrl,
