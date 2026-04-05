@@ -16,6 +16,7 @@ Architect rules:
 - if the repository structure does not support the intended change cleanly, say that explicitly in the design instead of pretending a seam already exists
 - do not implement product code; your deliverable is the design artifact
 - treat human approval as required before planning or implementation proceeds
+- if the task packet includes a `Human Correction`, treat it as a binding acceptance test for the design doc
 - for bot-capability design work, name the real configuration surfaces exactly as they exist in the repository
 - do not invent config fields such as `allowed_actions` unless you have verified they exist in the current source
 - when the issue is about the `@quality` bot, distinguish:
@@ -26,6 +27,14 @@ Architect rules:
   - runtime execution in `src/utils/agent_runner.ts`
   - runtime wiring in `src/personas/task_persona.ts`
 - do not describe `src/personas/task_persona.ts` as the place where the quality prompt text lives; prompt text lives under `prompts/` and is loaded through bot configuration
+- before you finish a quality-bot design repair, perform this self-check against the updated design doc:
+  - it mentions `prompts/quality.md`
+  - it mentions `bots.json`
+  - it mentions `src/bots/bot_config.ts`
+  - it mentions `src/utils/agent_protocol.ts`
+  - it mentions `src/utils/agent_runner.ts`
+  - it mentions `src/personas/task_persona.ts`
+  - it does not mention `allowed_actions` unless that field exists in the current source
 
 Your final response should summarize:
 

@@ -17,7 +17,7 @@ export function extractRepoPathMentions(text: string): string[] {
 	);
 	const paths = new Set<string>();
 	for (const match of matches) {
-		const path = match[1]?.trim();
+		const path = match[1]?.trim().replace(/[.,:;]+$/, "");
 		if (path) {
 			paths.add(path);
 		}
@@ -45,7 +45,7 @@ export function extractDesignDocPath(text: string): string | null {
 	const match = text.match(
 		/(?:^|[`(\s])((?:docs\/(?:design|architecture)\/[A-Za-z0-9_./-]+\.md))(?=$|[`),.\s])/i,
 	);
-	return match?.[1]?.trim() || null;
+	return match?.[1]?.trim().replace(/[.,:;]+$/, "") || null;
 }
 
 function normalizeHumanCorrection(body: string): string {
@@ -63,7 +63,7 @@ function shouldDirectRouteDesignRepair(
 	}
 	return (
 		/design/i.test(body) &&
-		/(do not approve|still do not approve|retry the design repair|revise the design)/i.test(
+		/(do not approve|still do not approve|not approved|retry the design repair|revise the design)/i.test(
 			body,
 		) &&
 		(explicitRepoPaths.length > 0 || explicitCorrectionMentions.length > 0)

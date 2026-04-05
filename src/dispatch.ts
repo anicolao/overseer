@@ -43,7 +43,7 @@ function extractRepoPathsForDirectRepair(text: string): string[] {
 	);
 	const paths = new Set<string>();
 	for (const match of matches) {
-		const value = match[1]?.trim();
+		const value = match[1]?.trim().replace(/[.,:;]+$/, "");
 		if (value) {
 			paths.add(value);
 		}
@@ -55,14 +55,14 @@ function extractDesignDocPathForDirectRepair(text: string): string | null {
 	const match = text.match(
 		/(?:^|[`(\s])((?:docs\/(?:design|architecture)\/[A-Za-z0-9_./-]+\.md))(?=$|[`),.\s])/i,
 	);
-	return match?.[1]?.trim() || null;
+	return match?.[1]?.trim().replace(/[.,:;]+$/, "") || null;
 }
 
 function shouldBypassOverseerForDirectDesignRepair(body: string): boolean {
 	return (
 		hasExplicitPersonaMention(body, "@overseer") &&
 		/design/i.test(body) &&
-		/(still do not approve|do not approve|design-repair task|route this directly back to the product architect)/i.test(
+		/(still do not approve|do not approve|not approved|design-repair task|route this directly back to the product architect)/i.test(
 			body,
 		)
 	);
