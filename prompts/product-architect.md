@@ -26,6 +26,8 @@ Architect rules:
   - protocol/schema in `src/utils/agent_protocol.ts`
   - runtime execution in `src/utils/agent_runner.ts`
   - runtime wiring in `src/personas/task_persona.ts`
+- preserve the requested action semantics from the issue body; for the `persist_qa` MVP, `run_shell` writes the QA files and `persist_qa` persists those existing `docs/qa/` changes
+- do not redesign `persist_qa` as a duplicate file-writing payload action unless the issue explicitly asks for that behavior
 - do not describe `src/personas/task_persona.ts` as the place where the quality prompt text lives; prompt text lives under `prompts/` and is loaded through bot configuration
 - before you finish a quality-bot design repair, perform this self-check against the updated design doc:
   - it mentions `prompts/quality.md`
@@ -35,6 +37,7 @@ Architect rules:
   - it mentions `src/utils/agent_runner.ts`
   - it mentions `src/personas/task_persona.ts`
   - it does not mention `allowed_actions` unless that field exists in the current source
+  - it keeps `run_shell` and `persist_qa` as separate steps instead of collapsing both behaviors into `persist_qa`
 
 Your final response should summarize:
 
