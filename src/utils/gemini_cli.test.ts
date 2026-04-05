@@ -147,6 +147,48 @@ describe("GeminiCliService", () => {
 		expect(result.log).toContain("Failed to parse Gemini CLI headless output");
 	});
 
+	it("retries once when the CLI returns an empty final payload", async () => {
+		let attempts = 0;
+		const service = new GeminiCliService(async () => {
+			attempts += 1;
+			if (attempts === 1) {
+				return {
+					exitCode: 0,
+					timedOut: false,
+					stderr: "",
+					stdout: JSON.stringify({
+						response: "",
+						stats: { attempt: 1 },
+					}),
+				};
+			}
+			return {
+				exitCode: 0,
+				timedOut: false,
+				stderr: "",
+				stdout: JSON.stringify({
+					response: JSON.stringify({
+						finalResponse: "Retried successfully.",
+						handoffTo: "@overseer",
+						log: "Second attempt succeeded.",
+					}),
+					stats: { attempt: 2 },
+				}),
+			};
+		});
+
+		const result = await service.runTask({
+			botId: "planner",
+			displayName: "Planner",
+			systemInstruction: "PROMPT",
+			taskMessage: "TASK",
+		});
+
+		expect(attempts).toBe(2);
+		expect(result.finalResponse).toBe("Retried successfully.");
+		expect(result.log).toContain("Second attempt succeeded.");
+	});
+
 	it("returns a blocked handoff when the CLI times out", async () => {
 		const service = new GeminiCliService(
 			async () => ({

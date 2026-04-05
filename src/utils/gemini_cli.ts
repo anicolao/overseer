@@ -171,14 +171,17 @@ async function runGeminiCliCommand(
 
 export class GeminiCliService {
 	private readonly timeoutMs: number;
+	private readonly maxAttempts: number;
 	private readonly runner: GeminiCliRunner;
 
 	constructor(
 		runner: GeminiCliRunner = runGeminiCliCommand,
 		timeoutMs: number = Number(process.env.GEMINI_CLI_TIMEOUT_MS || "600000"),
+		maxAttempts: number = Number(process.env.GEMINI_CLI_MAX_ATTEMPTS || "2"),
 	) {
 		this.runner = runner;
 		this.timeoutMs = timeoutMs;
+		this.maxAttempts = Math.max(1, maxAttempts);
 	}
 
 	async runTask(options: GeminiCliTaskOptions): Promise<IterationResult> {
@@ -224,73 +227,120 @@ export class GeminiCliService {
 			taskPromptRaw: taskPrompt,
 		});
 
+		let lastFailure:
+			| {
+					finalResponse: string;
+					log: string;
+			  }
+			| undefined;
+
 		try {
-			const result = await this.runner(invocation);
-			logTrace("geminiCli.run.complete", {
-				botId: options.botId,
-				exitCode: result.exitCode,
-				timedOut: result.timedOut,
-				stdout: textStats(result.stdout),
-				stdoutRaw: result.stdout,
-				stderr: textStats(result.stderr),
-				stderrRaw: result.stderr,
-			});
+			for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
+				logTrace("geminiCli.run.attempt", {
+					botId: options.botId,
+					displayName: options.displayName,
+					attempt,
+					maxAttempts: this.maxAttempts,
+				});
+				const result = await this.runner(invocation);
+				logTrace("geminiCli.run.complete", {
+					botId: options.botId,
+					attempt,
+					exitCode: result.exitCode,
+					timedOut: result.timedOut,
+					stdout: textStats(result.stdout),
+					stdoutRaw: result.stdout,
+					stderr: textStats(result.stderr),
+					stderrRaw: result.stderr,
+				});
 
-			if (result.timedOut) {
-				return {
-					finalResponse:
-						"Gemini CLI execution timed out before it produced a final handoff.",
-					handoffTo: "@overseer",
-					log: `Gemini CLI timed out after ${this.timeoutMs}ms.\nSTDERR:\n${result.stderr}\nSTDOUT:\n${result.stdout}`,
-				};
-			}
+				if (result.timedOut) {
+					return {
+						finalResponse:
+							"Gemini CLI execution timed out before it produced a final handoff.",
+						handoffTo: "@overseer",
+						log: `Gemini CLI timed out after ${this.timeoutMs}ms.\nSTDERR:\n${result.stderr}\nSTDOUT:\n${result.stdout}`,
+					};
+				}
 
-			let parsedHeadlessOutput: GeminiCliHeadlessOutput;
-			try {
-				parsedHeadlessOutput = JSON.parse(
-					result.stdout,
-				) as GeminiCliHeadlessOutput;
-			} catch (error) {
-				return {
-					finalResponse:
-						"Gemini CLI did not return machine-readable JSON output.",
-					handoffTo: "@overseer",
-					log: `Failed to parse Gemini CLI headless output: ${error instanceof Error ? error.message : String(error)}\nSTDERR:\n${result.stderr}\nSTDOUT:\n${result.stdout}`,
-				};
-			}
+				let parsedHeadlessOutput: GeminiCliHeadlessOutput;
+				try {
+					parsedHeadlessOutput = JSON.parse(
+						result.stdout,
+					) as GeminiCliHeadlessOutput;
+				} catch (error) {
+					lastFailure = {
+						finalResponse:
+							"Gemini CLI did not return machine-readable JSON output.",
+						log: `Failed to parse Gemini CLI headless output: ${error instanceof Error ? error.message : String(error)}\nSTDERR:\n${result.stderr}\nSTDOUT:\n${result.stdout}`,
+					};
+					if (attempt < this.maxAttempts) {
+						logTrace("geminiCli.run.retrying", {
+							botId: options.botId,
+							attempt,
+							reason: "non_json_headless_output",
+						});
+						continue;
+					}
+					return {
+						...lastFailure,
+						handoffTo: "@overseer",
+					};
+				}
 
-			if (parsedHeadlessOutput.error) {
-				return {
-					finalResponse:
-						"Gemini CLI returned an error before the task could be completed.",
-					handoffTo: "@overseer",
-					log: `Gemini CLI error output:\n${JSON.stringify(parsedHeadlessOutput.error, null, 2)}\nSTDERR:\n${result.stderr}`,
-				};
-			}
+				if (parsedHeadlessOutput.error) {
+					return {
+						finalResponse:
+							"Gemini CLI returned an error before the task could be completed.",
+						handoffTo: "@overseer",
+						log: `Gemini CLI error output:\n${JSON.stringify(parsedHeadlessOutput.error, null, 2)}\nSTDERR:\n${result.stderr}`,
+					};
+				}
 
-			const responseText = parsedHeadlessOutput.response || "";
-			try {
-				const parsedResult = parseIterationResultPayload(responseText);
-				return {
-					...parsedResult,
-					log: [
-						parsedResult.log,
-						"",
-						"GEMINI CLI HEADLESS STATS:",
-						JSON.stringify(parsedHeadlessOutput.stats || {}, null, 2),
-						"",
-						"GEMINI CLI STDERR:",
-						result.stderr || "(none)",
-					].join("\n"),
-				};
-			} catch (error) {
-				return {
-					finalResponse:
-						"Gemini CLI completed but did not return a valid IterationResult JSON payload.",
-					handoffTo: "@overseer",
-					log: `Failed to parse Gemini CLI response payload: ${error instanceof Error ? error.message : String(error)}\nRESPONSE:\n${responseText}\nSTDERR:\n${result.stderr}`,
-				};
+				const responseText = parsedHeadlessOutput.response || "";
+				try {
+					const parsedResult = parseIterationResultPayload(responseText);
+					return {
+						...parsedResult,
+						log: [
+							parsedResult.log,
+							"",
+							"GEMINI CLI HEADLESS STATS:",
+							JSON.stringify(parsedHeadlessOutput.stats || {}, null, 2),
+							"",
+							"GEMINI CLI STDERR:",
+							result.stderr || "(none)",
+						].join("\n"),
+					};
+				} catch (error) {
+					lastFailure = {
+						finalResponse:
+							"Gemini CLI completed but did not return a valid IterationResult JSON payload.",
+						log: `Failed to parse Gemini CLI response payload: ${error instanceof Error ? error.message : String(error)}\nRESPONSE:\n${responseText}\nSTDERR:\n${result.stderr}`,
+					};
+					if (attempt < this.maxAttempts) {
+						logTrace("geminiCli.run.retrying", {
+							botId: options.botId,
+							attempt,
+							reason: "invalid_iteration_result_payload",
+							responsePreview: textStats(responseText),
+						});
+						continue;
+					}
+					return {
+						...lastFailure,
+						handoffTo: "@overseer",
+					};
+				}
 			}
+			return {
+				finalResponse:
+					"Gemini CLI completed but did not produce a usable final result.",
+				handoffTo: "@overseer",
+				log:
+					lastFailure?.log ||
+					"Gemini CLI exhausted its retry budget without a usable final result.",
+			};
 		} catch (error) {
 			logTrace("geminiCli.run.error", {
 				botId: options.botId,
