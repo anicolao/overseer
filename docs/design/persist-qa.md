@@ -5,35 +5,24 @@ Enable the `@quality` bot to write QA documents under `docs/qa/...` using `run_s
 
 ## Core Interaction Model
 The workflow strictly separates file creation/editing from persistence:
-1. **File Modification:** The `@quality` bot uses its authorized `run_shell` action to write or edit QA artifacts (e.g., test plans, QA reports) under the `docs/qa/` directory.
-2. **Persistence:** The `@quality` bot invokes the `persist_qa` action. This action takes no payload parameters (no path, no content). It strictly acts as a trigger to commit and push whatever existing uncommitted changes are present in the `docs/qa/` directory.
+1. **File Modification:** The `@quality` bot uses its authorized `run_shell` action to create or edit files in `docs/qa/`. It verifies the results locally.
+2. **Persistence:** Once verified, the `@quality` bot calls the `persist_qa` action. This action does *not* accept file paths or contents; it simply acts as a trigger to commit whatever uncommitted changes exist in `docs/qa/`.
 
-## Implementation Seams
+## Architecture & Wiring
 
-To implement this feature end-to-end, changes are required across the following repository boundaries:
+### 1. Protocol Definition (`src/utils/agent_protocol.ts`)
+The JSON protocol schema definition. The `persist_qa` action is defined here as a valid literal action type.
 
-### 1. Prompt Content (`prompts/quality.md`)
-- Update the system prompt for the `@quality` persona.
-- Explain the two-step workflow: first use `run_shell` to write files to `docs/qa/...`, then use `persist_qa` to persist them.
-- Clarify that `persist_qa` takes no arguments and only saves files in the `docs/qa/` directory.
+### 2. Runtime Execution (`src/utils/agent_runner.ts`)
+The `agent_runner.ts` file acts as the execution seam, translating JSON protocol objects into system effects. It must handle the `persist_qa` action by executing a restricted git commit scoped specifically to `docs/qa/`.
 
-### 2. Manifest and Configuration (`bots.json`, `src/bots/bot_config.ts`)
-- **`bots.json`**: Update the `@quality` bot manifest to include the new `persist_qa` action in its authorized toolset. Ensure it also retains access to `run_shell` for the file-writing step.
-- **`src/bots/bot_config.ts`**: Ensure the configuration schema and parsing correctly load the new action for the `@quality` bot.
+### 3. Bot Capability Wiring
+We must authorize the `@quality` bot to use the `persist_qa` action, ensuring other bots do not use it inappropriately.
 
-### 3. Protocol and Schema (`src/utils/agent_protocol.ts`)
-- Define the schema for the `persist_qa` action.
-- The schema must specify that `persist_qa` takes no arguments (e.g., `{ "type": "persist_qa" }` with no `path` or `content` fields).
+- **`src/personas/task_persona.ts`**: Contains the bot instructions. We update the rules for `@quality` to instruct it to use `persist_qa` instead of `persist_work` when finalizing QA tasks, and list `persist_qa` as an available action.
+- **`src/bots/bot_config.ts`**: Maps actions to bots. The `persist_qa` action must be enabled specifically for the `@quality` bot.
 
-### 4. Runtime Execution (`src/utils/agent_runner.ts`)
-- Implement the execution logic for the `persist_qa` action.
-- The runner must recognize the action and invoke the persistence layer.
-
-### 5. Runtime Wiring (`src/personas/task_persona.ts`)
-- Wire the `persist_qa` action into the runtime environment for the `@quality` persona.
-- Ensure the persona context makes the tool available when executing tasks.
-
-### 6. Persistence Behavior (`src/utils/persistence.ts`)
-- Implement the actual persistence mechanics for `persist_qa`.
-- The logic must specifically restrict the git add/commit/push operations to the `docs/qa/` directory.
-- It should fail or warn if invoked when there are no changes in `docs/qa/`.
+## Security and Constraints
+- The `persist_qa` action takes no arguments.
+- The runtime implementation (`agent_runner.ts`) must enforce that only paths starting with `docs/qa/` are staged and committed.
+- The action will fail if changes outside `docs/qa/` are present or if no changes exist in `docs/qa/`.
