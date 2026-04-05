@@ -57,11 +57,17 @@ describe("bot_config", () => {
 			"if implementation uncovers a missing step or architectural omission, send the work back to `@product-architect` or `@planner`",
 		);
 		expect(overseer.prompt.concatenatedPrompt).toContain(
+			"route directly to planning when it is grounded in the current repository and does not leave unresolved product decisions",
+		);
+		expect(overseer.prompt.concatenatedPrompt).toContain(
 			"you may send a repaired task back to that same specialist instead of escalating immediately to human review",
 		);
 		expect(overseer.prompt.concatenatedPrompt).toContain(
 			"do not frame design repair as a literal search-and-replace task unless you have verified the stale text actually appears in the artifact",
 		);
+		expect(
+			getBotOrThrow(registry, "product-architect").prompt.concatenatedPrompt,
+		).toContain("make the design implementation-ready when possible");
 	});
 
 	it("exposes overseer and task bots through the registry", () => {

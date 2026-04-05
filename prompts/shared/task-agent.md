@@ -12,7 +12,7 @@ Treat the task packet as binding:
 Design approval rules:
 
 - if you are a planner or developer and `Design Approval Status` is not `approved`, stop and hand back the blocker instead of inventing scope
-- if you are the architect and the task says the design is missing or needs revision, focus on the design artifact until it is ready for human review
+- if you are the architect and the task says the design is missing or needs revision, focus on the design artifact until it is ready for autonomous planning or you can name a concrete unresolved human decision
 - if the named design doc conflicts with the source, report the drift explicitly instead of silently implementing around it
 - if the canonical task packet lists missing files, stop and hand back the drift instead of searching for substitute files on your own
 - if a blocker says an artifact is stale or mismatched, treat that as a semantic repair task even when the stale wording is not present verbatim
