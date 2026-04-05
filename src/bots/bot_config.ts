@@ -32,6 +32,7 @@ interface RawBotDefinition {
 	};
 	prompt_files?: string[];
 	allow_persist_work?: boolean;
+	allow_persist_qa?: boolean;
 	require_post_persist_verification?: boolean;
 	max_iterations?: number;
 	max_actions_per_turn?: number;
@@ -53,6 +54,7 @@ export interface LoadedBotDefinition {
 	};
 	shellAccess: ShellAccess;
 	allowPersistWork: boolean;
+	allowPersistQa: boolean;
 	requirePostPersistVerification: boolean;
 	maxIterations: number;
 	maxActionsPerTurn: number;
@@ -146,6 +148,7 @@ function loadBotDefinition(
 		`${id}.llm.model`,
 	);
 	const allowPersistWork = Boolean(rawBot.allow_persist_work);
+	const allowPersistQa = Boolean(rawBot.allow_persist_qa);
 	const requirePostPersistVerification =
 		rawBot.require_post_persist_verification ?? true;
 	const maxIterations = parsePositiveInteger(
@@ -174,12 +177,14 @@ function loadBotDefinition(
 		},
 		shellAccess,
 		allowPersistWork,
+		allowPersistQa,
 		requirePostPersistVerification,
 		maxIterations,
 		maxActionsPerTurn,
 		prompt: loadPromptAssembly(repoRoot, promptFiles, {
 			shellAccess,
 			allowPersistWork,
+			allowPersistQa,
 			requirePostPersistVerification,
 			maxActionsPerTurn,
 		}),
@@ -192,6 +197,7 @@ function loadPromptAssembly(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		allowPersistQa: boolean;
 		requirePostPersistVerification: boolean;
 		maxActionsPerTurn: number;
 	},
@@ -228,6 +234,7 @@ function renderPromptTemplate(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		allowPersistQa: boolean;
 		requirePostPersistVerification: boolean;
 		maxActionsPerTurn: number;
 	},
@@ -320,6 +327,7 @@ function buildAvailableActionsBullets(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		allowPersistQa: boolean;
 		requirePostPersistVerification: boolean;
 	},
 ): string {
@@ -374,6 +382,15 @@ function buildAvailableActionsBullets(
 		);
 	}
 
+	if (context.allowPersistQa) {
+		bullets.push(
+			loadPromptFile(
+				"prompts/partials/available-actions/persist-qa-enabled.md",
+				repoRoot,
+			).trim(),
+		);
+	}
+
 	return bullets.join("\n");
 }
 
@@ -382,6 +399,7 @@ function buildExampleActionsJson(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		allowPersistQa: boolean;
 		requirePostPersistVerification: boolean;
 		maxActionsPerTurn: number;
 	},
@@ -405,6 +423,7 @@ function buildShellActionRules(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		allowPersistQa: boolean;
 		requirePostPersistVerification: boolean;
 	},
 ): string {
@@ -426,6 +445,7 @@ function buildPostPersistCompletionRules(
 	context: {
 		shellAccess: ShellAccess;
 		allowPersistWork: boolean;
+		allowPersistQa: boolean;
 		requirePostPersistVerification: boolean;
 	},
 ): string {

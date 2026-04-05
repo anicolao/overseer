@@ -91,15 +91,19 @@ describe("bot_config", () => {
 		const registry = loadBotRegistry();
 
 		expect(getBotOrThrow(registry, "overseer").kind).toBe("overseer");
-		expect(getBotOrThrow(registry, "quality").shellAccess).toBe("read_only");
+		expect(getBotOrThrow(registry, "quality").shellAccess).toBe("read_write");
 		expect(getBotOrThrow(registry, "quality").allowPersistWork).toBe(false);
+		expect(getBotOrThrow(registry, "quality").allowPersistQa).toBe(true);
 		expect(
 			getBotOrThrow(registry, "quality").requirePostPersistVerification,
 		).toBe(true);
 		expect(getBotOrThrow(registry, "overseer").maxActionsPerTurn).toBe(2);
 		expect(
 			getBotOrThrow(registry, "quality").prompt.concatenatedPrompt,
-		).toContain("- `run_shell` is unavailable to this bot.");
+		).not.toContain("- `run_shell` is unavailable to this bot.");
+		expect(
+			getBotOrThrow(registry, "quality").prompt.concatenatedPrompt,
+		).toContain(`"type":"persist_qa"`);
 		expect(registry.all).toHaveLength(5);
 	});
 });

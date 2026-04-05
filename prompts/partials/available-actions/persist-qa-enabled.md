@@ -1,0 +1,1 @@
+- `{"type":"persist_qa"}` to publish local QA reports and updates once verification is complete.
