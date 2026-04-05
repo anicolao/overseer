@@ -10,6 +10,7 @@ describe("bot_config", () => {
 		expect(developer.kind).toBe("task");
 		expect(developer.shellAccess).toBe("read_write");
 		expect(developer.allowPersistWork).toBe(true);
+		expect(developer.allowPersistQa).toBe(false);
 		expect(developer.requirePostPersistVerification).toBe(false);
 		expect(developer.maxActionsPerTurn).toBe(2);
 		expect(developer.prompt.promptFiles).toContain(
@@ -68,15 +69,19 @@ describe("bot_config", () => {
 		const registry = loadBotRegistry();
 
 		expect(getBotOrThrow(registry, "overseer").kind).toBe("overseer");
-		expect(getBotOrThrow(registry, "quality").shellAccess).toBe("read_only");
+		expect(getBotOrThrow(registry, "quality").shellAccess).toBe("read_write");
 		expect(getBotOrThrow(registry, "quality").allowPersistWork).toBe(false);
+		expect(getBotOrThrow(registry, "quality").allowPersistQa).toBe(true);
 		expect(
 			getBotOrThrow(registry, "quality").requirePostPersistVerification,
-		).toBe(true);
+		).toBe(false);
 		expect(getBotOrThrow(registry, "overseer").maxActionsPerTurn).toBe(2);
 		expect(
 			getBotOrThrow(registry, "quality").prompt.concatenatedPrompt,
-		).toContain("- `run_shell` is unavailable to this bot.");
+		).toContain('"type":"persist_qa"');
+		expect(
+			getBotOrThrow(registry, "quality").prompt.concatenatedPrompt,
+		).toContain("use `run_shell` to write detailed QA notes");
 		expect(registry.all).toHaveLength(5);
 	});
 });

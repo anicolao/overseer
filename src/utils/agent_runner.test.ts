@@ -165,6 +165,67 @@ describe("AgentRunner", () => {
 		expect(result.log).toContain('"commit_sha": "abc123"');
 	});
 
+	it("executes persist_qa actions through the injected callback", async () => {
+		const responses = [
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Write QA notes.", "Persist QA notes.", "Return control."],
+				next_step: "Persist the QA notes.",
+				actions: [{ type: "persist_qa" }],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Write QA notes.", "Persist QA notes.", "Return control."],
+				next_step: "Return control to the dispatcher.",
+				actions: [],
+				task_status: "done",
+				final_response: "Persisted the QA notes for Overseer review.",
+			}),
+		];
+
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage() {
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner(
+			makeFakeShell(async () => ({
+				stdout: "",
+				stderr: "",
+				exitCode: 0,
+			})),
+		);
+		const result = await runner.runAutonomousLoop(
+			gemini as never,
+			"System instruction",
+			"Initial message",
+			5,
+			{
+				persistQa: async () => ({
+					ok: true,
+					branch: "bot/issue-35",
+					commit_sha: "qa123",
+					changed_files: ["docs/qa/report.md"],
+					message: "Persisted QA successfully.",
+				}),
+			},
+		);
+
+		expect(result.finalResponse).toContain("Persisted the QA notes");
+		expect(result.log).toContain('"commit_sha": "qa123"');
+		expect(result.log).toContain("docs/qa/report.md");
+	});
+
 	it("does not post github_comment status updates during the loop", async () => {
 		const responses = [
 			JSON.stringify({

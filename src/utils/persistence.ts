@@ -277,6 +277,220 @@ export class PersistenceService {
 		};
 	}
 
+	async persistQa(
+		issueNumber: number,
+		persona: string,
+	): Promise<PersistWorkResult> {
+		const branch = this.getBranchName(issueNumber);
+		try {
+			await this.runGit(
+				["fetch", "origin", branch],
+				"persistence.fetchBranch",
+				{
+					branch,
+				},
+			);
+		} catch (error) {
+			return this.makeErrorResult(
+				branch,
+				"branch_fetch_failed",
+				"Failed to fetch the target issue branch before persisting QA work.",
+				error,
+			);
+		}
+
+		const currentBranchResult = await this.runGit(
+			["rev-parse", "--abbrev-ref", "HEAD"],
+			"persistence.currentBranch",
+		);
+		const currentBranch = currentBranchResult.stdout.trim();
+		if (currentBranch !== branch) {
+			return {
+				ok: false,
+				branch,
+				error_code: "wrong_branch",
+				message: `QA persistence must run on ${branch}, but the current branch is ${currentBranch}.`,
+				details: {
+					current_branch: currentBranch,
+				},
+			};
+		}
+
+		const aheadCount = await this.getAheadCount(branch);
+		if (aheadCount > 0) {
+			const pushedFiles = await this.getChangedFilesAgainstRemote(branch);
+			const nonQaAheadFiles = pushedFiles.filter(
+				(path) => !this.isQaPath(path),
+			);
+			if (nonQaAheadFiles.length > 0) {
+				return {
+					ok: false,
+					branch,
+					error_code: "non_qa_changes",
+					message:
+						"persist_qa may only push commits whose changed files stay under docs/qa/.",
+					details: {
+						changed_files: pushedFiles,
+						non_qa_changed_files: nonQaAheadFiles,
+					},
+				};
+			}
+		}
+
+		try {
+			await this.stageQaChanges(branch);
+		} catch (error) {
+			return this.makeErrorResult(
+				branch,
+				"stage_failed",
+				"Failed to stage docs/qa changes for QA persistence.",
+				error,
+			);
+		}
+
+		const changedFiles = await this.getStagedChangedPaths();
+		const nonQaStagedFiles = changedFiles.filter(
+			(path) => !this.isQaPath(path),
+		);
+		if (nonQaStagedFiles.length > 0) {
+			return {
+				ok: false,
+				branch,
+				error_code: "non_qa_changes",
+				message: "persist_qa may only persist staged changes under docs/qa/.",
+				details: {
+					changed_files: changedFiles,
+					non_qa_changed_files: nonQaStagedFiles,
+				},
+			};
+		}
+
+		if (changedFiles.length === 0 && aheadCount === 0) {
+			return {
+				ok: false,
+				branch,
+				error_code: "no_changes",
+				message: "No docs/qa changes are available to persist.",
+			};
+		}
+
+		if (changedFiles.length === 0 && aheadCount > 0) {
+			const commitSha = (
+				await this.runGit(["rev-parse", "HEAD"], "persistence.commitSha")
+			).stdout.trim();
+			const pushedFiles = await this.getChangedFilesAgainstRemote(branch);
+			const pushResult = await this.runGitAllowFailure(
+				["push", "origin", `HEAD:${branch}`],
+				"persistence.pushExistingQaCommits",
+				{ branch, commitSha, changedFiles: pushedFiles, aheadCount },
+			);
+			if (pushResult.exitCode !== 0) {
+				const remoteHead = await this.getRemoteHead(branch);
+				return {
+					ok: false,
+					branch,
+					error_code: this.classifyPushFailure(pushResult.stderr),
+					message:
+						"Failed to push local QA commits that are ahead of the issue branch.",
+					details: {
+						stdout: pushResult.stdout,
+						stderr: pushResult.stderr,
+						local_commit_sha: commitSha,
+						remote_branch_head: remoteHead,
+						changed_files: pushedFiles,
+						ahead_count: aheadCount,
+					},
+				};
+			}
+			return {
+				ok: true,
+				branch,
+				commit_sha: commitSha,
+				changed_files: pushedFiles,
+				message: `Pushed ${aheadCount} existing QA commit(s) to ${branch}.`,
+			};
+		}
+
+		const commitMessage = `${persona}: issue #${issueNumber} persist qa`;
+		const commitResult = await this.runGitAllowFailure(
+			["commit", "-m", commitMessage],
+			"persistence.commitQa",
+			{ branch, changedFiles, persona },
+		);
+		if (commitResult.exitCode !== 0) {
+			const commitOutput = [commitResult.stdout, commitResult.stderr]
+				.filter(Boolean)
+				.join("\n");
+			if (commitOutput.includes("nothing to commit")) {
+				return {
+					ok: false,
+					branch,
+					error_code: "no_changes",
+					message: "No docs/qa changes remained to commit.",
+					details: {
+						changed_files: changedFiles,
+					},
+				};
+			}
+			return {
+				ok: false,
+				branch,
+				error_code: "commit_failed",
+				message: "Failed to create a commit for the QA artifact changes.",
+				details: {
+					stdout: commitResult.stdout,
+					stderr: commitResult.stderr,
+					changed_files: changedFiles,
+				},
+			};
+		}
+
+		let commitSha = "";
+		try {
+			commitSha = (
+				await this.runGit(["rev-parse", "HEAD"], "persistence.commitSha")
+			).stdout.trim();
+		} catch (error) {
+			return this.makeErrorResult(
+				branch,
+				"commit_sha_failed",
+				"Created a QA commit, but failed to resolve the resulting commit SHA.",
+				error,
+				{ changed_files: changedFiles },
+			);
+		}
+
+		const pushResult = await this.runGitAllowFailure(
+			["push", "origin", `HEAD:${branch}`],
+			"persistence.pushQa",
+			{ branch, commitSha, changedFiles },
+		);
+		if (pushResult.exitCode !== 0) {
+			const remoteHead = await this.getRemoteHead(branch);
+			return {
+				ok: false,
+				branch,
+				error_code: this.classifyPushFailure(pushResult.stderr),
+				message: "Failed to push the local QA commit to the issue branch.",
+				details: {
+					stdout: pushResult.stdout,
+					stderr: pushResult.stderr,
+					local_commit_sha: commitSha,
+					remote_branch_head: remoteHead,
+					changed_files: changedFiles,
+				},
+			};
+		}
+
+		return {
+			ok: true,
+			branch,
+			commit_sha: commitSha,
+			changed_files: changedFiles,
+			message: `Persisted ${changedFiles.length} QA file(s) to ${branch}.`,
+		};
+	}
+
 	private getBranchName(issueNumber: number): string {
 		return `bot/issue-${issueNumber}`;
 	}
@@ -296,6 +510,21 @@ export class PersistenceService {
 		);
 	}
 
+	private async stageQaChanges(branch: string): Promise<void> {
+		const status = await this.runGitAllowFailure(
+			["status", "--porcelain", "--untracked-files=all", "--", "docs/qa"],
+			"persistence.qaStatus",
+			{ branch },
+		);
+		if (status.exitCode !== 0 || status.stdout.trim().length === 0) {
+			return;
+		}
+
+		await this.runGit(["add", "-A", "--", "docs/qa"], "persistence.stageQa", {
+			branch,
+		});
+	}
+
 	private async getStagedChangedPaths(): Promise<string[]> {
 		const result = await this.runGit(
 			["diff", "--cached", "--name-only", "-z"],
@@ -308,6 +537,10 @@ export class PersistenceService {
 
 	private isIgnoredPath(path: string): boolean {
 		return path.startsWith(".backstop/") || /^session_.*\.log$/.test(path);
+	}
+
+	private isQaPath(path: string): boolean {
+		return path === "docs/qa" || path.startsWith("docs/qa/");
 	}
 
 	private async remoteBranchExists(branchName: string): Promise<boolean> {

@@ -84,6 +84,7 @@ export class TaskPersona {
 			canonicalTaskBodyRaw: taskPromptBody,
 			shellAccess: this.bot.shellAccess,
 			allowPersistWork: this.bot.allowPersistWork,
+			allowPersistQa: this.bot.allowPersistQa,
 			maxIterations: this.bot.maxIterations,
 			maxActionsPerTurn: this.bot.maxActionsPerTurn,
 			llm: this.bot.llm,
@@ -103,6 +104,9 @@ export class TaskPersona {
 			},
 			persistWork: this.bot.allowPersistWork
 				? () => this.persistence.persistWork(issueNumber, this.bot.id)
+				: undefined,
+			persistQa: this.bot.allowPersistQa
+				? () => this.persistence.persistQa(issueNumber, this.bot.id)
 				: undefined,
 		};
 

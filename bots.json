@@ -71,13 +71,14 @@
 			"id": "quality",
 			"display_name": "Quality",
 			"kind": "task",
-			"shell_access": "read_only",
+			"shell_access": "read_write",
 			"allow_persist_work": false,
+			"allow_persist_qa": true,
+			"require_post_persist_verification": false,
 			"max_iterations": 8,
-			"max_actions_per_turn": 1,
+			"max_actions_per_turn": 2,
 			"prompt_files": [
 				"prompts/shared/task-agent.md",
-				"prompts/shared/read-only-agent.md",
 				"prompts/quality.md"
 			]
 		}

@@ -1,0 +1,1 @@
+- `{"type":"persist_qa"}` for restricted persistence of existing `docs/qa/` changes when your bot is authorized for QA artifact publishing.

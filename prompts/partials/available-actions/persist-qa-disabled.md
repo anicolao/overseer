@@ -1,0 +1,1 @@
+- `persist_qa` is not available to this bot unless the dispatcher explicitly enables restricted QA artifact persistence.
