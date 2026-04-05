@@ -1,41 +1,24 @@
 # Technical Design: `persist_qa` Action
 
 ## Objective
-Introduce a `persist_qa` action that saves quality assurance output directly to `docs/qa/...` and grant the `@quality` bot access to this action as well as `run_shell` to allow running test commands.
+Introduce a `persist_qa` action to persist quality assurance artifacts and results, and ensure the `@quality` bot has appropriate capabilities.
 
-## Motivation
-Currently, quality assurance outputs might not be structured or persisted effectively by the `@quality` bot. By giving it dedicated permissions to persist QA results via a specific action and execute tests via `run_shell`, we can ensure consistent documentation and feedback loops.
+## Architecture & Implementation Seams
 
-## Requirements
-1.  **New Action `persist_qa`**:
-    *   Added to `ActionType` in `src/utils/agent_protocol.ts`.
-    *   Takes arguments `content` (string) and `path` (string, defaults to `docs/qa/latest.md` or similar).
-    *   Implemented in `src/utils/agent_runner.ts` under the action handler.
-2.  **Bot Capability**:
-    *   The `@quality` bot needs authorization to use both `persist_qa` and `run_shell`. This requires changes in `src/bots/bot_config.ts`.
-3.  **Persona Updates**:
-    *   `src/personas/task_persona.ts` (or the quality bot's specific persona file) needs to describe the `persist_qa` action and when to use it.
+To implement this feature end-to-end, changes are required across the following boundaries:
 
-## Implementation Details
+### 1. Prompt Content (`prompts/quality.md`)
+The system prompt for the quality bot must be updated to explain the existence, purpose, and usage of the `persist_qa` action. It should instruct the bot to save its test plans and validation results using this action.
 
-### 1. `src/utils/agent_protocol.ts`
-Add `persist_qa` to the `ActionType` enum/type.
+### 2. Manifest & Configuration (`bots.json` & `src/bots/bot_config.ts`)
+- **`bots.json`**: The `@quality` bot's configuration block must be updated to grant it the capability to perform the `persist_qa` and `run_shell` actions. (Note: Permissions must use the native schema properties defined in the project; no fictional `allowed_actions` field will be used).
+- **`src/bots/bot_config.ts`**: The types and configuration parsing logic must support the new bot manifest definitions to ensure the `@quality` bot correctly inherits the new action capabilities at config load time.
 
-### 2. `src/utils/agent_runner.ts`
-Implement the `persist_qa` handler. It should:
-*   Ensure the directory exists.
-*   Write the `content` to the `path`.
+### 3. Protocol / Schema (`src/utils/agent_protocol.ts`)
+The `persist_qa` action needs to be formally defined in the agent protocol schema. This includes defining the action type and its expected payload parameters (e.g., target file path under `docs/qa/` and the file content).
 
-### 3. `src/bots/bot_config.ts`
-Update the `BotConfig` for the `@quality` bot to include both `persist_qa` and `run_shell` in its `allowed_actions`.
+### 4. Runtime Execution (`src/utils/agent_runner.ts`)
+The core execution loop must be extended to process the `persist_qa` action when yielded by an agent. This involves reading the payload from the protocol, performing the file system write operation to the appropriate directory, and returning the result to the agent.
 
-### 4. `src/personas/task_persona.ts`
-Add the JSON schema and rules for using `persist_qa`.
-
-## Quality Bot Prompt Updates (`src/personas/task_persona.ts`)
-To ensure the quality bot correctly utilizes the `persist_qa` action, its persona prompt in `src/personas/task_persona.ts` must be updated. Specifically, the prompt must explicitly instruct the quality bot to format its final output as the payload for a `persist_qa` action, rather than using `persist_work` or outputting unstructured text.
-
-The prompt addition will include:
-- Explicit instructions that the final deliverable must be a `persist_qa` action.
-- Clarification that the `persist_qa` action requires the QA summary, test findings, and the file path to save the report (e.g., under `docs/qa/`).
-- Emphasis that the `@quality` bot should *not* use `persist_work` for QA artifacts, as `persist_qa` is tailored to save structured verification documents.
+### 5. Runtime Wiring (`src/personas/task_persona.ts`)
+The persona wiring logic must correctly hook the `persist_qa` action into the runtime environment for the `@quality` bot. This ensures the configuration and the protocol are connected so the agent runner actually invokes the new action handler when requested by the `@quality` persona.
