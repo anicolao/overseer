@@ -124,6 +124,10 @@ export class TaskPersona {
 			taskPacket.designApprovalStatus === "needs_revision"
 		) {
 			const artifact = taskPacket.designFile || "the design artifact";
+			const hasQualityBotCorrection =
+				taskPacket.humanCorrection?.includes("prompts/quality.md") ||
+				taskPacket.humanCorrection?.includes("bots.json") ||
+				taskPacket.humanCorrection?.includes("allowed_actions");
 			return [
 				"REPAIR EXECUTION NOTE:",
 				"- This is a semantic design-repair task.",
@@ -132,6 +136,17 @@ export class TaskPersona {
 				`- After you inspect the named files once, rewrite the affected sections in ${artifact} so they name the real files, symbols, and seams from the current repository.`,
 				"- Do not spend multiple turns searching for literal stale strings.",
 				"- A no-op search or replace does not satisfy the task; you must leave a real diff in the design artifact or report a blocker.",
+				...(hasQualityBotCorrection
+					? [
+							"- Before finishing, verify that the revised design explicitly covers all of these repository seams:",
+							"  - prompt content in prompts/quality.md",
+							"  - manifest/config in bots.json and src/bots/bot_config.ts",
+							"  - protocol/schema in src/utils/agent_protocol.ts",
+							"  - runtime execution in src/utils/agent_runner.ts",
+							"  - runtime wiring in src/personas/task_persona.ts",
+							"- Remove any claim that permissions are configured with allowed_actions unless that field exists in the current source.",
+						]
+					: []),
 				"",
 				canonicalTaskBody,
 			].join("\n");

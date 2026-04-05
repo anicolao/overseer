@@ -24,6 +24,21 @@ describe("extractRepoPathMentions", () => {
 			"src/bots/bot_config.ts",
 		]);
 	});
+
+	it("strips trailing punctuation from extracted repo paths", () => {
+		const paths = extractRepoPathMentions(
+			[
+				"@overseer still wrong.",
+				"Read `prompts/quality.md`, `bots.json`, and `src/personas/task_persona.ts`.",
+			].join(" "),
+		);
+
+		expect(paths).toEqual([
+			"prompts/quality.md",
+			"bots.json",
+			"src/personas/task_persona.ts",
+		]);
+	});
 });
 
 describe("extractQuotedCorrectionMentions", () => {
