@@ -37,7 +37,7 @@ function appendGithubOutput(key: string, value: string): void {
 	fs.appendFileSync(outputPath, `${key}=${value}\n`);
 }
 
-function extractRepoPathsForDirectRepair(text: string): string[] {
+export function extractRepoPathsForDirectRepair(text: string): string[] {
 	const matches = text.matchAll(
 		/(?:^|[`(\s])((?:src|prompts|docs)\/[A-Za-z0-9_./-]+|bots\.json|AGENTS\.md)(?=$|[`),.\s])/g,
 	);
@@ -51,20 +51,24 @@ function extractRepoPathsForDirectRepair(text: string): string[] {
 	return [...paths];
 }
 
-function extractDesignDocPathForDirectRepair(text: string): string | null {
+export function extractDesignDocPathForDirectRepair(
+	text: string,
+): string | null {
 	const match = text.match(
 		/(?:^|[`(\s])((?:docs\/(?:design|architecture)\/[A-Za-z0-9_./-]+\.md))(?=$|[`),.\s])/i,
 	);
 	return match?.[1]?.trim().replace(/[.,:;]+$/, "") || null;
 }
 
-function buildPlanPathFromDesignFile(designFile: string): string {
+export function buildPlanPathFromDesignFile(designFile: string): string {
 	return designFile
 		.replace(/^docs\/design\//, "docs/plans/")
 		.replace(/^docs\/architecture\//, "docs/plans/");
 }
 
-function shouldBypassOverseerForDirectDesignRepair(body: string): boolean {
+export function shouldBypassOverseerForDirectDesignRepair(
+	body: string,
+): boolean {
 	return (
 		hasExplicitPersonaMention(body, "@overseer") &&
 		/design/i.test(body) &&
@@ -74,7 +78,7 @@ function shouldBypassOverseerForDirectDesignRepair(body: string): boolean {
 	);
 }
 
-function shouldBypassOverseerForApprovedDesign(body: string): boolean {
+export function shouldBypassOverseerForApprovedDesign(body: string): boolean {
 	return (
 		hasExplicitPersonaMention(body, "@overseer") &&
 		/design/i.test(body) &&
@@ -83,7 +87,20 @@ function shouldBypassOverseerForApprovedDesign(body: string): boolean {
 	);
 }
 
-function buildDirectDesignRepairIterationResult(body: string): IterationResult {
+export function shouldBypassOverseerForArchitectPlanningReady(
+	body: string,
+	automatedPersona: string | undefined,
+): boolean {
+	return (
+		automatedPersona === "Product/Architect" &&
+		/planning can proceed autonomously|implementation-ready/i.test(body) &&
+		Boolean(extractDesignDocPathForDirectRepair(body))
+	);
+}
+
+export function buildDirectDesignRepairIterationResult(
+	body: string,
+): IterationResult {
 	const designFile =
 		extractDesignDocPathForDirectRepair(body) || "docs/design/persist-qa.md";
 	const filesToRead = Array.from(
@@ -115,7 +132,7 @@ function buildDirectDesignRepairIterationResult(body: string): IterationResult {
 	};
 }
 
-function buildDirectDesignApprovalIterationResult(
+export function buildDirectDesignApprovalIterationResult(
 	body: string,
 ): IterationResult {
 	const designFile =
@@ -156,6 +173,44 @@ function buildDirectDesignApprovalIterationResult(
 		finalResponse,
 		handoffTo: "@planner",
 		log: `DIRECT DISPATCH DESIGN APPROVAL\n\n${finalResponse}`,
+	};
+}
+
+export function buildDirectArchitectPlanningIterationResult(
+	body: string,
+): IterationResult {
+	const designFile =
+		extractDesignDocPathForDirectRepair(body) || "docs/design/persist-qa.md";
+	const planFile = buildPlanPathFromDesignFile(designFile);
+	const filesToRead = Array.from(
+		new Set([
+			designFile,
+			...extractRepoPathsForDirectRepair(body),
+			"AGENTS.md",
+		]),
+	);
+	const finalResponse = [
+		"The Product Architect has produced an implementation-ready design. I am routing it directly to the Planner instead of spending another LLM run re-inspecting the same design artifact.",
+		"",
+		"Planner Task:",
+		"Task ID: MVP validation: persist_qa end-to-end",
+		`Design File: ${designFile}`,
+		"Design Approval Status: approved",
+		`Plan File: ${planFile}`,
+		"Files To Read:",
+		...filesToRead.map((path) => `- ${path}`),
+		"Current Step: Create the implementation plan for the approved design.",
+		`Task Summary: Decompose ${designFile} into 2-5 concrete implementation increments grounded in the named repository seams, and write the result to ${planFile}.`,
+		`Done When: ${planFile} exists and describes small implementation increments that preserve the approved design's separation between run_shell writes and persist_qa persistence.`,
+		"Verification:",
+		`- cat ${planFile}`,
+		"Likely Next Step: Delegate the first implementation increment to @developer-tester.",
+	].join("\n");
+
+	return {
+		finalResponse,
+		handoffTo: "@planner",
+		log: `DIRECT DISPATCH ARCHITECT TO PLANNER\n\n${finalResponse}`,
 	};
 }
 
@@ -368,6 +423,30 @@ async function run() {
 				personaNameMap,
 				sender,
 				commentUrl,
+			);
+			return;
+		}
+		if (
+			isAutomatedComment &&
+			activePersona === null &&
+			shouldBypassOverseerForArchitectPlanningReady(
+				body,
+				automatedPersona ?? undefined,
+			)
+		) {
+			appendGithubOutput("persona_executed", "true");
+			appendGithubOutput("executed_persona", "overseer");
+			await finalizeRun(
+				github,
+				owner,
+				repo,
+				issueNumber,
+				"overseer",
+				buildDirectArchitectPlanningIterationResult(body),
+				personaNameMap,
+				sender,
+				commentUrl,
+				automatedPersona ?? undefined,
 			);
 			return;
 		}
@@ -615,7 +694,9 @@ async function finalizeRun(
 	}
 }
 
-run().catch((error) => {
-	console.error("Fatal error in dispatcher:", error);
-	process.exit(1);
-});
+if (process.env.VITEST !== "true") {
+	run().catch((error) => {
+		console.error("Fatal error in dispatcher:", error);
+		process.exit(1);
+	});
+}
