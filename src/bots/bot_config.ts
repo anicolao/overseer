@@ -333,11 +333,23 @@ function buildAvailableActionsBullets(
 	if (context.shellAccess === "read_write") {
 		bullets.push(
 			loadPromptFile(
+				"prompts/partials/available-actions/replace-in-file-enabled.md",
+				repoRoot,
+			).trim(),
+		);
+		bullets.push(
+			loadPromptFile(
 				"prompts/partials/available-actions/run-shell-enabled.md",
 				repoRoot,
 			).trim(),
 		);
 	} else {
+		bullets.push(
+			loadPromptFile(
+				"prompts/partials/available-actions/replace-in-file-disabled.md",
+				repoRoot,
+			).trim(),
+		);
 		bullets.push(
 			loadPromptFile(
 				"prompts/partials/available-actions/run-shell-disabled.md",
@@ -376,7 +388,9 @@ function buildExampleActionsJson(
 ): string {
 	const examplePath =
 		context.shellAccess === "read_write"
-			? "prompts/partials/example-actions/read-write.json"
+			? context.maxActionsPerTurn >= 2
+				? "prompts/partials/example-actions/read-write-2.json"
+				: "prompts/partials/example-actions/read-write.json"
 			: "prompts/partials/example-actions/read-only.json";
 	const actions = JSON.parse(loadPromptFile(examplePath, repoRoot)) as Array<{
 		type: string;

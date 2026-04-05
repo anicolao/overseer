@@ -1,0 +1,1 @@
+- `replace_in_file` is not available to this bot. Stay inside `run_ro_shell` and do not attempt repository writes.

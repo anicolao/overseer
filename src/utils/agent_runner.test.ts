@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -94,13 +94,13 @@ describe("AgentRunner", () => {
 		expect(sentMessages[1]).toContain("ORIGINAL TASK:");
 		expect(sentMessages[1]).toContain("Initial message");
 		expect(sentMessages[1]).toContain("CURRENT ITERATION: 1");
-		expect(sentMessages[1]).toContain("MOST RECENT STRUCTURED RESPONSE:");
-		expect(sentMessages[1]).toContain(
-			'"next_step":"Inspect the repository root."',
-		);
-		expect(sentMessages[1]).toContain("LATEST ACTION OUTPUT:");
-		expect(sentMessages[1]).toContain("hello");
-		expect(sentMessages[1]).toContain("world");
+		expect(sentMessages[1]).toContain("MOST RECENT PLAN:");
+		expect(sentMessages[1]).toContain("- Inspect the repository root.");
+		expect(sentMessages[1]).toContain("MOST RECENT NEXT STEP:");
+		expect(sentMessages[1]).toContain("Inspect the repository root.");
+		expect(sentMessages[1]).toContain("MOST RECENT ACTION RESULTS:");
+		expect(sentMessages[1]).toContain("stdout preview: hello");
+		expect(sentMessages[1]).toContain("stdout preview: world");
 	});
 
 	it("executes persist_work actions through the injected callback", async () => {
@@ -270,6 +270,96 @@ describe("AgentRunner", () => {
 
 		expect(result.log).toContain("run_shell_not_available");
 		expect(result.finalResponse).toContain("Returned control");
+	});
+
+	it("executes replace_in_file actions directly in the repository", async () => {
+		const repoRoot = process.cwd();
+		const tempDir = mkdtempSync(
+			join(repoRoot, ".tmp-overseer-replace-in-file-"),
+		);
+		writeFileSync(join(tempDir, "target.ts"), "const enabled = false;\n");
+		const relativePath = `${tempDir.slice(repoRoot.length + 1)}/target.ts`;
+		const responses = [
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Update the file.", "Persist the change.", "Return control."],
+				next_step: "Update the file.",
+				actions: [
+					{
+						type: "replace_in_file",
+						path: relativePath,
+						old_string: "const enabled = false;",
+						new_string: "const enabled = true;",
+					},
+				],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Update the file.", "Persist the change.", "Return control."],
+				next_step: "Persist the change.",
+				actions: [{ type: "persist_work" }],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Update the file.", "Persist the change.", "Return control."],
+				next_step: "Return control.",
+				actions: [],
+				task_status: "done",
+				final_response: "Updated and persisted the file.",
+			}),
+		];
+
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage() {
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner(
+			makeFakeShell(async () => ({
+				stdout: "",
+				stderr: "",
+				exitCode: 0,
+			})),
+		);
+		try {
+			const result = await runner.runAutonomousLoop(
+				gemini as never,
+				"System instruction",
+				"Initial message",
+				6,
+				{
+					shellAccess: "read_write",
+					maxActionsPerTurn: 1,
+					requirePostPersistVerification: false,
+					persistWork: async () => ({
+						ok: true,
+						branch: "bot/issue-35",
+						commit_sha: "abc123",
+						changed_files: [relativePath],
+						message: "Persisted successfully.",
+					}),
+				},
+			);
+
+			expect(result.finalResponse).toBe("Updated and persisted the file.");
+			expect(result.log).toContain('"replacements": 1');
+			expect(readFileSync(join(tempDir, "target.ts"), "utf8")).toContain(
+				"const enabled = true;",
+			);
+		} finally {
+			rmSync(tempDir, { recursive: true, force: true });
+		}
 	});
 
 	it("requires a structured handoff when configured", async () => {
@@ -578,6 +668,79 @@ describe("AgentRunner", () => {
 				message.includes("Persistence succeeded. Run a read-only verification"),
 			),
 		).toBe(false);
+	});
+
+	it("nudges stalled read-only inspection toward action or a blocker", async () => {
+		const responses = [
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect the plan.", "Implement the change."],
+				next_step: "Inspect the plan.",
+				actions: [
+					{ type: "run_ro_shell", command: "cat docs/plans/current.md" },
+				],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect the plan.", "Implement the change."],
+				next_step: "Inspect the target file.",
+				actions: [
+					{ type: "run_ro_shell", command: "sed -n '1,80p' src/file.ts" },
+				],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Return control."],
+				next_step: "Return control.",
+				actions: [],
+				task_status: "done",
+				final_response: "Blocked on missing implementation detail.",
+			}),
+		];
+
+		const sentMessages: string[] = [];
+		const gemini = {
+			startChat() {
+				return {
+					async sendMessage(message: string) {
+						sentMessages.push(message);
+						const next = responses.shift();
+						if (!next) {
+							throw new Error("No more responses queued");
+						}
+						return { text: next, response: { text: () => next } };
+					},
+				};
+			},
+		};
+
+		const runner = new AgentRunner(
+			makeFakeShell(async () => ({
+				stdout: "ok",
+				stderr: "",
+				exitCode: 0,
+			})),
+		);
+		await runner.runAutonomousLoop(
+			gemini as never,
+			"System instruction",
+			"Initial message",
+			5,
+			{
+				shellAccess: "read_only",
+				maxActionsPerTurn: 1,
+			},
+		);
+
+		expect(
+			sentMessages.some((message) =>
+				message.includes(
+					"consecutive turns on read-only inspection without editing",
+				),
+			),
+		).toBe(true);
 	});
 
 	it("repairs repeated no-progress cycles and aborts after continued repetition", async () => {

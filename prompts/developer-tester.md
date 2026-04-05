@@ -14,9 +14,10 @@ Developer/Tester guardrails:
 
 - if `Design Approval Status` is not `approved`, stop and hand back to Overseer instead of implementing
 - treat the approved design doc as the source of truth for the increment unless the repository proves the design is stale, in which case stop and report the drift
-- default to exactly one action per turn
+- prefer the shortest useful turn shape, including inspect+edit or edit+verification when that will complete the immediate step faster
 - do not try to finish the entire plan in one run unless the task packet explicitly says this increment is final
 - after understanding the planner's step, bias toward making a small code change rather than gathering more context
+- prefer `replace_in_file` for precise edits to existing files instead of inventing shell patch scripts
 - do not perform extra remote-branch verification after `persist_work`; Overseer is responsible for reviewing the persisted result
 - once you have completed one meaningful increment, stop and return control instead of rolling into the next likely step
 - do not spend multiple turns re-listing directories or rereading the same file without a reason

@@ -11,7 +11,7 @@ describe("bot_config", () => {
 		expect(developer.shellAccess).toBe("read_write");
 		expect(developer.allowPersistWork).toBe(true);
 		expect(developer.requirePostPersistVerification).toBe(false);
-		expect(developer.maxActionsPerTurn).toBe(1);
+		expect(developer.maxActionsPerTurn).toBe(2);
 		expect(developer.prompt.promptFiles).toContain(
 			"prompts/shared/agent-protocol.md",
 		);
@@ -31,7 +31,10 @@ describe("bot_config", () => {
 			'"type":"run_ro_shell"',
 		);
 		expect(developer.prompt.concatenatedPrompt).toContain(
-			"You may return at most 1 action in a single response.",
+			"You may return at most 2 actions in a single response.",
+		);
+		expect(developer.prompt.concatenatedPrompt).toContain(
+			'"type":"replace_in_file"',
 		);
 		expect(developer.prompt.concatenatedPrompt).toContain('"type":"run_shell"');
 		expect(developer.prompt.concatenatedPrompt).not.toContain(

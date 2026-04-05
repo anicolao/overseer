@@ -23,6 +23,14 @@ export interface RunShellAction {
 	command: string;
 }
 
+export interface ReplaceInFileAction {
+	type: "replace_in_file";
+	path: string;
+	old_string: string;
+	new_string: string;
+	replace_all?: boolean;
+}
+
 export interface PersistWorkAction {
 	type: "persist_work";
 }
@@ -30,6 +38,7 @@ export interface PersistWorkAction {
 export type AgentAction =
 	| RunReadOnlyShellAction
 	| RunShellAction
+	| ReplaceInFileAction
 	| PersistWorkAction;
 
 export interface AgentProtocolResponse {
@@ -51,9 +60,10 @@ export interface ParsedAgentProtocolResponse {
 export interface ContinuationContext {
 	originalTask: string;
 	iteration: number;
-	previousResponseJson: string;
+	previousPlan: string[];
+	previousNextStep: string;
 	previousGithubComment?: string;
-	actionOutput: string;
+	actionResultSummary: string;
 	reminder?: string;
 }
 
@@ -71,9 +81,10 @@ export function buildProtocolRepairMessage(
 export function buildContinuationMessage({
 	originalTask,
 	iteration,
-	previousResponseJson,
+	previousPlan,
+	previousNextStep,
 	previousGithubComment,
-	actionOutput,
+	actionResultSummary,
 	reminder,
 }: ContinuationContext): string {
 	const previousGithubCommentSection = previousGithubComment
@@ -93,9 +104,10 @@ export function buildContinuationMessage({
 	return renderPromptFile("prompts/runtime/continuation.md", {
 		ORIGINAL_TASK: originalTask,
 		ITERATION: String(iteration),
-		PREVIOUS_RESPONSE_JSON: previousResponseJson,
+		PREVIOUS_PLAN: previousPlan.map((step) => `- ${step}`).join("\n"),
+		PREVIOUS_NEXT_STEP: previousNextStep,
 		PREVIOUS_GITHUB_COMMENT_SECTION: previousGithubCommentSection,
-		ACTION_OUTPUT: actionOutput,
+		ACTION_RESULT_SUMMARY: actionResultSummary,
 		REMINDER_SECTION: reminderSection,
 		AGENT_PROTOCOL_VERSION,
 	});
@@ -104,16 +116,18 @@ export function buildContinuationMessage({
 export function buildLoopRepairMessage(input: {
 	originalTask: string;
 	iteration: number;
-	previousResponseJson: string;
-	actionOutput: string;
+	previousPlan: string[];
+	previousNextStep: string;
+	actionResultSummary: string;
 	repeatedCycleCount: number;
 }): string {
 	return renderPromptFile("prompts/runtime/loop-repair.md", {
 		REPEATED_CYCLE_COUNT: String(input.repeatedCycleCount),
 		ORIGINAL_TASK: input.originalTask,
 		ITERATION: String(input.iteration),
-		PREVIOUS_RESPONSE_JSON: input.previousResponseJson,
-		ACTION_OUTPUT: input.actionOutput,
+		PREVIOUS_PLAN: input.previousPlan.map((step) => `- ${step}`).join("\n"),
+		PREVIOUS_NEXT_STEP: input.previousNextStep,
+		ACTION_RESULT_SUMMARY: input.actionResultSummary,
 		AGENT_PROTOCOL_VERSION,
 	});
 }
@@ -345,6 +359,27 @@ function parseAction(value: unknown, index: number): AgentAction {
 		};
 	}
 
+	if (type === "replace_in_file") {
+		return {
+			type: "replace_in_file",
+			path: requireNonEmptyString(record.path, `actions[${index}].path`),
+			old_string: requireNonEmptyString(
+				record.old_string,
+				`actions[${index}].old_string`,
+			),
+			new_string:
+				typeof record.new_string === "string"
+					? record.new_string
+					: (() => {
+							throw new Error(`actions[${index}].new_string must be a string`);
+						})(),
+			replace_all: parseOptionalBoolean(
+				record.replace_all,
+				`actions[${index}].replace_all`,
+			),
+		};
+	}
+
 	if (type === "persist_work") {
 		return {
 			type: "persist_work",
@@ -352,7 +387,7 @@ function parseAction(value: unknown, index: number): AgentAction {
 	}
 
 	throw new Error(
-		`actions[${index}].type must be "run_ro_shell", "run_shell", or "persist_work"`,
+		`actions[${index}].type must be "run_ro_shell", "run_shell", "replace_in_file", or "persist_work"`,
 	);
 }
 
@@ -367,4 +402,17 @@ function parseRequiredPlan(value: unknown): string[] {
 	return value.map((entry, index) =>
 		requireNonEmptyString(entry, `plan[${index}]`),
 	);
+}
+
+function parseOptionalBoolean(
+	value: unknown,
+	fieldName: string,
+): boolean | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (typeof value !== "boolean") {
+		throw new Error(`${fieldName} must be a boolean`);
+	}
+	return value;
 }

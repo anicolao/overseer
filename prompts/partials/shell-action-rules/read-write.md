@@ -1,3 +1,5 @@
 - `run_ro_shell` is the default choice for inspection and verification.
+- Prefer `replace_in_file` for precise text edits to existing files.
 - Use `run_shell` only when you intentionally need to modify repository files or run write-dependent project tooling.
+- Do not create temporary patch scripts when `replace_in_file` can express the edit directly.
 - If the environment is missing a tool you need, edit `flake.nix` and then continue using the shell actions above.
