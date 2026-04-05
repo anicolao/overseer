@@ -13,8 +13,10 @@ import {
 } from "./utils/handoff.js";
 import { PersistenceService } from "./utils/persistence.js";
 import {
+	extractPersonaMentions,
 	getAttribution,
 	hasExplicitPersonaMention,
+	stripMarkdownCode,
 } from "./utils/persona_helper.js";
 import { truncate } from "./utils/text.js";
 import {
@@ -215,16 +217,18 @@ async function run() {
 
 		// 2. Identify target persona
 		let targetedPersona: string | null = null;
-		const nextStepMatch = body.match(/Next step: (@[a-z-]+)/i);
+		const bodyWithoutCodeMentions = extractPersonaMentions(
+			body.replace(/Next step:/gi, "\nNext step: "),
+		);
+		const nextStepMatch = stripNextStepHandle(body);
 		if (nextStepMatch) {
-			targetedPersona = handleMap[nextStepMatch[1].toLowerCase()] || null;
+			targetedPersona = handleMap[nextStepMatch.toLowerCase()] || null;
 		}
 		if (!targetedPersona) {
-			const mentions = body.match(/@[a-z-]+/gi);
-			if (mentions) {
+			if (bodyWithoutCodeMentions.length > 0) {
 				// Search from the end to find the most recent handoff
-				for (let i = mentions.length - 1; i >= 0; i--) {
-					const handle = mentions[i].toLowerCase();
+				for (let i = bodyWithoutCodeMentions.length - 1; i >= 0; i--) {
+					const handle = bodyWithoutCodeMentions[i].toLowerCase();
 					if (handleMap[handle]) {
 						targetedPersona = handleMap[handle];
 						break;
@@ -379,6 +383,12 @@ async function run() {
 			);
 		});
 	}
+}
+
+function stripNextStepHandle(body: string): string | null {
+	const sanitized = stripMarkdownCode(body);
+	const nextStepMatch = sanitized.match(/Next step: (@[a-z-]+)/i);
+	return nextStepMatch?.[1] || null;
 }
 
 async function finalizeRun(
