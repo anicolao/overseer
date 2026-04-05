@@ -98,6 +98,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.OVERSEER_TOKEN || secrets.GITHUB_TOKEN }}
           TRACE_JSONL_PATH: trace_${{ github.run_id }}.jsonl
+          TASK_PERSONA_BACKEND: gemini_cli
+          TASK_PERSONA_CLI_BOTS: product-architect,planner,developer-tester,quality
         run: nix develop --command npx tsx src/dispatch.ts
 
       - name: Persistence Backstop

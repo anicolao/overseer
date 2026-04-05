@@ -7,6 +7,10 @@ import type {
 } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
 import type { GeminiService } from "../utils/gemini.js";
+import {
+	GeminiCliService,
+	shouldUseGeminiCliForTaskBot,
+} from "../utils/gemini_cli.js";
 import type { PersistenceService } from "../utils/persistence.js";
 import {
 	parseTaskPacket,
@@ -20,16 +24,19 @@ export class TaskPersona {
 	private gemini: GeminiService;
 	private persistence: PersistenceService;
 	private runner: AgentRunner;
+	private geminiCli: GeminiCliService;
 
 	constructor(
 		bot: LoadedBotDefinition,
 		gemini: GeminiService,
 		persistence: PersistenceService,
+		geminiCli: GeminiCliService = new GeminiCliService(),
 	) {
 		this.bot = bot;
 		this.gemini = gemini;
 		this.persistence = persistence;
 		this.runner = new AgentRunnerClass();
+		this.geminiCli = geminiCli;
 	}
 
 	async handleTask(
@@ -72,6 +79,21 @@ export class TaskPersona {
 			taskPacket,
 			canonicalTaskBody,
 		);
+
+		if (shouldUseGeminiCliForTaskBot(this.bot.id)) {
+			logTrace("persona.task.cliMode", {
+				botId: this.bot.id,
+				displayName: this.bot.displayName,
+				issueNumber,
+			});
+			return this.geminiCli.runTask({
+				botId: this.bot.id,
+				displayName: this.bot.displayName,
+				systemInstruction: this.bot.prompt.concatenatedPrompt,
+				taskMessage: taskPromptBody,
+				modelName: this.bot.llm.model,
+			});
+		}
 
 		logTrace("persona.task.promptPrepared", {
 			botId: this.bot.id,

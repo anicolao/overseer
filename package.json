@@ -10,7 +10,8 @@
     "lint": "biome check src/",
     "format": "biome format --write src/",
     "bots:inspect": "tsx src/scripts/inspect_bots.ts",
-    "runs:inspect": "tsx src/scripts/inspect_run.ts"
+    "runs:inspect": "tsx src/scripts/inspect_run.ts",
+    "persona:run": "tsx src/scripts/run_task_persona.ts"
   },
   "repository": {
     "type": "git",
@@ -25,6 +26,7 @@
   },
   "homepage": "https://github.com/anicolao/overseer#readme",
   "dependencies": {
+    "@google/gemini-cli": "^0.36.0",
     "@google/generative-ai": "^0.24.1",
     "@octokit/rest": "^22.0.1",
     "@octokit/webhooks-methods": "^6.0.0",

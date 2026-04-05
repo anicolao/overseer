@@ -1,8 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { getBotOrThrow, loadBotRegistry } from "../bots/bot_config.js";
 import { TaskPersona } from "./task_persona.js";
 
+const ORIGINAL_ENV = { ...process.env };
+
 describe("TaskPersona", () => {
+	afterEach(() => {
+		process.env = { ...ORIGINAL_ENV };
+	});
+
 	it("hands impossible task packets back to Overseer before invoking the LLM", async () => {
 		const registry = loadBotRegistry();
 		const bot = getBotOrThrow(registry, "developer-tester");
@@ -107,5 +113,81 @@ describe("TaskPersona", () => {
 		expect(receivedInitialMessage).toContain(
 			"Do not spend multiple turns searching for literal stale strings.",
 		);
+	});
+
+	it("routes matching task bots through Gemini CLI when enabled", async () => {
+		process.env.TASK_PERSONA_BACKEND = "gemini_cli";
+		process.env.TASK_PERSONA_CLI_BOTS = "developer-tester";
+
+		const registry = loadBotRegistry();
+		const bot = getBotOrThrow(registry, "developer-tester");
+		let startChatCalled = false;
+		let cliCalled = false;
+		const gemini = {
+			startChat() {
+				startChatCalled = true;
+				throw new Error("startChat should not be called in CLI mode");
+			},
+		};
+		const persistence = {
+			persistWork: async () => ({
+				ok: true as const,
+				branch: "bot/issue-1",
+				commit_sha: "abc123",
+				changed_files: [],
+				message: "Persisted successfully.",
+			}),
+		};
+		const geminiCli = {
+			runTask: async (options: {
+				botId: string;
+				displayName: string;
+				systemInstruction: string;
+				taskMessage: string;
+			}) => {
+				cliCalled = true;
+				expect(options.botId).toBe("developer-tester");
+				expect(options.displayName).toBe("Developer/Tester");
+				expect(options.systemInstruction).toContain(
+					"If a top-level `WORKFLOW.md` exists",
+				);
+				expect(options.taskMessage).toContain("CANONICAL TASK PACKET:");
+				expect(options.taskMessage).toContain(
+					"Task Summary: Update the runtime seam.",
+				);
+				return {
+					finalResponse: "CLI completed the task.",
+					handoffTo: "@overseer" as const,
+					log: "CLI log",
+				};
+			},
+		};
+		const persona = new TaskPersona(
+			bot,
+			gemini as never,
+			persistence as never,
+			geminiCli as never,
+		);
+
+		const result = await persona.handleTask(
+			"anicolao",
+			"overseer",
+			99,
+			[
+				"Developer Task:",
+				"Task ID: cli-path",
+				"Design File: docs/current-system.md",
+				"Design Approval Status: approved",
+				"Files To Read:",
+				"- src/utils/agent_runner.ts",
+				"Task Summary: Update the runtime seam.",
+				"Done When: A code change is proposed.",
+			].join("\n"),
+		);
+
+		expect(startChatCalled).toBe(false);
+		expect(cliCalled).toBe(true);
+		expect(result.finalResponse).toBe("CLI completed the task.");
+		expect(result.handoffTo).toBe("@overseer");
 	});
 });
