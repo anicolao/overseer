@@ -32,6 +32,7 @@ export function parseNullDelimitedPaths(output: string): string[] {
 export function isIgnoredPersistencePath(path: string): boolean {
 	return (
 		path === "flake.lock" ||
+		path === "package-lock.json" ||
 		path.startsWith(".backstop/") ||
 		/^session_.*\.log$/.test(path)
 	);

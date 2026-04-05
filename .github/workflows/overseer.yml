@@ -89,7 +89,7 @@ jobs:
 
       - name: Install Dependencies
         if: steps.backstop_guard.outputs.skip_workflow != 'true'
-        run: npm ci
+        run: npm install
 
       - name: Run Overseer Dispatcher
         id: dispatcher
