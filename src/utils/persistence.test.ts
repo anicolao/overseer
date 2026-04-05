@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	isIgnoredPersistencePath,
 	parseNullDelimitedPaths,
+	shouldFormatWithBiome,
 } from "./persistence.js";
 
 describe("parseNullDelimitedPaths", () => {
@@ -33,5 +34,18 @@ describe("isIgnoredPersistencePath", () => {
 		expect(isIgnoredPersistencePath("docs/design/persist-qa-mvp.md")).toBe(
 			false,
 		);
+	});
+});
+
+describe("shouldFormatWithBiome", () => {
+	it("formats supported source and documentation files", () => {
+		expect(shouldFormatWithBiome("src/utils/agent_protocol.ts")).toBe(true);
+		expect(shouldFormatWithBiome("docs/design/persist-qa.md")).toBe(true);
+		expect(shouldFormatWithBiome("bots.json")).toBe(true);
+	});
+
+	it("skips unsupported or ignored file types", () => {
+		expect(shouldFormatWithBiome("flake.lock")).toBe(false);
+		expect(shouldFormatWithBiome("session_architect.log")).toBe(false);
 	});
 });

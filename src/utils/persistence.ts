@@ -38,6 +38,10 @@ export function isIgnoredPersistencePath(path: string): boolean {
 	);
 }
 
+export function shouldFormatWithBiome(path: string): boolean {
+	return /\.(?:[cm]?[jt]sx?|json|jsonc|md)$/.test(path);
+}
+
 export class PersistenceService {
 	async ensureIssueBranch(
 		issueNumber: number,
@@ -206,11 +210,26 @@ export class PersistenceService {
 			};
 		}
 
+		try {
+			await this.formatRelevantChanges(changedFiles);
+			await this.stageRelevantChanges(branch);
+		} catch (error) {
+			return this.makeErrorResult(
+				branch,
+				"format_failed",
+				"Failed to format repository changes before persistence.",
+				error,
+				{ changed_files: changedFiles },
+			);
+		}
+
+		const formattedChangedFiles = await this.getStagedChangedPaths();
+
 		const commitMessage = `${persona}: issue #${issueNumber} persist work`;
 		const commitResult = await this.runGitAllowFailure(
 			["commit", "-m", commitMessage],
 			"persistence.commit",
-			{ branch, changedFiles, persona },
+			{ branch, changedFiles: formattedChangedFiles, persona },
 		);
 		if (commitResult.exitCode !== 0) {
 			const commitOutput = [commitResult.stdout, commitResult.stderr]
@@ -223,7 +242,7 @@ export class PersistenceService {
 					error_code: "no_changes",
 					message: "No repository changes remained to commit.",
 					details: {
-						changed_files: changedFiles,
+						changed_files: formattedChangedFiles,
 					},
 				};
 			}
@@ -235,7 +254,7 @@ export class PersistenceService {
 				details: {
 					stdout: commitResult.stdout,
 					stderr: commitResult.stderr,
-					changed_files: changedFiles,
+					changed_files: formattedChangedFiles,
 				},
 			};
 		}
@@ -251,14 +270,14 @@ export class PersistenceService {
 				"commit_sha_failed",
 				"Created a commit, but failed to resolve the resulting commit SHA.",
 				error,
-				{ changed_files: changedFiles },
+				{ changed_files: formattedChangedFiles },
 			);
 		}
 
 		const pushResult = await this.runGitAllowFailure(
 			["push", "origin", `HEAD:${branch}`],
 			"persistence.push",
-			{ branch, commitSha, changedFiles },
+			{ branch, commitSha, changedFiles: formattedChangedFiles },
 		);
 		if (pushResult.exitCode !== 0) {
 			const remoteHead = await this.getRemoteHead(branch);
@@ -272,7 +291,7 @@ export class PersistenceService {
 					stderr: pushResult.stderr,
 					local_commit_sha: commitSha,
 					remote_branch_head: remoteHead,
-					changed_files: changedFiles,
+					changed_files: formattedChangedFiles,
 				},
 			};
 		}
@@ -281,8 +300,8 @@ export class PersistenceService {
 			ok: true,
 			branch,
 			commit_sha: commitSha,
-			changed_files: changedFiles,
-			message: `Persisted ${changedFiles.length} file(s) to ${branch}.`,
+			changed_files: formattedChangedFiles,
+			message: `Persisted ${formattedChangedFiles.length} file(s) to ${branch}.`,
 		};
 	}
 
@@ -316,8 +335,46 @@ export class PersistenceService {
 		);
 	}
 
+	private async formatRelevantChanges(paths: string[]): Promise<void> {
+		const formattablePaths = Array.from(
+			new Set(paths.filter((path) => shouldFormatWithBiome(path))),
+		);
+		if (formattablePaths.length === 0) {
+			return;
+		}
+
+		await this.runCommand(
+			"npx",
+			["biome", "check", "--write", ...formattablePaths],
+			"persistence.biomeWrite",
+			{ formattablePaths },
+		);
+	}
+
 	private isIgnoredPath(path: string): boolean {
 		return isIgnoredPersistencePath(path);
+	}
+
+	private async runCommand(
+		command: string,
+		args: string[],
+		traceEvent: string,
+		context?: Record<string, unknown>,
+	): Promise<GitCommandResult> {
+		logTrace(traceEvent, {
+			command,
+			args,
+			...(context || {}),
+		});
+		const { stdout, stderr } = await execFileAsync(command, args, {
+			encoding: "utf8",
+			maxBuffer: 10 * 1024 * 1024,
+		});
+		return {
+			stdout,
+			stderr,
+			exitCode: 0,
+		};
 	}
 
 	private async remoteBranchExists(branchName: string): Promise<boolean> {
