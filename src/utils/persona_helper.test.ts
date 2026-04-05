@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { hasExplicitPersonaMention, isLimitReached } from "./persona_helper.js";
+import {
+	extractPersonaMentions,
+	hasExplicitPersonaMention,
+	isLimitReached,
+	stripMarkdownCode,
+} from "./persona_helper.js";
 
 describe("hasExplicitPersonaMention", () => {
 	it("detects an explicit overseer mention in issue text", () => {
@@ -22,6 +27,41 @@ describe("hasExplicitPersonaMention", () => {
 				"@overseer",
 			),
 		).toBe(false);
+	});
+
+	it("ignores persona handles inside inline code", () => {
+		expect(
+			hasExplicitPersonaMention(
+				"Use `@overseer` literally in the example, but do not wake it.",
+				"@overseer",
+			),
+		).toBe(false);
+	});
+});
+
+describe("stripMarkdownCode", () => {
+	it("removes inline and fenced code spans", () => {
+		expect(
+			stripMarkdownCode(
+				"Before `@quality` after\n```md\nNext step: @planner\n``` tail",
+			),
+		).toBe("Before   after\n  tail");
+	});
+});
+
+describe("extractPersonaMentions", () => {
+	it("ignores quoted persona handles inside code spans", () => {
+		expect(
+			extractPersonaMentions(
+				[
+					"Wake @overseer for this correction.",
+					"Do not route to `@quality` from this quoted requirement.",
+					"```md",
+					"Next step: @planner",
+					"```",
+				].join("\n"),
+			),
+		).toEqual(["@overseer"]);
 	});
 });
 
