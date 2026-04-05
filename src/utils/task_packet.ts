@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { extractDirectedTask } from "./persona_helper.js";
 
 export interface TaskPacket {
@@ -19,6 +21,7 @@ export interface TaskPacket {
 	verificationCommands: string[];
 	likelyNextStep?: string;
 	supplementalContext?: string;
+	missingFiles: string[];
 }
 
 type StructuredTaskFields = {
@@ -49,6 +52,7 @@ export function parseTaskPacket(body: string): TaskPacket {
 			taskSummary: directedTask,
 			progressEvidence: [],
 			verificationCommands: [],
+			missingFiles: [],
 		};
 	}
 
@@ -68,6 +72,7 @@ export function parseTaskPacket(body: string): TaskPacket {
 		normalizeOptionalValue(parsed.taskSummary) ||
 		supplementalContext ||
 		directedTask;
+	const missingFiles = filesToRead.filter((path) => !pathExistsInRepo(path));
 
 	return {
 		rawBody: body,
@@ -94,6 +99,7 @@ export function parseTaskPacket(body: string): TaskPacket {
 			.filter(Boolean),
 		likelyNextStep: normalizeOptionalValue(parsed.likelyNextStep),
 		supplementalContext: supplementalContext || undefined,
+		missingFiles,
 	};
 }
 
@@ -121,6 +127,9 @@ export function renderTaskPacketForPrompt(packet: TaskPacket): string {
 			packet.verificationCommands.length > 0
 				? packet.verificationCommands.join(" | ")
 				: "none"
+		}`,
+		`- Missing Files: ${
+			packet.missingFiles.length > 0 ? packet.missingFiles.join(", ") : "none"
 		}`,
 		`- Likely Next Step: ${packet.likelyNextStep || "none"}`,
 	];
@@ -311,7 +320,7 @@ function splitFilesToRead(value: string): string[] {
 	}
 	return normalized
 		.split(",")
-		.map((entry) => entry.trim())
+		.map((entry) => normalizePathReference(entry))
 		.filter(Boolean);
 }
 
@@ -324,4 +333,49 @@ function normalizeOptionalValue(value?: string): string | undefined {
 		return undefined;
 	}
 	return trimmed;
+}
+
+function normalizePathReference(value: string): string {
+	const trimmed = value.trim();
+	const match = trimmed.match(/^([A-Za-z0-9._/-]+\/?)/);
+	return match?.[1]?.trim() || trimmed;
+}
+
+function pathExistsInRepo(relativePath: string): boolean {
+	const normalizedPath = relativePath.replace(/\/+$/, "");
+	if (!normalizedPath) {
+		return false;
+	}
+	return existsSync(resolve(process.cwd(), normalizedPath));
+}
+
+export function validateTaskPacketForExecution(packet: TaskPacket): {
+	ok: boolean;
+	missingFiles: string[];
+	message?: string;
+} {
+	if (!packet.hasStructuredHandoff) {
+		return { ok: true, missingFiles: [] };
+	}
+
+	const missingFiles = packet.missingFiles.filter((path) => {
+		if (
+			packet.handoffType === "architect" &&
+			packet.designFile === path &&
+			packet.designApprovalStatus === "missing"
+		) {
+			return false;
+		}
+		return true;
+	});
+
+	if (missingFiles.length === 0) {
+		return { ok: true, missingFiles: [] };
+	}
+
+	return {
+		ok: false,
+		missingFiles,
+		message: `Task packet references files that do not exist in the current repository state: ${missingFiles.join(", ")}. The design or plan does not match the source and must be repaired before this task can continue.`,
+	};
 }
