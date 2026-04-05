@@ -83,6 +83,7 @@ Requirements for Overseer handoffs:
 - if there is no approved design in the issue context, do not delegate implementation
 - route missing or stale artifacts back to the specialist who owns them instead of patching around them in a developer handoff
 - if a previous specialist run failed on the same step, avoid improvising a more detailed technical fix yourself; prefer rerouting to the appropriate specialist or to human review
+- if a specialist times out or reports a blocker that still belongs with that same specialty, you may send a repaired task back to that same specialist instead of escalating immediately to human review
 - every developer task must define `Current Step`, `Smallest Useful Increment`, `Stop After`, and `Done When`
 - every planner or developer task must name an approved `Design File`
 - write `Done When` for the current increment, not the whole issue
