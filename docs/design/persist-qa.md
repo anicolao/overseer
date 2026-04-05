@@ -13,14 +13,14 @@ The implementation integrates the `persist_qa` action into the core agent protoc
     - Add `persist_qa` to the allowed action types within the protocol schema.
     - Define the expected payload (e.g., target file path under `docs/qa/`, and the content to be saved).
 
-2.  **Action Dispatch (`src/dispatch.ts`)**
+2.  **Action Dispatch (`src/utils/agent_protocol.ts`)**
     - Implement the handler for the `persist_qa` action.
     - Ensure the action safely writes the provided content to the specified path under the `docs/qa/` directory.
     - Implement authorization to ensure the `@quality` bot is allowed to invoke this action.
     - Verify that the `@quality` bot is also authorized to use `run_shell` for executing test commands.
 
 ## Integration Seam
-- The overseer/dispatcher (`src/dispatch.ts`) intercepts the `persist_qa` action from the `@quality` bot's JSON response, validates it against the schema in `src/utils/agent_protocol.ts`, and routes it to the persistence logic.
+- The overseer/dispatcher (`src/utils/agent_protocol.ts`) intercepts the `persist_qa` action from the `@quality` bot's JSON response, validates it against the schema in `src/utils/agent_protocol.ts`, and routes it to the persistence logic.
 - The protocol definition (`src/utils/agent_protocol.ts`) acts as the source of truth for the action's shape, ensuring that any payload passed to the dispatcher is well-formed.
 
 ## Future Work
