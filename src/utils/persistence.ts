@@ -29,6 +29,14 @@ export function parseNullDelimitedPaths(output: string): string[] {
 	return Array.from(new Set(output.split("\0").filter(Boolean)));
 }
 
+export function isIgnoredPersistencePath(path: string): boolean {
+	return (
+		path === "flake.lock" ||
+		path.startsWith(".backstop/") ||
+		/^session_.*\.log$/.test(path)
+	);
+}
+
 export class PersistenceService {
 	async ensureIssueBranch(
 		issueNumber: number,
@@ -289,6 +297,7 @@ export class PersistenceService {
 				"--",
 				".",
 				":(glob,exclude).backstop/**",
+				":(exclude)flake.lock",
 				":(glob,exclude)session_*.log",
 			],
 			"persistence.stage",
@@ -302,12 +311,12 @@ export class PersistenceService {
 			"persistence.stagedChangedPaths",
 		);
 		return parseNullDelimitedPaths(result.stdout).filter(
-			(path) => !this.isIgnoredPath(path),
+			(path) => !isIgnoredPersistencePath(path),
 		);
 	}
 
 	private isIgnoredPath(path: string): boolean {
-		return path.startsWith(".backstop/") || /^session_.*\.log$/.test(path);
+		return isIgnoredPersistencePath(path);
 	}
 
 	private async remoteBranchExists(branchName: string): Promise<boolean> {
