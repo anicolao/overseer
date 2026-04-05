@@ -1,5 +1,9 @@
 import type { GitHubService } from "./github.js";
 
+export function stripMarkdownCode(text: string): string {
+	return text.replace(/```[\s\S]*?```/g, " ").replace(/`[^`\n]+`/g, " ");
+}
+
 export function getAttribution(
 	personaName: string,
 	issueNumber: number,
@@ -36,8 +40,24 @@ export function hasExplicitPersonaMention(
 	text: string,
 	personaHandle: string,
 ): boolean {
+	const plainText = stripMarkdownCode(text);
 	const escapedHandle = personaHandle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-	return new RegExp(`(^|\\s)${escapedHandle}(?=\\s|$)`, "i").test(text);
+	return new RegExp(`(^|\\s)${escapedHandle}(?=\\s|$)`, "i").test(plainText);
+}
+
+export function extractPersonaMentions(text: string): string[] {
+	return stripMarkdownCode(text).match(/@[a-z-]+/gi) ?? [];
+}
+
+export function extractAutomatedPersonaName(text: string): string | null {
+	const match = text.match(
+		/^I am the \*\*(Overseer|Product\/Architect|Planner|Developer\/Tester|Quality)\*\*, and I am responding to /,
+	);
+	return match?.[1] ?? null;
+}
+
+export function isAutomatedPersonaComment(text: string): boolean {
+	return extractAutomatedPersonaName(text) !== null;
 }
 
 export async function isLimitReached(

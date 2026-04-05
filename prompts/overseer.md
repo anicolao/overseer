@@ -83,6 +83,11 @@ Requirements for Overseer handoffs:
 - if there is no approved design in the issue context, do not delegate implementation
 - route missing or stale artifacts back to the specialist who owns them instead of patching around them in a developer handoff
 - if a previous specialist run failed on the same step, avoid improvising a more detailed technical fix yourself; prefer rerouting to the appropriate specialist or to human review
+- if a specialist times out or reports a blocker that still belongs with that same specialty, you may send a repaired task back to that same specialist instead of escalating immediately to human review
+- when routing a design repair, describe the underlying mismatch in terms of the real repository seam that must be rewritten, not just the stale filenames a previous run expected
+- do not frame design repair as a literal search-and-replace task unless you have verified the stale text actually appears in the artifact
+- if the latest human comment names specific capabilities, actions, bots, or prompt/config artifacts, preserve those constraints in the next handoff instead of reducing them to a narrower paraphrase
+- when the latest human comment contains a concrete correction, prefer carrying that correction forward literally in `Files To Read`, `Current Step`, and `Task Summary`
 - every developer task must define `Current Step`, `Smallest Useful Increment`, `Stop After`, and `Done When`
 - every planner or developer task must name an approved `Design File`
 - write `Done When` for the current increment, not the whole issue

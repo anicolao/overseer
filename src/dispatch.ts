@@ -13,8 +13,12 @@ import {
 } from "./utils/handoff.js";
 import { PersistenceService } from "./utils/persistence.js";
 import {
+	extractAutomatedPersonaName,
+	extractPersonaMentions,
 	getAttribution,
 	hasExplicitPersonaMention,
+	isAutomatedPersonaComment,
+	stripMarkdownCode,
 } from "./utils/persona_helper.js";
 import { truncate } from "./utils/text.js";
 import {
@@ -31,6 +35,115 @@ function appendGithubOutput(key: string, value: string): void {
 		return;
 	}
 	fs.appendFileSync(outputPath, `${key}=${value}\n`);
+}
+
+function extractRepoPathsForDirectRepair(text: string): string[] {
+	const matches = text.matchAll(
+		/(?:^|[`(\s])((?:src|prompts|docs)\/[A-Za-z0-9_./-]+|bots\.json|AGENTS\.md)(?=$|[`),.\s])/g,
+	);
+	const paths = new Set<string>();
+	for (const match of matches) {
+		const value = match[1]?.trim().replace(/[.,:;]+$/, "");
+		if (value) {
+			paths.add(value);
+		}
+	}
+	return [...paths];
+}
+
+function extractDesignDocPathForDirectRepair(text: string): string | null {
+	const match = text.match(
+		/(?:^|[`(\s])((?:docs\/(?:design|architecture)\/[A-Za-z0-9_./-]+\.md))(?=$|[`),.\s])/i,
+	);
+	return match?.[1]?.trim().replace(/[.,:;]+$/, "") || null;
+}
+
+function buildPlanPathFromDesignFile(designFile: string): string {
+	return designFile
+		.replace(/^docs\/design\//, "docs/plans/")
+		.replace(/^docs\/architecture\//, "docs/plans/");
+}
+
+function shouldBypassOverseerForDirectDesignRepair(body: string): boolean {
+	return (
+		hasExplicitPersonaMention(body, "@overseer") &&
+		/design/i.test(body) &&
+		/(still do not approve|do not approve|not approved|design-repair task|route this directly back to the product architect)/i.test(
+			body,
+		)
+	);
+}
+
+function shouldBypassOverseerForApprovedDesign(body: string): boolean {
+	return (
+		hasExplicitPersonaMention(body, "@overseer") &&
+		/design/i.test(body) &&
+		/\bapprove(?:d)?\b/i.test(body) &&
+		!/(do not approve|still do not approve|not approved)/i.test(body)
+	);
+}
+
+function buildDirectDesignRepairIterationResult(body: string): IterationResult {
+	const designFile =
+		extractDesignDocPathForDirectRepair(body) || "docs/design/persist-qa.md";
+	const filesToRead = Array.from(
+		new Set([designFile, ...extractRepoPathsForDirectRepair(body)]),
+	);
+	const correction = body.replace(/^@overseer\b\s*/i, "").trim();
+	const finalResponse = [
+		"The human has explicitly rejected the current design and provided a concrete correction. I am routing that correction directly back to the Product Architect as a design-repair task.",
+		"",
+		"Architect Task:",
+		"Task ID: MVP validation: persist_qa end-to-end",
+		`Design File: ${designFile}`,
+		"Design Approval Status: needs_revision",
+		"Files To Read:",
+		...filesToRead.map((path) => `- ${path}`),
+		`Human Correction: ${correction}`,
+		`Current Step: Revise ${designFile} so it reflects the latest human correction and accurately describes the real prompt, manifest/config, protocol, runtime execution, and runtime wiring seams in this repository.`,
+		`Task Summary: Rewrite the stale sections of ${designFile} to match this correction literally where relevant: ${correction}`,
+		`Done When: ${designFile} accurately explains prompt content in prompts/quality.md, manifest/config in bots.json and src/bots/bot_config.ts, protocol/schema in src/utils/agent_protocol.ts, runtime execution in src/utils/agent_runner.ts, runtime wiring in src/personas/task_persona.ts, and does not invent fields that do not exist in the source.`,
+		"Verification:",
+		`- cat ${designFile}`,
+		"Likely Next Step: human approval",
+	].join("\n");
+
+	return {
+		finalResponse,
+		handoffTo: "@product-architect",
+		log: `DIRECT DISPATCH DESIGN REPAIR\n\n${finalResponse}`,
+	};
+}
+
+function buildDirectDesignApprovalIterationResult(
+	body: string,
+): IterationResult {
+	const designFile =
+		extractDesignDocPathForDirectRepair(body) || "docs/design/persist-qa.md";
+	const planFile = buildPlanPathFromDesignFile(designFile);
+	const finalResponse = [
+		"The human has explicitly approved the current design. I am routing the approved artifact directly to the Planner.",
+		"",
+		"Planner Task:",
+		"Task ID: MVP validation: persist_qa end-to-end",
+		`Design File: ${designFile}`,
+		"Design Approval Status: approved",
+		`Plan File: ${planFile}`,
+		"Files To Read:",
+		`- ${designFile}`,
+		"Current Step: Create the implementation plan for the approved design.",
+		`Task Summary: Decompose ${designFile} into small implementation increments that can be delegated one at a time.`,
+		`Done When: ${planFile} exists and describes the implementation steps needed to realize the approved design.`,
+		"Verification:",
+		`- cat ${planFile}`,
+		"Likely Next Step: Delegate the first implementation increment to @developer-tester.",
+	].join("\n");
+
+	return {
+		finalResponse,
+		handoffTo: "@planner",
+		log: `DIRECT DISPATCH DESIGN APPROVAL\n\n${finalResponse}`,
+	};
 }
 
 async function run() {
@@ -77,7 +190,6 @@ async function run() {
 	};
 
 	const sender = eventData.sender?.login;
-	const botUser = "anicolao"; // The identity used by OVERSEER_TOKEN
 	logTrace("dispatcher.start", {
 		eventName,
 		sender,
@@ -204,27 +316,68 @@ async function run() {
 			);
 			return;
 		}
+		const automatedPersona = extractAutomatedPersonaName(body);
+		const isAutomatedComment = isAutomatedPersonaComment(body);
+		if (
+			!isAutomatedComment &&
+			activePersona === null &&
+			shouldBypassOverseerForDirectDesignRepair(body)
+		) {
+			appendGithubOutput("persona_executed", "true");
+			appendGithubOutput("executed_persona", "overseer");
+			await finalizeRun(
+				github,
+				owner,
+				repo,
+				issueNumber,
+				"overseer",
+				buildDirectDesignRepairIterationResult(body),
+				personaNameMap,
+				sender,
+				commentUrl,
+			);
+			return;
+		}
+		if (
+			!isAutomatedComment &&
+			activePersona === null &&
+			shouldBypassOverseerForApprovedDesign(body)
+		) {
+			appendGithubOutput("persona_executed", "true");
+			appendGithubOutput("executed_persona", "overseer");
+			await finalizeRun(
+				github,
+				owner,
+				repo,
+				issueNumber,
+				"overseer",
+				buildDirectDesignApprovalIterationResult(body),
+				personaNameMap,
+				sender,
+				commentUrl,
+			);
+			return;
+		}
 
 		// 1. Identify sender persona if bot
-		if (sender === botUser) {
-			const personaMatch = body.match(/I am the \*\*(.+?)\*\*/);
-			if (personaMatch) {
-				senderPersona = personaMatch[1];
-			}
+		if (automatedPersona) {
+			senderPersona = automatedPersona;
 		}
 
 		// 2. Identify target persona
 		let targetedPersona: string | null = null;
-		const nextStepMatch = body.match(/Next step: (@[a-z-]+)/i);
+		const bodyWithoutCodeMentions = extractPersonaMentions(
+			body.replace(/Next step:/gi, "\nNext step: "),
+		);
+		const nextStepMatch = stripNextStepHandle(body);
 		if (nextStepMatch) {
-			targetedPersona = handleMap[nextStepMatch[1].toLowerCase()] || null;
+			targetedPersona = handleMap[nextStepMatch.toLowerCase()] || null;
 		}
 		if (!targetedPersona) {
-			const mentions = body.match(/@[a-z-]+/gi);
-			if (mentions) {
+			if (bodyWithoutCodeMentions.length > 0) {
 				// Search from the end to find the most recent handoff
-				for (let i = mentions.length - 1; i >= 0; i--) {
-					const handle = mentions[i].toLowerCase();
+				for (let i = bodyWithoutCodeMentions.length - 1; i >= 0; i--) {
+					const handle = bodyWithoutCodeMentions[i].toLowerCase();
 					if (handleMap[handle]) {
 						targetedPersona = handleMap[handle];
 						break;
@@ -273,7 +426,7 @@ async function run() {
 			};
 			// 4. Persona-Specific Bot Protection: Prevent self-triggering
 			if (
-				sender === botUser &&
+				isAutomatedComment &&
 				senderPersona === personaNameMap[executedPersona]
 			) {
 				console.log(`Ignoring self-trigger from ${executedPersona}`);
@@ -379,6 +532,12 @@ async function run() {
 			);
 		});
 	}
+}
+
+function stripNextStepHandle(body: string): string | null {
+	const sanitized = stripMarkdownCode(body);
+	const nextStepMatch = sanitized.match(/Next step: (@[a-z-]+)/i);
+	return nextStepMatch?.[1] || null;
 }
 
 async function finalizeRun(

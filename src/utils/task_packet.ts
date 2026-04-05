@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { extractDirectedTask } from "./persona_helper.js";
 
 export interface TaskPacket {
@@ -13,12 +15,14 @@ export interface TaskPacket {
 	currentStep?: string;
 	smallestUsefulIncrement?: string;
 	stopAfter?: string;
+	humanCorrection?: string;
 	taskSummary: string;
 	doneWhen?: string;
 	progressEvidence: string[];
 	verificationCommands: string[];
 	likelyNextStep?: string;
 	supplementalContext?: string;
+	missingFiles: string[];
 }
 
 type StructuredTaskFields = {
@@ -30,6 +34,7 @@ type StructuredTaskFields = {
 	currentStep?: string;
 	smallestUsefulIncrement?: string;
 	stopAfter?: string;
+	humanCorrection?: string;
 	taskSummary?: string;
 	doneWhen?: string;
 	progressEvidence: string[];
@@ -46,9 +51,11 @@ export function parseTaskPacket(body: string): TaskPacket {
 			directedTask,
 			hasStructuredHandoff: false,
 			filesToRead: [],
+			humanCorrection: undefined,
 			taskSummary: directedTask,
 			progressEvidence: [],
 			verificationCommands: [],
+			missingFiles: [],
 		};
 	}
 
@@ -68,6 +75,7 @@ export function parseTaskPacket(body: string): TaskPacket {
 		normalizeOptionalValue(parsed.taskSummary) ||
 		supplementalContext ||
 		directedTask;
+	const missingFiles = filesToRead.filter((path) => !pathExistsInRepo(path));
 
 	return {
 		rawBody: body,
@@ -84,6 +92,7 @@ export function parseTaskPacket(body: string): TaskPacket {
 			parsed.smallestUsefulIncrement,
 		),
 		stopAfter: normalizeOptionalValue(parsed.stopAfter),
+		humanCorrection: normalizeOptionalValue(parsed.humanCorrection),
 		taskSummary,
 		doneWhen: normalizeOptionalValue(parsed.doneWhen),
 		progressEvidence: parsed.progressEvidence
@@ -94,6 +103,7 @@ export function parseTaskPacket(body: string): TaskPacket {
 			.filter(Boolean),
 		likelyNextStep: normalizeOptionalValue(parsed.likelyNextStep),
 		supplementalContext: supplementalContext || undefined,
+		missingFiles,
 	};
 }
 
@@ -110,6 +120,7 @@ export function renderTaskPacketForPrompt(packet: TaskPacket): string {
 		`- Current Step: ${packet.currentStep || "none"}`,
 		`- Smallest Useful Increment: ${packet.smallestUsefulIncrement || "none"}`,
 		`- Stop After: ${packet.stopAfter || "none"}`,
+		`- Human Correction: ${packet.humanCorrection || "none"}`,
 		`- Task Summary: ${packet.taskSummary}`,
 		`- Done When: ${packet.doneWhen || "none"}`,
 		`- Progress Evidence: ${
@@ -121,6 +132,9 @@ export function renderTaskPacketForPrompt(packet: TaskPacket): string {
 			packet.verificationCommands.length > 0
 				? packet.verificationCommands.join(" | ")
 				: "none"
+		}`,
+		`- Missing Files: ${
+			packet.missingFiles.length > 0 ? packet.missingFiles.join(", ") : "none"
 		}`,
 		`- Likely Next Step: ${packet.likelyNextStep || "none"}`,
 	];
@@ -172,7 +186,7 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 		}
 
 		const keyMatch = trimmed.match(
-			/^(Task ID|Design File|Design Approval Status|Plan File|Files To Read|Current Step|Smallest Useful Increment|Stop After|Task Summary|Done When|Progress Evidence|Verification|Likely Next Step):\s*(.*)$/i,
+			/^(Task ID|Design File|Design Approval Status|Plan File|Files To Read|Current Step|Smallest Useful Increment|Stop After|Human Correction|Task Summary|Done When|Progress Evidence|Verification|Likely Next Step):\s*(.*)$/i,
 		);
 		if (keyMatch) {
 			activeListKey = null;
@@ -215,6 +229,10 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 			if (rawKey === "stop after") {
 				result.stopAfter = rawValue.trim();
 				activeScalarKey = "stopAfter";
+				continue;
+			}
+			if (rawKey === "human correction") {
+				result.humanCorrection = rawValue.trim();
 				continue;
 			}
 			if (rawKey === "task summary") {
@@ -311,7 +329,7 @@ function splitFilesToRead(value: string): string[] {
 	}
 	return normalized
 		.split(",")
-		.map((entry) => entry.trim())
+		.map((entry) => normalizePathReference(entry))
 		.filter(Boolean);
 }
 
@@ -324,4 +342,49 @@ function normalizeOptionalValue(value?: string): string | undefined {
 		return undefined;
 	}
 	return trimmed;
+}
+
+function normalizePathReference(value: string): string {
+	const trimmed = value.trim();
+	const match = trimmed.match(/^([A-Za-z0-9._/-]+\/?)/);
+	return match?.[1]?.trim() || trimmed;
+}
+
+function pathExistsInRepo(relativePath: string): boolean {
+	const normalizedPath = relativePath.replace(/\/+$/, "");
+	if (!normalizedPath) {
+		return false;
+	}
+	return existsSync(resolve(process.cwd(), normalizedPath));
+}
+
+export function validateTaskPacketForExecution(packet: TaskPacket): {
+	ok: boolean;
+	missingFiles: string[];
+	message?: string;
+} {
+	if (!packet.hasStructuredHandoff) {
+		return { ok: true, missingFiles: [] };
+	}
+
+	const missingFiles = packet.missingFiles.filter((path) => {
+		if (
+			packet.handoffType === "architect" &&
+			packet.designFile === path &&
+			packet.designApprovalStatus === "missing"
+		) {
+			return false;
+		}
+		return true;
+	});
+
+	if (missingFiles.length === 0) {
+		return { ok: true, missingFiles: [] };
+	}
+
+	return {
+		ok: false,
+		missingFiles,
+		message: `Task packet references files that do not exist in the current repository state: ${missingFiles.join(", ")}. The design or plan does not match the source and must be repaired before this task can continue.`,
+	};
 }
