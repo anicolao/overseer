@@ -93,13 +93,12 @@ export class TaskPersona {
 				taskMessage: taskPromptBody,
 				modelName: this.bot.llm.model,
 			});
-			if (!this.bot.allowPersistWork) {
+			if (!this.bot.allowPersistWork && !this.bot.allowPersistQa) {
 				return cliResult;
 			}
-			const persistResult = await this.persistence.persistWork(
-				issueNumber,
-				this.bot.id,
-			);
+			const persistResult = this.bot.allowPersistWork
+				? await this.persistence.persistWork(issueNumber, this.bot.id)
+				: await this.persistence.persistQa(issueNumber, this.bot.id);
 			if (persistResult.ok) {
 				return {
 					...cliResult,

@@ -78,7 +78,6 @@
 			"max_actions_per_turn": 1,
 			"prompt_files": [
 				"prompts/shared/task-agent.md",
-				"prompts/shared/read-only-agent.md",
 				"prompts/quality.md"
 			]
 		}
