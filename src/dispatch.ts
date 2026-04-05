@@ -815,8 +815,12 @@ async function finalizeRun(
 }
 
 if (process.env.VITEST !== "true") {
-	run().catch((error) => {
-		console.error("Fatal error in dispatcher:", error);
-		process.exit(1);
-	});
+	run()
+		.then(() => {
+			process.exit(0);
+		})
+		.catch((error) => {
+			console.error("Fatal error in dispatcher:", error);
+			process.exit(1);
+		});
 }
