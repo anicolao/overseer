@@ -131,10 +131,17 @@ export class OverseerPersona {
 		);
 		const latestResponder =
 			_commenterPersona || commenter || "unknown responder";
+		const retryingSameSpecialistIsAllowed =
+			/(ERROR:\s*Max iterations reached|Blocker:|failed to|does not exist|needs revision|needs repair)/i.test(
+				body,
+			);
+		const sameResponderGuardrail = retryingSameSpecialistIsAllowed
+			? `- Do not assign the next step back to ${latestResponder} unless the latest response is a blocker, timeout, or repair request that still belongs with that specialist after you fix the task packet.`
+			: `- Do not assign the next step back to ${latestResponder}.`;
 		const taskBody = `The issue has been updated. The latest response came from ${latestResponder}. Review the full context and decide the next micro-task.
 
 Guardrails:
-- Do not assign the next step back to ${latestResponder}.
+${sameResponderGuardrail}
 - If ${latestResponder} claims to have created or updated files, read those files before deciding the next action.
 
 CONTEXT:
