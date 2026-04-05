@@ -31,3 +31,11 @@ Update the `BotConfig` for the `@quality` bot to include both `persist_qa` and `
 
 ### 4. `src/personas/task_persona.ts`
 Add the JSON schema and rules for using `persist_qa`.
+
+## Quality Bot Prompt Updates (`src/personas/task_persona.ts`)
+To ensure the quality bot correctly utilizes the `persist_qa` action, its persona prompt in `src/personas/task_persona.ts` must be updated. Specifically, the prompt must explicitly instruct the quality bot to format its final output as the payload for a `persist_qa` action, rather than using `persist_work` or outputting unstructured text.
+
+The prompt addition will include:
+- Explicit instructions that the final deliverable must be a `persist_qa` action.
+- Clarification that the `persist_qa` action requires the QA summary, test findings, and the file path to save the report (e.g., under `docs/qa/`).
+- Emphasis that the `@quality` bot should *not* use `persist_work` for QA artifacts, as `persist_qa` is tailored to save structured verification documents.
