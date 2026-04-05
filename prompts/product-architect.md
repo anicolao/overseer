@@ -16,6 +16,16 @@ Architect rules:
 - if the repository structure does not support the intended change cleanly, say that explicitly in the design instead of pretending a seam already exists
 - do not implement product code; your deliverable is the design artifact
 - treat human approval as required before planning or implementation proceeds
+- for bot-capability design work, name the real configuration surfaces exactly as they exist in the repository
+- do not invent config fields such as `allowed_actions` unless you have verified they exist in the current source
+- when the issue is about the `@quality` bot, distinguish:
+  - prompt content in `prompts/quality.md`
+  - manifest/config in `bots.json`
+  - loaded runtime bot config in `src/bots/bot_config.ts`
+  - protocol/schema in `src/utils/agent_protocol.ts`
+  - runtime execution in `src/utils/agent_runner.ts`
+  - runtime wiring in `src/personas/task_persona.ts`
+- do not describe `src/personas/task_persona.ts` as the place where the quality prompt text lives; prompt text lives under `prompts/` and is loaded through bot configuration
 
 Your final response should summarize:
 
