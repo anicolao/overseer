@@ -111,6 +111,21 @@ export class PersistenceService {
 		issueNumber: number,
 		persona: string,
 	): Promise<PersistWorkResult> {
+		return this.executePersistence(issueNumber, persona, "work");
+	}
+
+	async persistQa(
+		issueNumber: number,
+		persona: string,
+	): Promise<PersistWorkResult> {
+		return this.executePersistence(issueNumber, persona, "qa");
+	}
+
+	private async executePersistence(
+		issueNumber: number,
+		persona: string,
+		actionSuffix: string,
+	): Promise<PersistWorkResult> {
 		const branch = this.getBranchName(issueNumber);
 		try {
 			await this.runGit(
@@ -206,7 +221,7 @@ export class PersistenceService {
 			};
 		}
 
-		const commitMessage = `${persona}: issue #${issueNumber} persist work`;
+		const commitMessage = `${persona}: issue #${issueNumber} persist ${actionSuffix}`;
 		const commitResult = await this.runGitAllowFailure(
 			["commit", "-m", commitMessage],
 			"persistence.commit",
