@@ -1,27 +1,33 @@
 # Design: persist_qa MVP
 
 ## Objective
-Add a `persist_qa` action specifically for the `@quality` bot. The `@quality` bot will write quality assurance artifacts to the `docs/qa/` directory using the existing `run_shell` action, and then use the new `persist_qa` action to persist those changes.
+Enable the `@quality` bot to independently write and persist quality assurance artifacts. The `@quality` bot will write QA documents to the `docs/qa/` directory using the existing `run_shell` action, and then call a new `persist_qa` action to persist those existing changes.
 
-## Protocol Definition
+## Architecture and Seams
+
+### 1. Protocol Definition and Parsing
 - **File**: `src/utils/agent_protocol.ts`
-- **Change**: Define a new action type `persist_qa` in the JSON protocol schema.
-- **Shape**: `{"type": "persist_qa"}` without any additional payload, as file writing is handled separately by `run_shell`.
+- **Responsibility**: Define the JSON action schema and parser for the `persist_qa` action type. It takes no payload since the files are written by `run_shell`.
 
-## Runtime Execution
+### 2. Runtime Execution
 - **File**: `src/utils/agent_runner.ts`
-- **Change**: Add execution logic to handle the `persist_qa` action. When encountered, it triggers persistence for the changes made to the repository.
+- **Responsibility**: Execute the `persist_qa` action. This layer will invoke the underlying git persistence logic for the QA files.
 
-## Bot Configuration & Wiring
+### 3. Bot Configuration and Capability Wiring
 - **File**: `bots.json`
-  - **Change**: Add a capability flag (e.g., `canPersistQA: true`) to the `@quality` bot.
+  - **Responsibility**: Define the manifest for the `@quality` bot, declaring the capability to use `persist_qa`.
 - **File**: `src/bots/bot_config.ts`
-  - **Change**: Update the runtime configuration types to load the new capability.
+  - **Responsibility**: Load the bot configuration from `bots.json` and represent it at runtime.
 - **File**: `src/personas/task_persona.ts`
-  - **Change**: Read the capability from the bot configuration and wire it into the `AgentRunner` so only authorized bots can execute `persist_qa`.
+  - **Responsibility**: Wire the runtime capabilities into the `AgentRunner`, enabling the `@quality` persona to execute the `persist_qa` action.
 
-## Prompt Updates
+### 4. Prompt Instructions
 - **File**: `prompts/quality.md`
-- **Change**: Update the instructions to explicitly state:
-  1. Use `run_shell` to write or edit QA artifacts under `docs/qa/`.
-  2. Use the `persist_qa` action to persist those changes once verified.
+  - **Responsibility**: Instruct the `@quality` bot on its workflow: use `run_shell` to write QA artifacts to `docs/qa/`, and then call `persist_qa` to persist the work.
+
+## Implementation Steps
+1. Update `src/utils/agent_protocol.ts` to add `persist_qa` to the valid action schemas.
+2. Update `src/utils/agent_runner.ts` to handle the `persist_qa` execution, persisting changes in `docs/qa/`.
+3. Update `bots.json` and `src/bots/bot_config.ts` to define and load the new capability.
+4. Update `src/personas/task_persona.ts` to wire the capability into the runner.
+5. Update `prompts/quality.md` with instructions on using `run_shell` for editing and `persist_qa` for persistence.
