@@ -41,6 +41,35 @@ export function extractQuotedCorrectionMentions(text: string): string[] {
 	return [...mentions];
 }
 
+export function extractDesignDocPath(text: string): string | null {
+	const match = text.match(
+		/(?:^|[`(\s])((?:docs\/(?:design|architecture)\/[A-Za-z0-9_./-]+\.md))(?=$|[`),.\s])/i,
+	);
+	return match?.[1]?.trim() || null;
+}
+
+function normalizeHumanCorrection(body: string): string {
+	return body.replace(/^@overseer\b\s*/i, "").trim();
+}
+
+function shouldDirectRouteDesignRepair(
+	body: string,
+	commenterPersona: string | undefined,
+	explicitRepoPaths: string[],
+	explicitCorrectionMentions: string[],
+): boolean {
+	if (commenterPersona) {
+		return false;
+	}
+	return (
+		/design/i.test(body) &&
+		/(do not approve|still do not approve|retry the design repair|revise the design)/i.test(
+			body,
+		) &&
+		(explicitRepoPaths.length > 0 || explicitCorrectionMentions.length > 0)
+	);
+}
+
 export class OverseerPersona {
 	private bot: LoadedBotDefinition;
 	private gemini: GeminiService;
@@ -75,6 +104,54 @@ export class OverseerPersona {
 				llm: this.bot.llm,
 				...summarizePromptAssembly(this.bot.prompt),
 			},
+		};
+	}
+
+	private buildDirectDesignRepairResponse(
+		body: string,
+		fullContext: string,
+		explicitRepoPaths: string[],
+		explicitCorrectionMentions: string[],
+	): IterationResult {
+		const designFile =
+			extractDesignDocPath(body) || extractDesignDocPath(fullContext);
+		const filesToRead = Array.from(
+			new Set(
+				[designFile, ...explicitRepoPaths].filter((value): value is string =>
+					Boolean(value),
+				),
+			),
+		);
+		const correction = normalizeHumanCorrection(body);
+		const currentStep = designFile
+			? `Revise ${designFile} so it explicitly incorporates the latest human correction, including ${explicitCorrectionMentions.join(", ") || "the named repository seams"}, and matches the current repository files.`
+			: `Revise the active design doc so it explicitly incorporates the latest human correction, including ${explicitCorrectionMentions.join(", ") || "the named repository seams"}, and matches the current repository files.`;
+		const doneWhen = designFile
+			? `${designFile} explicitly covers the latest human correction, matches the named prompt/config/protocol/runtime seams from the repository, and is ready for human approval.`
+			: `The active design doc explicitly covers the latest human correction, matches the named prompt/config/protocol/runtime seams from the repository, and is ready for human approval.`;
+		const lines = [
+			"The human has provided a concrete design correction. I am routing that correction directly back to the Product/Architect without paraphrasing it away.",
+			"",
+			"Architect Task:",
+			"Task ID: MVP validation: persist_qa end-to-end",
+			`Design File: ${designFile || "none"}`,
+			"Design Approval Status: needs_revision",
+			"Files To Read:",
+			...(filesToRead.length > 0
+				? filesToRead.map((path) => `- ${path}`)
+				: ["- none"]),
+			`Current Step: ${currentStep}`,
+			`Task Summary: Rewrite the stale design sections so they match this human correction literally where relevant: ${correction}`,
+			`Done When: ${doneWhen}`,
+			"Verification:",
+			...(designFile ? [`- cat ${designFile}`] : ["- cat docs/design"]),
+			"Likely Next Step: human approval",
+		];
+
+		return {
+			finalResponse: lines.join("\n"),
+			handoffTo: "@product-architect",
+			log: `DIRECT DESIGN REPAIR ROUTE\n\n${lines.join("\n")}`,
 		};
 	}
 
@@ -170,6 +247,28 @@ export class OverseerPersona {
 			: `- Do not assign the next step back to ${latestResponder}.`;
 		const explicitRepoPaths = extractRepoPathMentions(body);
 		const explicitCorrectionMentions = extractQuotedCorrectionMentions(body);
+		if (
+			shouldDirectRouteDesignRepair(
+				body,
+				_commenterPersona,
+				explicitRepoPaths,
+				explicitCorrectionMentions,
+			)
+		) {
+			logTrace("persona.overseer.directDesignRepairRoute", {
+				commenter,
+				commenterPersona: _commenterPersona,
+				body: textStats(body),
+				explicitRepoPaths,
+				explicitCorrectionMentions,
+			});
+			return this.buildDirectDesignRepairResponse(
+				body,
+				fullContext,
+				explicitRepoPaths,
+				explicitCorrectionMentions,
+			);
+		}
 		const explicitRepoPathsSection =
 			explicitRepoPaths.length > 0
 				? `\nExplicit repo paths mentioned in the latest comment:\n${explicitRepoPaths
