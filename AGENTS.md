@@ -49,4 +49,12 @@ For the MVP issue about `persist_qa`, a correct design should distinguish:
 - bot capability wiring
 - prompt instructions for `@quality`
 
+For this repository specifically:
+
+- the `@quality` prompt text lives in `prompts/quality.md`
+- bot manifest/config lives in `bots.json`
+- loaded runtime bot config lives in `src/bots/bot_config.ts`
+- `src/personas/task_persona.ts` wires runtime capabilities into the task runner; it is not where the quality prompt text is authored
+- do not claim there is an `allowed_actions` field unless you verified it exists in the current source
+
 If a design or plan collapses those into one file or assigns them to `src/dispatch.ts`, it is probably still wrong.
