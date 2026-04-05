@@ -692,6 +692,13 @@ describe("AgentRunner", () => {
 			}),
 			JSON.stringify({
 				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Inspect the plan.", "Implement the change."],
+				next_step: "Inspect another file.",
+				actions: [{ type: "run_ro_shell", command: "cat src/other.ts" }],
+				task_status: "in_progress",
+			}),
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
 				plan: ["Return control."],
 				next_step: "Return control.",
 				actions: [],
@@ -727,7 +734,7 @@ describe("AgentRunner", () => {
 			gemini as never,
 			"System instruction",
 			"Initial message",
-			5,
+			6,
 			{
 				shellAccess: "read_only",
 				maxActionsPerTurn: 1,
@@ -738,6 +745,13 @@ describe("AgentRunner", () => {
 			sentMessages.some((message) =>
 				message.includes(
 					"consecutive turns on read-only inspection without editing",
+				),
+			),
+		).toBe(true);
+		expect(
+			sentMessages.some((message) =>
+				message.includes(
+					'Your next response must either make a targeted repository edit with replace_in_file or run_shell, or finish with task_status "done" and a blocker summary for Overseer.',
 				),
 			),
 		).toBe(true);
@@ -787,7 +801,7 @@ describe("AgentRunner", () => {
 		);
 
 		expect(result.finalResponse).toContain(
-			"Stopped after repeated no-progress loops",
+			"Stopped after repeated invalid responses without adapting",
 		);
 		expect(
 			sentMessages.some((message) => message.includes("LOOP DETECTED:")),
