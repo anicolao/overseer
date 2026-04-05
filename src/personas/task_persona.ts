@@ -127,6 +127,7 @@ export class TaskPersona {
 			return [
 				"REPAIR EXECUTION NOTE:",
 				"- This is a semantic design-repair task.",
+				`- Treat the Human Correction field${taskPacket.humanCorrection ? " and the raw directed task" : ""} as a hard constraint, not as optional background context.`,
 				"- The stale file names or abstractions may not appear verbatim in the current design doc.",
 				`- After you inspect the named files once, rewrite the affected sections in ${artifact} so they name the real files, symbols, and seams from the current repository.`,
 				"- Do not spend multiple turns searching for literal stale strings.",

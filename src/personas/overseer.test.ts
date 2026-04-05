@@ -86,6 +86,7 @@ describe("OverseerPersona direct design repair routing", () => {
 		);
 		expect(result.finalResponse).toContain("- prompts/quality.md");
 		expect(result.finalResponse).toContain("- bots.json");
+		expect(result.finalResponse).toContain("Human Correction:");
 		expect(result.finalResponse).toContain("persist_qa");
 		expect(result.finalResponse).toContain("run_shell");
 	});
