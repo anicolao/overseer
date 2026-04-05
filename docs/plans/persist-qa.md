@@ -1,28 +1,17 @@
-# Implementation Plan: `persist_qa` Action
+# Implementation Plan: persist_qa Action
 
-This plan decomposes the approved design from `docs/design/persist-qa.md` into actionable steps.
+Based on the approved design in `docs/design/persist-qa.md`.
 
-## Step 1: Update Action Schema and Dispatcher
-**Objective:** Add support for the `persist_qa` action in the central action dispatcher.
-**Tasks:**
-- Locate the action dispatcher.
-- Add schema validation/definition for `persist_qa` expecting `type: "persist_qa"`, `path` (must start with `docs/qa/`), and `content`.
-- Implement the handler logic:
-  - Ensure the target directory (`docs/qa/...`) exists (e.g., using `mkdir -p`).
-  - Write `content` to `path`.
-  - Add the new file to git (`git add <path>`).
-  - Return a success message with the path written.
+## Increment 1: Action Protocol and Runner
+**Files:** `src/utils/agent_protocol.ts`, `src/utils/agent_runner.ts`
+- **`agent_protocol.ts`:** Add `{"type": "persist_qa"}` to the allowed action types schema.
+- **`agent_runner.ts`:** Implement the dispatch handler for `persist_qa` within the runner loop, triggering the required persistence logic (similar to `persist_work`).
 
-## Step 2: Update `@quality` Bot Prompt
-**Objective:** Grant `@quality` access to `run_shell` and `persist_qa`.
-**Tasks:**
-- Edit `prompts/quality.md`.
-- Add `run_shell` to the list of available actions to allow the bot to run linters, tests, or other inspection commands.
-- Add `persist_qa` to the list of available actions.
-- Add instructions requiring the use of `persist_qa` to finalize and record the QA review. Specify that the path must be under `docs/qa/`.
+## Increment 2: Permissions and Persona
+**Files:** `src/bots/bot_config.ts`, `src/personas/task_persona.ts`
+- **`bot_config.ts`:** Grant the `@quality` bot permission to use `persist_qa` and ensure the action mapping assigns appropriate read/write capabilities (e.g., mapping to `requiresWrite`).
+- **`task_persona.ts`:** Update the persona enforcement/prompt generation to correctly output `persist_qa` as an available action, including any rules for its usage.
 
-## Step 3: End-to-End Verification
-**Objective:** Verify that the dispatcher correctly executes `persist_qa` and the quality bot prompt is updated.
-**Tasks:**
-- Run the dispatcher locally or trigger a test action with a payload calling `persist_qa` to confirm the file is created and staged.
-- Read `prompts/quality.md` to ensure the new actions are documented correctly.
+## Increment 3: Prompt Update
+**Files:** `prompts/quality.md`
+- **`prompts/quality.md`:** Update the system prompt for the `@quality` bot to instruct it on when and how to use the `persist_qa` action.
