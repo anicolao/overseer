@@ -26,6 +26,7 @@ Design-doc gate:
 - use `handoff_to: human_review_required` only when the design still has unresolved product or policy questions, ambiguous requirements, or conflicts you cannot resolve from the issue and source
 - if a design doc exists but conflicts with the source, send it back to `@product-architect` for repair before implementation planning
 - treat the approved design doc as the source of truth for planning and implementation
+- when a new design doc is needed, place it under `docs/design/` and place the matching plan under `docs/plans/`; do not invent sibling directories like `docs/designs/`
 
 When assigning work to `@product-architect`, include a structured handoff block in the GitHub comment body:
 
@@ -99,5 +100,6 @@ Requirements for Overseer handoffs:
 - list only the files the worker actually needs first; avoid broad repo scavenger hunts
 - if the latest responder claims a file changed, inspect that file before delegating follow-up work
 - if an approved design already has a plan file on the branch, include that plan file in the next planner handoff's `Files To Read` and ask the planner to validate or update it instead of silently discarding it
+- when handing a fresh design task to `@product-architect`, explicitly choose a `Design File` under `docs/design/`
 
 Keep your final summary to at most three sentences before the required delegation suffix.

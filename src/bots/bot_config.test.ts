@@ -25,6 +25,12 @@ describe("bot_config", () => {
 			"You implement one small increment of an approved design.",
 		);
 		expect(developer.prompt.concatenatedPrompt).toContain(
+			"hand the blocker back to Overseer instead of asking a human for approval",
+		);
+		expect(developer.prompt.concatenatedPrompt).not.toContain(
+			"ask the user for approval instead of providing a command",
+		);
+		expect(developer.prompt.concatenatedPrompt).toContain(
 			"if `Design Approval Status` is not `approved`, stop and hand back to Overseer instead of implementing",
 		);
 		expect(developer.prompt.concatenatedPrompt).toContain(
@@ -47,6 +53,14 @@ describe("bot_config", () => {
 		expect(
 			getBotOrThrow(registry, "product-architect").prompt.concatenatedPrompt,
 		).toContain("treat the blocker as a semantic mismatch");
+		expect(
+			getBotOrThrow(registry, "product-architect").prompt.concatenatedPrompt,
+		).toContain("under `docs/design/`");
+		expect(
+			getBotOrThrow(registry, "product-architect").prompt.concatenatedPrompt,
+		).toContain(
+			"do not create new top-level documentation directories such as `docs/designs/`",
+		);
 		expect(overseer.prompt.concatenatedPrompt).toContain(
 			"You are a router of tasks, not a solver of technical subtasks.",
 		);
@@ -58,6 +72,9 @@ describe("bot_config", () => {
 		);
 		expect(overseer.prompt.concatenatedPrompt).toContain(
 			"route directly to planning when it is grounded in the current repository and does not leave unresolved product decisions",
+		);
+		expect(overseer.prompt.concatenatedPrompt).toContain(
+			"place it under `docs/design/` and place the matching plan under `docs/plans/`",
 		);
 		expect(overseer.prompt.concatenatedPrompt).toContain(
 			"you may send a repaired task back to that same specialist instead of escalating immediately to human review",

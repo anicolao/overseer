@@ -14,6 +14,9 @@ Planner rules:
 - preserve the approved design's action semantics; if the issue says `run_shell` writes files and another action persists them, do not collapse those responsibilities into one implementation step
 - if the task packet already names a `Plan File` that exists, read it first and treat your job as validating or updating that existing plan rather than replacing it blindly
 - if the existing plan file already matches the approved design, do not edit it just to create activity; verify that it is still valid, then hand back the first implementation increment Overseer should assign next
+- after one inspection pass over the approved design and named source files, write or update the plan on the next turn instead of continuing exploratory reads
+- prefer 2-5 concrete implementation increments over a long exhaustive breakdown
+- when planning a new design, write the plan directly to the named `Plan File` rather than spending multiple turns refining prose in your response
 
 Your final response should summarize:
 
