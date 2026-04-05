@@ -161,9 +161,9 @@ describe("task_packet", () => {
 			[
 				"Developer Task:",
 				"Task ID: persist-qa-step",
-				"Design File: docs/design/persist-qa.md",
+				"Design File: docs/design/__missing-persist-qa__.md",
 				"Design Approval Status: approved",
-				"Plan File: docs/plans/persist-qa.md",
+				"Plan File: docs/plans/__missing-persist-qa__.md",
 				"Files To Read:",
 				"- src/action-types.ts",
 				"- src/action-handler.ts",
@@ -175,8 +175,8 @@ describe("task_packet", () => {
 
 		expect(validation.ok).toBe(false);
 		expect(validation.missingFiles).toEqual([
-			"docs/design/persist-qa.md",
-			"docs/plans/persist-qa.md",
+			"docs/design/__missing-persist-qa__.md",
+			"docs/plans/__missing-persist-qa__.md",
 			"src/action-types.ts",
 			"src/action-handler.ts",
 		]);
