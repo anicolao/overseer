@@ -77,6 +77,8 @@ interface RunnerProgressState {
 	repeatedCycleCount: number;
 	loopRepairsIssued: number;
 	consecutiveReadOnlyTurnsWithoutWrite: number;
+	lastProtocolError?: string;
+	consecutiveProtocolErrorCount: number;
 }
 
 export class AgentRunner {
@@ -125,6 +127,7 @@ export class AgentRunner {
 			repeatedCycleCount: 0,
 			loopRepairsIssued: 0,
 			consecutiveReadOnlyTurnsWithoutWrite: 0,
+			consecutiveProtocolErrorCount: 0,
 		};
 
 		while (iteration < maxIterations) {
@@ -154,14 +157,22 @@ export class AgentRunner {
 			try {
 				parsedResponse = parseAgentProtocolResponse(responseText);
 			} catch (error) {
+				const errorMessage =
+					error instanceof Error ? error.message : String(error);
 				logTrace("agent.iteration.protocolError", {
 					iteration,
-					error: error instanceof Error ? error.message : String(error),
+					error: errorMessage,
 				});
-				currentMessage = buildProtocolRepairMessage(
-					error instanceof Error ? error.message : String(error),
+				const abortResult = this.handleProtocolError(
+					progressState,
+					errorMessage,
 					responseText,
+					options,
 				);
+				if (abortResult) {
+					return abortResult;
+				}
+				currentMessage = buildProtocolRepairMessage(errorMessage, responseText);
 				continue;
 			}
 
@@ -187,7 +198,41 @@ export class AgentRunner {
 					error,
 					maxActionsPerTurn,
 				});
+				const abortResult = this.handleProtocolError(
+					progressState,
+					error,
+					responseText,
+					options,
+				);
+				if (abortResult) {
+					return abortResult;
+				}
 				currentMessage = buildProtocolRepairMessage(error, responseText);
+				continue;
+			}
+
+			const readOnlyStallError = this.validateReadOnlyStallResponse(
+				progressState,
+				parsedResponse,
+			);
+			if (readOnlyStallError) {
+				logTrace("agent.iteration.protocolError", {
+					iteration,
+					error: readOnlyStallError,
+				});
+				const abortResult = this.handleProtocolError(
+					progressState,
+					readOnlyStallError,
+					responseText,
+					options,
+				);
+				if (abortResult) {
+					return abortResult;
+				}
+				currentMessage = buildProtocolRepairMessage(
+					readOnlyStallError,
+					responseText,
+				);
 				continue;
 			}
 
@@ -199,6 +244,15 @@ export class AgentRunner {
 						iteration,
 						error,
 					});
+					const abortResult = this.handleProtocolError(
+						progressState,
+						error,
+						responseText,
+						options,
+					);
+					if (abortResult) {
+						return abortResult;
+					}
 					currentMessage = buildProtocolRepairMessage(error, responseText);
 					continue;
 				}
@@ -211,6 +265,15 @@ export class AgentRunner {
 						iteration,
 						error: doneValidationError,
 					});
+					const abortResult = this.handleProtocolError(
+						progressState,
+						doneValidationError,
+						responseText,
+						options,
+					);
+					if (abortResult) {
+						return abortResult;
+					}
 					currentMessage = buildProtocolRepairMessage(
 						doneValidationError,
 						responseText,
@@ -228,6 +291,8 @@ export class AgentRunner {
 				parsedResponse.protocol.actions,
 				options,
 			);
+			progressState.lastProtocolError = undefined;
+			progressState.consecutiveProtocolErrorCount = 0;
 			this.updateProgressState(progressState, actionExecution.executedActions);
 			const actionOutput = actionExecution.output;
 			const actionSummary = actionExecution.summary;
@@ -551,6 +616,63 @@ export class AgentRunner {
 		}
 
 		return null;
+	}
+
+	private handleProtocolError(
+		state: RunnerProgressState,
+		error: string,
+		_responseText: string,
+		options: AgentRunnerOptions,
+	): IterationResult | null {
+		if (state.lastProtocolError === error) {
+			state.consecutiveProtocolErrorCount += 1;
+		} else {
+			state.lastProtocolError = error;
+			state.consecutiveProtocolErrorCount = 1;
+		}
+
+		if (state.consecutiveProtocolErrorCount < 3) {
+			return null;
+		}
+
+		logTrace("agent.loop.abortedForRepeatedProtocolErrors", {
+			error,
+			consecutiveProtocolErrorCount: state.consecutiveProtocolErrorCount,
+		});
+		return {
+			finalResponse:
+				"Stopped after repeated invalid responses without adapting. The bot needs a revised task packet or human intervention before continuing.",
+			handoffTo: options.loopAbortHandoffTo,
+			log: this.sessionLog,
+		};
+	}
+
+	private validateReadOnlyStallResponse(
+		state: RunnerProgressState,
+		parsedResponse: ParsedAgentProtocolResponse,
+	): string | null {
+		if (state.usedWriteAction) {
+			return null;
+		}
+
+		if (state.consecutiveReadOnlyTurnsWithoutWrite < 2) {
+			return null;
+		}
+
+		if (parsedResponse.protocol.task_status === "done") {
+			return null;
+		}
+
+		const hasOnlyReadOnlyActions =
+			parsedResponse.protocol.actions.length > 0 &&
+			parsedResponse.protocol.actions.every(
+				(action) => action.type === "run_ro_shell",
+			);
+		if (!hasOnlyReadOnlyActions) {
+			return null;
+		}
+
+		return `You have already spent ${state.consecutiveReadOnlyTurnsWithoutWrite} consecutive turns on read-only inspection without editing. Your next response must either make a targeted repository edit with replace_in_file or run_shell, or finish with task_status "done" and a blocker summary for Overseer.`;
 	}
 
 	private buildProgressReminder(
