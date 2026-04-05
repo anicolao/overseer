@@ -25,6 +25,7 @@ export interface IterationResult {
 
 export interface AgentRunnerOptions {
 	persistWork?: () => Promise<PersistWorkResult>;
+	persistQa?: () => Promise<PersistWorkResult>;
 	requireDoneHandoff?: boolean;
 	loopAbortHandoffTo?: AgentHandoffTarget;
 	modelName?: string;
@@ -491,6 +492,41 @@ export class AgentRunner {
 				continue;
 			}
 
+			if (action.type === "persist_qa") {
+				if (!options.persistQa) {
+					const denial = {
+						ok: false,
+						branch: "unavailable",
+						error_code: "persist_qa_not_available",
+						message: "persist_qa is not available for this persona.",
+					};
+					executedActions.push({
+						type: action.type,
+						ok: false,
+						persistResult: denial,
+						message: denial.message,
+					});
+					const formatted = JSON.stringify(denial, null, 2);
+					outputs.push(formatted);
+					summaries.push(
+						`persist_qa unavailable: ${denial.message} (error_code=${denial.error_code})`,
+					);
+					continue;
+				}
+
+				const result = await options.persistQa();
+				executedActions.push({
+					type: action.type,
+					ok: result.ok,
+					persistResult: result,
+					message: result.message,
+				});
+				const formatted = JSON.stringify(result, null, 2);
+				outputs.push(formatted);
+				summaries.push(this.summarizePersistResult(result));
+				continue;
+			}
+
 			if (!options.persistWork) {
 				const denial = {
 					ok: false,
@@ -580,7 +616,7 @@ export class AgentRunner {
 				continue;
 			}
 
-			if (action.type === "persist_work") {
+			if (action.type === "persist_work" || action.type === "persist_qa") {
 				if (state.usedWriteAction && action.persistResult?.ok) {
 					state.persistSucceededAfterWrite = true;
 					state.verifiedAfterPersist = false;
