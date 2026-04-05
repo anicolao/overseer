@@ -35,6 +35,68 @@ function appendGithubOutput(key: string, value: string): void {
 	fs.appendFileSync(outputPath, `${key}=${value}\n`);
 }
 
+function extractRepoPathsForDirectRepair(text: string): string[] {
+	const matches = text.matchAll(
+		/(?:^|[`(\s])((?:src|prompts|docs)\/[A-Za-z0-9_./-]+|bots\.json|AGENTS\.md)(?=$|[`),.\s])/g,
+	);
+	const paths = new Set<string>();
+	for (const match of matches) {
+		const value = match[1]?.trim();
+		if (value) {
+			paths.add(value);
+		}
+	}
+	return [...paths];
+}
+
+function extractDesignDocPathForDirectRepair(text: string): string | null {
+	const match = text.match(
+		/(?:^|[`(\s])((?:docs\/(?:design|architecture)\/[A-Za-z0-9_./-]+\.md))(?=$|[`),.\s])/i,
+	);
+	return match?.[1]?.trim() || null;
+}
+
+function shouldBypassOverseerForDirectDesignRepair(body: string): boolean {
+	return (
+		hasExplicitPersonaMention(body, "@overseer") &&
+		/design/i.test(body) &&
+		/(still do not approve|do not approve|design-repair task|route this directly back to the product architect)/i.test(
+			body,
+		)
+	);
+}
+
+function buildDirectDesignRepairIterationResult(body: string): IterationResult {
+	const designFile =
+		extractDesignDocPathForDirectRepair(body) || "docs/design/persist-qa.md";
+	const filesToRead = Array.from(
+		new Set([designFile, ...extractRepoPathsForDirectRepair(body)]),
+	);
+	const correction = body.replace(/^@overseer\b\s*/i, "").trim();
+	const finalResponse = [
+		"The human has explicitly rejected the current design and provided a concrete correction. I am routing that correction directly back to the Product Architect as a design-repair task.",
+		"",
+		"Architect Task:",
+		"Task ID: MVP validation: persist_qa end-to-end",
+		`Design File: ${designFile}`,
+		"Design Approval Status: needs_revision",
+		"Files To Read:",
+		...filesToRead.map((path) => `- ${path}`),
+		`Current Step: Revise ${designFile} so it reflects the latest human correction and accurately describes the real prompt, manifest/config, protocol, runtime execution, and runtime wiring seams in this repository.`,
+		`Task Summary: Rewrite the stale sections of ${designFile} to match this correction literally where relevant: ${correction}`,
+		`Done When: ${designFile} accurately explains prompt content in prompts/quality.md, manifest/config in bots.json and src/bots/bot_config.ts, protocol/schema in src/utils/agent_protocol.ts, runtime execution in src/utils/agent_runner.ts, runtime wiring in src/personas/task_persona.ts, and does not invent fields that do not exist in the source.`,
+		"Verification:",
+		`- cat ${designFile}`,
+		"Likely Next Step: human approval",
+	].join("\n");
+
+	return {
+		finalResponse,
+		handoffTo: "@product-architect",
+		log: `DIRECT DISPATCH DESIGN REPAIR\n\n${finalResponse}`,
+	};
+}
+
 async function run() {
 	const eventPath = process.env.GITHUB_EVENT_PATH;
 	if (!eventPath) throw new Error("GITHUB_EVENT_PATH not found");
@@ -203,6 +265,26 @@ async function run() {
 			});
 			console.log(
 				"Skipping issue_comment dispatch for workflow noise comment.",
+			);
+			return;
+		}
+		if (
+			sender !== botUser &&
+			activePersona === null &&
+			shouldBypassOverseerForDirectDesignRepair(body)
+		) {
+			appendGithubOutput("persona_executed", "true");
+			appendGithubOutput("executed_persona", "overseer");
+			await finalizeRun(
+				github,
+				owner,
+				repo,
+				issueNumber,
+				"overseer",
+				buildDirectDesignRepairIterationResult(body),
+				personaNameMap,
+				sender,
+				commentUrl,
 			);
 			return;
 		}
