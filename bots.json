@@ -30,7 +30,7 @@
 			"shell_access": "read_write",
 			"allow_persist_work": true,
 			"max_iterations": 10,
-			"max_actions_per_turn": 1,
+			"max_actions_per_turn": 2,
 			"prompt_files": [
 				"prompts/shared/task-agent.md",
 				"prompts/shared/persisting-agent.md",
@@ -44,7 +44,7 @@
 			"shell_access": "read_write",
 			"allow_persist_work": true,
 			"max_iterations": 10,
-			"max_actions_per_turn": 1,
+			"max_actions_per_turn": 2,
 			"prompt_files": [
 				"prompts/shared/task-agent.md",
 				"prompts/shared/persisting-agent.md",
