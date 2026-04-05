@@ -1,10 +1,16 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getBotOrThrow, loadBotRegistry } from "../bots/bot_config.js";
 import { TaskPersona } from "./task_persona.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
 describe("TaskPersona", () => {
+	beforeEach(() => {
+		process.env = { ...ORIGINAL_ENV };
+		delete process.env.TASK_PERSONA_BACKEND;
+		delete process.env.TASK_PERSONA_CLI_BOTS;
+	});
+
 	afterEach(() => {
 		process.env = { ...ORIGINAL_ENV };
 	});
