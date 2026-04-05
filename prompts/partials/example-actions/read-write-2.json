@@ -1,0 +1,12 @@
+[
+	{
+		"type": "run_ro_shell",
+		"command": "sed -n '1,200p' docs/plans/current-plan.md"
+	},
+	{
+		"type": "replace_in_file",
+		"path": "src/example.ts",
+		"old_string": "const enabled = false;",
+		"new_string": "const enabled = true;"
+	}
+]

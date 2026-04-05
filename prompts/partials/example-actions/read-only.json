@@ -1,10 +1,10 @@
 [
-  {
-    "type": "run_ro_shell",
-    "command": "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
-  },
-  {
-    "type": "run_ro_shell",
-    "command": "cat docs/plans/current-plan.md"
-  }
+	{
+		"type": "run_ro_shell",
+		"command": "[ -f WORKFLOW.md ] && cat WORKFLOW.md || true"
+	},
+	{
+		"type": "run_ro_shell",
+		"command": "cat docs/plans/current-plan.md"
+	}
 ]

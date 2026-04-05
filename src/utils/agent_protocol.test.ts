@@ -86,6 +86,34 @@ I will comply.
 		expect(parsed.protocol.actions).toEqual([{ type: "persist_work" }]);
 	});
 
+	it("parses replace_in_file actions", () => {
+		const parsed = parseAgentProtocolResponse(
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Update the target file."],
+				next_step: "Update the target file.",
+				actions: [
+					{
+						type: "replace_in_file",
+						path: "src/example.ts",
+						old_string: "const enabled = false;",
+						new_string: "const enabled = true;",
+					},
+				],
+				task_status: "in_progress",
+			}),
+		);
+
+		expect(parsed.protocol.actions).toEqual([
+			{
+				type: "replace_in_file",
+				path: "src/example.ts",
+				old_string: "const enabled = false;",
+				new_string: "const enabled = true;",
+			},
+		]);
+	});
+
 	it("parses optional github_comment and plan fields", () => {
 		const parsed = parseAgentProtocolResponse(
 			JSON.stringify({
@@ -185,33 +213,28 @@ I will comply.
 		).toThrow(/plan/);
 	});
 
-	it("builds continuation messages that restate task and prior response", () => {
+	it("builds continuation messages with a compact task state summary", () => {
 		const message = buildContinuationMessage({
 			originalTask: "Developer Task:\nTask ID: issue-55",
 			iteration: 3,
-			previousResponseJson: JSON.stringify({
-				version: AGENT_PROTOCOL_VERSION,
-				plan: ["Read the plan", "Implement the change"],
-				next_step: "Read the plan",
-				actions: [
-					{ type: "run_ro_shell", command: "cat docs/plans/current.md" },
-				],
-				task_status: "in_progress",
-			}),
+			previousPlan: ["Read the plan", "Implement the change"],
+			previousNextStep: "Read the plan",
 			previousGithubComment: "Reading the plan before changing code.",
-			actionOutput:
-				"--- EXECUTING: cat docs/plans/current.md ---\nSTDOUT:\nPlan contents",
+			actionResultSummary:
+				"run_ro_shell `cat docs/plans/current.md` exited with code 0.\nstdout preview: Plan contents",
 		});
 
 		expect(message).toContain("ORIGINAL TASK:");
 		expect(message).toContain("Task ID: issue-55");
 		expect(message).toContain("CURRENT ITERATION: 3");
-		expect(message).toContain("MOST RECENT STRUCTURED RESPONSE:");
-		expect(message).toContain('"next_step":"Read the plan"');
+		expect(message).toContain("MOST RECENT PLAN:");
+		expect(message).toContain("- Read the plan");
+		expect(message).toContain("MOST RECENT NEXT STEP:");
+		expect(message).toContain("Read the plan");
 		expect(message).toContain("MOST RECENT GITHUB STATUS COMMENT:");
 		expect(message).toContain("Reading the plan before changing code.");
-		expect(message).toContain("LATEST ACTION OUTPUT:");
-		expect(message).toContain("Plan contents");
+		expect(message).toContain("MOST RECENT ACTION RESULTS:");
+		expect(message).toContain("stdout preview: Plan contents");
 		expect(message).toContain("Continue the same assigned increment.");
 		expect(message).toContain("return control with a concise progress update");
 		expect(message).toContain(

@@ -43,7 +43,7 @@ Example in-progress response object:
     "Inspect the relevant plan and implementation files.",
     "Make the minimal code change required by the task.",
     "Run targeted verification.",
-    "Persist the work and confirm it exists on the issue branch."
+    "Persist the work and hand control back."
   ],
   "next_step": "Read WORKFLOW.md and the referenced plan file before changing code.",
   "actions": {{IN_PROGRESS_EXAMPLE_ACTIONS}},

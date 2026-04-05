@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Content } from "@google/generative-ai";
 import {
@@ -56,23 +56,27 @@ export interface AgentRunnerOptions {
 interface ExecutedActionRecord {
 	type: ParsedAgentProtocolResponse["protocol"]["actions"][number]["type"];
 	command?: string;
+	path?: string;
 	exitCode?: number;
 	ok?: boolean;
 	persistResult?: PersistWorkResult;
+	message?: string;
 }
 
 interface ActionExecutionResult {
 	output: string;
+	summary: string;
 	executedActions: ExecutedActionRecord[];
 }
 
 interface RunnerProgressState {
-	usedRunShell: boolean;
+	usedWriteAction: boolean;
 	persistSucceededAfterWrite: boolean;
 	verifiedAfterPersist: boolean;
 	lastLoopFingerprint?: string;
 	repeatedCycleCount: number;
 	loopRepairsIssued: number;
+	consecutiveReadOnlyTurnsWithoutWrite: number;
 }
 
 export class AgentRunner {
@@ -115,11 +119,12 @@ export class AgentRunner {
 		let currentMessage = initialMessage;
 		let iteration = 0;
 		const progressState: RunnerProgressState = {
-			usedRunShell: false,
+			usedWriteAction: false,
 			persistSucceededAfterWrite: false,
 			verifiedAfterPersist: false,
 			repeatedCycleCount: 0,
 			loopRepairsIssued: 0,
+			consecutiveReadOnlyTurnsWithoutWrite: 0,
 		};
 
 		while (iteration < maxIterations) {
@@ -225,12 +230,14 @@ export class AgentRunner {
 			);
 			this.updateProgressState(progressState, actionExecution.executedActions);
 			const actionOutput = actionExecution.output;
+			const actionSummary = actionExecution.summary;
 			logTrace("agent.iteration.action", {
 				iteration,
 				actionTypes: parsedResponse.protocol.actions.map(
 					(action) => action.type,
 				),
 				actionOutput: textStats(actionOutput),
+				actionSummary: textStats(actionSummary),
 			});
 			this.log(`ACTION OUTPUT: ${actionOutput}\n`);
 
@@ -265,8 +272,9 @@ export class AgentRunner {
 				currentMessage = buildLoopRepairMessage({
 					originalTask,
 					iteration,
-					previousResponseJson: parsedResponse.rawJson,
-					actionOutput,
+					previousPlan: parsedResponse.protocol.plan,
+					previousNextStep: parsedResponse.protocol.next_step,
+					actionResultSummary: actionSummary,
 					repeatedCycleCount: progressState.repeatedCycleCount + 1,
 				});
 				continue;
@@ -279,9 +287,10 @@ export class AgentRunner {
 			currentMessage = buildContinuationMessage({
 				originalTask,
 				iteration,
-				previousResponseJson: parsedResponse.rawJson,
+				previousPlan: parsedResponse.protocol.plan,
+				previousNextStep: parsedResponse.protocol.next_step,
 				previousGithubComment: parsedResponse.protocol.github_comment,
-				actionOutput,
+				actionResultSummary: actionSummary,
 				reminder,
 			});
 		}
@@ -307,11 +316,13 @@ export class AgentRunner {
 		if (actions.length === 0) {
 			return {
 				output: "ERROR: No actions were supplied.",
+				summary: "No actions were supplied.",
 				executedActions: [],
 			};
 		}
 
 		const outputs: string[] = [];
+		const summaries: string[] = [];
 		const executedActions: ExecutedActionRecord[] = [];
 		const shellAccess = options.shellAccess ?? "read_write";
 
@@ -327,7 +338,11 @@ export class AgentRunner {
 					exitCode: result.exitCode,
 					ok: result.exitCode === 0,
 				});
-				outputs.push(this.formatShellOutput(action.command, result));
+				const formatted = this.formatShellOutput(action.command, result);
+				outputs.push(formatted);
+				summaries.push(
+					this.summarizeShellResult(action.command, result, "run_ro_shell"),
+				);
 				continue;
 			}
 
@@ -343,8 +358,13 @@ export class AgentRunner {
 						type: action.type,
 						command: action.command,
 						ok: false,
+						message: denial.message,
 					});
-					outputs.push(JSON.stringify(denial, null, 2));
+					const formatted = JSON.stringify(denial, null, 2);
+					outputs.push(formatted);
+					summaries.push(
+						`run_shell denied: ${denial.message} (error_code=${denial.error_code})`,
+					);
 					continue;
 				}
 
@@ -358,7 +378,51 @@ export class AgentRunner {
 					exitCode: result.exitCode,
 					ok: result.exitCode === 0,
 				});
-				outputs.push(this.formatShellOutput(action.command, result));
+				const formatted = this.formatShellOutput(action.command, result);
+				outputs.push(formatted);
+				summaries.push(
+					this.summarizeShellResult(action.command, result, "run_shell"),
+				);
+				continue;
+			}
+
+			if (action.type === "replace_in_file") {
+				if (shellAccess !== "read_write") {
+					const denial = {
+						ok: false,
+						error_code: "replace_in_file_not_available",
+						message:
+							'replace_in_file is not available for this persona. Use "run_ro_shell" instead.',
+						path: action.path,
+					};
+					executedActions.push({
+						type: action.type,
+						path: action.path,
+						ok: false,
+						message: denial.message,
+					});
+					const formatted = JSON.stringify(denial, null, 2);
+					outputs.push(formatted);
+					summaries.push(
+						`replace_in_file denied for ${action.path}: ${denial.message} (error_code=${denial.error_code})`,
+					);
+					continue;
+				}
+
+				const result = this.executeReplaceInFile(action);
+				executedActions.push({
+					type: action.type,
+					path: action.path,
+					ok: result.ok,
+					message: result.message,
+				});
+				const formatted = JSON.stringify(result, null, 2);
+				outputs.push(formatted);
+				summaries.push(
+					result.ok
+						? `replace_in_file updated ${action.path} (${result.replacements} replacement${result.replacements === 1 ? "" : "s"})`
+						: `replace_in_file failed for ${action.path}: ${result.message} (error_code=${result.error_code})`,
+				);
 				continue;
 			}
 
@@ -373,8 +437,13 @@ export class AgentRunner {
 					type: action.type,
 					ok: false,
 					persistResult: denial,
+					message: denial.message,
 				});
-				outputs.push(JSON.stringify(denial, null, 2));
+				const formatted = JSON.stringify(denial, null, 2);
+				outputs.push(formatted);
+				summaries.push(
+					`persist_work unavailable: ${denial.message} (error_code=${denial.error_code})`,
+				);
 				continue;
 			}
 
@@ -383,12 +452,16 @@ export class AgentRunner {
 				type: action.type,
 				ok: result.ok,
 				persistResult: result,
+				message: result.message,
 			});
-			outputs.push(JSON.stringify(result, null, 2));
+			const formatted = JSON.stringify(result, null, 2);
+			outputs.push(formatted);
+			summaries.push(this.summarizePersistResult(result));
 		}
 
 		return {
 			output: outputs.join("\n"),
+			summary: summaries.join("\n"),
 			executedActions,
 		};
 	}
@@ -412,16 +485,38 @@ export class AgentRunner {
 		state: RunnerProgressState,
 		executedActions: ExecutedActionRecord[],
 	): void {
+		const wroteThisTurn = executedActions.some(
+			(action) =>
+				(action.type === "run_shell" || action.type === "replace_in_file") &&
+				action.ok,
+		);
+		const usedOnlyReadOnlyActions =
+			executedActions.length > 0 &&
+			executedActions.every(
+				(action) => action.type === "run_ro_shell" && action.ok,
+			);
+
+		if (wroteThisTurn) {
+			state.consecutiveReadOnlyTurnsWithoutWrite = 0;
+		} else if (usedOnlyReadOnlyActions) {
+			state.consecutiveReadOnlyTurnsWithoutWrite += 1;
+		} else {
+			state.consecutiveReadOnlyTurnsWithoutWrite = 0;
+		}
+
 		for (const action of executedActions) {
-			if (action.type === "run_shell" && action.ok) {
-				state.usedRunShell = true;
+			if (
+				(action.type === "run_shell" || action.type === "replace_in_file") &&
+				action.ok
+			) {
+				state.usedWriteAction = true;
 				state.persistSucceededAfterWrite = false;
 				state.verifiedAfterPersist = false;
 				continue;
 			}
 
 			if (action.type === "persist_work") {
-				if (state.usedRunShell && action.persistResult?.ok) {
+				if (state.usedWriteAction && action.persistResult?.ok) {
 					state.persistSucceededAfterWrite = true;
 					state.verifiedAfterPersist = false;
 				}
@@ -431,7 +526,7 @@ export class AgentRunner {
 			if (
 				action.type === "run_ro_shell" &&
 				action.ok &&
-				state.usedRunShell &&
+				state.usedWriteAction &&
 				state.persistSucceededAfterWrite
 			) {
 				state.verifiedAfterPersist = true;
@@ -443,12 +538,12 @@ export class AgentRunner {
 		state: RunnerProgressState,
 		requirePostPersistVerification: boolean,
 	): string | null {
-		if (!state.usedRunShell) {
+		if (!state.usedWriteAction) {
 			return null;
 		}
 
 		if (!state.persistSucceededAfterWrite) {
-			return 'task_status "done" is not allowed after a successful run_shell action until persist_work succeeds';
+			return 'task_status "done" is not allowed after a successful repository write action until persist_work succeeds';
 		}
 
 		if (requirePostPersistVerification && !state.verifiedAfterPersist) {
@@ -462,11 +557,14 @@ export class AgentRunner {
 		state: RunnerProgressState,
 		requirePostPersistVerification: boolean,
 	): string | undefined {
-		if (!state.usedRunShell) {
+		if (!state.usedWriteAction) {
+			if (state.consecutiveReadOnlyTurnsWithoutWrite >= 2) {
+				return `You have already spent ${state.consecutiveReadOnlyTurnsWithoutWrite} consecutive turns on read-only inspection without editing. Your next turn should make a targeted edit, run a focused verification, or return a blocker instead of rereading broad context.`;
+			}
 			return undefined;
 		}
 		if (!state.persistSucceededAfterWrite) {
-			return "You have used run_shell successfully in this task. Do not finish until persist_work succeeds.";
+			return "You have already modified repository files in this task. Do not finish until persist_work succeeds.";
 		}
 		if (requirePostPersistVerification && !state.verifiedAfterPersist) {
 			return "Persistence succeeded. Run a read-only verification against the persisted branch or file contents before finishing.";
@@ -485,8 +583,10 @@ export class AgentRunner {
 			executedActions: executedActions.map((action) => ({
 				type: action.type,
 				command: action.command,
+				path: action.path,
 				exitCode: action.exitCode,
 				ok: action.ok,
+				message: action.message,
 				persistOk: action.persistResult?.ok,
 				persistErrorCode: action.persistResult?.error_code,
 				persistMessage: action.persistResult?.message,
@@ -544,6 +644,112 @@ export class AgentRunner {
 					],
 				},
 			],
+		};
+	}
+
+	private summarizeShellResult(
+		command: string,
+		result: Awaited<ReturnType<ShellService["executeCommand"]>>,
+		actionType: "run_ro_shell" | "run_shell",
+	): string {
+		const parts = [
+			`${actionType} \`${command}\` exited with code ${result.exitCode}.`,
+		];
+		const stdoutPreview = this.truncateForPrompt(result.stdout);
+		if (stdoutPreview) {
+			parts.push(`stdout preview: ${stdoutPreview}`);
+		}
+		const stderrPreview = this.truncateForPrompt(result.stderr);
+		if (stderrPreview) {
+			parts.push(`stderr preview: ${stderrPreview}`);
+		}
+		return parts.join("\n");
+	}
+
+	private summarizePersistResult(result: PersistWorkResult): string {
+		if (result.ok) {
+			const changedFiles =
+				result.changed_files && result.changed_files.length > 0
+					? result.changed_files.join(", ")
+					: "none reported";
+			return `persist_work succeeded on branch ${result.branch} at commit ${result.commit_sha}. Changed files: ${changedFiles}.`;
+		}
+
+		return `persist_work failed with error_code=${result.error_code}: ${result.message}`;
+	}
+
+	private truncateForPrompt(text: string, maxLength: number = 400): string {
+		const normalized = text.trim().replace(/\s+/g, " ");
+		if (normalized.length <= maxLength) {
+			return normalized;
+		}
+		return `${normalized.slice(0, maxLength - 3)}...`;
+	}
+
+	private executeReplaceInFile(action: {
+		path: string;
+		old_string: string;
+		new_string: string;
+		replace_all?: boolean;
+	}):
+		| { ok: true; path: string; replacements: number; message: string }
+		| {
+				ok: false;
+				path: string;
+				error_code: string;
+				message: string;
+		  } {
+		const repoRoot = resolve(process.cwd());
+		const targetPath = resolve(repoRoot, action.path);
+		if (!(targetPath === repoRoot || targetPath.startsWith(`${repoRoot}/`))) {
+			return {
+				ok: false,
+				path: action.path,
+				error_code: "path_outside_repo",
+				message: "replace_in_file may only target files inside the repository.",
+			};
+		}
+
+		if (!existsSync(targetPath)) {
+			return {
+				ok: false,
+				path: action.path,
+				error_code: "file_not_found",
+				message: "Target file does not exist.",
+			};
+		}
+
+		const original = readFileSync(targetPath, "utf8");
+		const matchCount = original.split(action.old_string).length - 1;
+		if (matchCount === 0) {
+			return {
+				ok: false,
+				path: action.path,
+				error_code: "old_string_not_found",
+				message: "old_string was not found in the target file.",
+			};
+		}
+
+		if (!action.replace_all && matchCount > 1) {
+			return {
+				ok: false,
+				path: action.path,
+				error_code: "ambiguous_match",
+				message:
+					"old_string matched multiple locations. Provide a more specific old_string or set replace_all to true.",
+			};
+		}
+
+		const updated = action.replace_all
+			? original.replaceAll(action.old_string, action.new_string)
+			: original.replace(action.old_string, action.new_string);
+		const replacements = action.replace_all ? matchCount : 1;
+		writeFileSync(targetPath, updated, "utf8");
+		return {
+			ok: true,
+			path: action.path,
+			replacements,
+			message: `Updated ${action.path} with ${replacements} replacement${replacements === 1 ? "" : "s"}.`,
 		};
 	}
 }

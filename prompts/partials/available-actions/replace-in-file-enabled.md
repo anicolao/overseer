@@ -1,0 +1,1 @@
+- `{"type":"replace_in_file","path":"...","old_string":"...","new_string":"..."}` for precise in-repo text edits without writing ad hoc patch scripts. If `old_string` appears multiple times, either make it more specific or set `"replace_all": true`.
