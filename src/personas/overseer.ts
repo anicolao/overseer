@@ -231,22 +231,10 @@ export class OverseerPersona {
 			};
 		}
 
-		const fullContext = await this.github.getFullIssueContext(
-			owner,
-			repo,
-			issueNumber,
-		);
-		const latestResponder =
-			_commenterPersona || commenter || "unknown responder";
-		const retryingSameSpecialistIsAllowed =
-			/(ERROR:\s*Max iterations reached|Blocker:|failed to|does not exist|needs revision|needs repair)/i.test(
-				body,
-			);
-		const sameResponderGuardrail = retryingSameSpecialistIsAllowed
-			? `- Do not assign the next step back to ${latestResponder} unless the latest response is a blocker, timeout, or repair request that still belongs with that specialist after you fix the task packet.`
-			: `- Do not assign the next step back to ${latestResponder}.`;
 		const explicitRepoPaths = extractRepoPathMentions(body);
 		const explicitCorrectionMentions = extractQuotedCorrectionMentions(body);
+		const latestResponder =
+			_commenterPersona || commenter || "unknown responder";
 		if (
 			shouldDirectRouteDesignRepair(
 				body,
@@ -255,6 +243,9 @@ export class OverseerPersona {
 				explicitCorrectionMentions,
 			)
 		) {
+			const directRouteContext = extractDesignDocPath(body)
+				? body
+				: await this.github.getFullIssueContext(owner, repo, issueNumber);
 			logTrace("persona.overseer.directDesignRepairRoute", {
 				commenter,
 				commenterPersona: _commenterPersona,
@@ -264,11 +255,23 @@ export class OverseerPersona {
 			});
 			return this.buildDirectDesignRepairResponse(
 				body,
-				fullContext,
+				directRouteContext,
 				explicitRepoPaths,
 				explicitCorrectionMentions,
 			);
 		}
+		const fullContext = await this.github.getFullIssueContext(
+			owner,
+			repo,
+			issueNumber,
+		);
+		const retryingSameSpecialistIsAllowed =
+			/(ERROR:\s*Max iterations reached|Blocker:|failed to|does not exist|needs revision|needs repair)/i.test(
+				body,
+			);
+		const sameResponderGuardrail = retryingSameSpecialistIsAllowed
+			? `- Do not assign the next step back to ${latestResponder} unless the latest response is a blocker, timeout, or repair request that still belongs with that specialist after you fix the task packet.`
+			: `- Do not assign the next step back to ${latestResponder}.`;
 		const explicitRepoPathsSection =
 			explicitRepoPaths.length > 0
 				? `\nExplicit repo paths mentioned in the latest comment:\n${explicitRepoPaths
