@@ -86,13 +86,45 @@ export class TaskPersona {
 				displayName: this.bot.displayName,
 				issueNumber,
 			});
-			return this.geminiCli.runTask({
+			const cliResult = await this.geminiCli.runTask({
 				botId: this.bot.id,
 				displayName: this.bot.displayName,
 				systemInstruction: this.bot.prompt.concatenatedPrompt,
 				taskMessage: taskPromptBody,
 				modelName: this.bot.llm.model,
 			});
+			if (!this.bot.allowPersistWork) {
+				return cliResult;
+			}
+			const persistResult = await this.persistence.persistWork(
+				issueNumber,
+				this.bot.id,
+			);
+			if (persistResult.ok) {
+				return {
+					...cliResult,
+					log: [
+						cliResult.log,
+						"",
+						"AUTO PERSIST RESULT:",
+						JSON.stringify(persistResult, null, 2),
+					].join("\n"),
+				};
+			}
+			if (persistResult.error_code === "no_changes") {
+				return cliResult;
+			}
+			return {
+				finalResponse:
+					"Gemini CLI completed the assigned work, but persistence failed before the result could be published.",
+				handoffTo: "@overseer",
+				log: [
+					cliResult.log,
+					"",
+					"AUTO PERSIST FAILURE:",
+					JSON.stringify(persistResult, null, 2),
+				].join("\n"),
+			};
 		}
 
 		logTrace("persona.task.promptPrepared", {

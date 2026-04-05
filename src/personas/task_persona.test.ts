@@ -123,6 +123,7 @@ describe("TaskPersona", () => {
 		const bot = getBotOrThrow(registry, "developer-tester");
 		let startChatCalled = false;
 		let cliCalled = false;
+		let persistCalled = false;
 		const gemini = {
 			startChat() {
 				startChatCalled = true;
@@ -130,13 +131,16 @@ describe("TaskPersona", () => {
 			},
 		};
 		const persistence = {
-			persistWork: async () => ({
-				ok: true as const,
-				branch: "bot/issue-1",
-				commit_sha: "abc123",
-				changed_files: [],
-				message: "Persisted successfully.",
-			}),
+			persistWork: async () => {
+				persistCalled = true;
+				return {
+					ok: true as const,
+					branch: "bot/issue-1",
+					commit_sha: "abc123",
+					changed_files: ["docs/design/example.md"],
+					message: "Persisted successfully.",
+				};
+			},
 		};
 		const geminiCli = {
 			runTask: async (options: {
@@ -187,7 +191,9 @@ describe("TaskPersona", () => {
 
 		expect(startChatCalled).toBe(false);
 		expect(cliCalled).toBe(true);
+		expect(persistCalled).toBe(true);
 		expect(result.finalResponse).toBe("CLI completed the task.");
 		expect(result.handoffTo).toBe("@overseer");
+		expect(result.log).toContain("AUTO PERSIST RESULT:");
 	});
 });
