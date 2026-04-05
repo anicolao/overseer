@@ -1,17 +1,28 @@
-# Implementation Plan: persist_qa Action
+# Implementation Plan: `persist_qa`
 
 Based on the approved design in `docs/design/persist-qa.md`.
 
-## Increment 1: Action Protocol and Runner
+## Increment 1: Protocol and Runner Surface
 **Files:** `src/utils/agent_protocol.ts`, `src/utils/agent_runner.ts`
-- **`agent_protocol.ts`:** Add `{"type": "persist_qa"}` to the allowed action types schema.
-- **`agent_runner.ts`:** Implement the dispatch handler for `persist_qa` within the runner loop, triggering the required persistence logic (similar to `persist_work`).
 
-## Increment 2: Permissions and Persona
-**Files:** `src/bots/bot_config.ts`, `src/personas/task_persona.ts`
-- **`bot_config.ts`:** Grant the `@quality` bot permission to use `persist_qa` and ensure the action mapping assigns appropriate read/write capabilities (e.g., mapping to `requiresWrite`).
-- **`task_persona.ts`:** Update the persona enforcement/prompt generation to correctly output `persist_qa` as an available action, including any rules for its usage.
+- Add `persist_qa` to the protocol action union and parser in `src/utils/agent_protocol.ts`.
+- Add a `persistQa` runner option and `persist_qa` action execution path in `src/utils/agent_runner.ts`.
+- Keep the action shape minimal; `run_shell` writes the file contents, while `persist_qa` only triggers persistence of existing `docs/qa/` changes.
 
-## Increment 3: Prompt Update
+## Increment 2: Restricted Persistence and Runtime Wiring
+**Files:** `src/utils/persistence.ts`, `src/personas/task_persona.ts`
+
+- Add a restricted persistence method in `src/utils/persistence.ts` that stages, commits, and pushes only `docs/qa/` changes.
+- Wire that method into `src/personas/task_persona.ts` as the `persistQa` callback for authorized bots.
+
+## Increment 3: Bot Capability Configuration
+**Files:** `bots.json`, `src/bots/bot_config.ts`
+
+- Add an explicit `allow_persist_qa` capability to the bot manifest and loaded bot config.
+- Enable `run_shell` and `persist_qa` for the `quality` bot without granting it the broader `persist_work` capability.
+
+## Increment 4: Quality Prompt Update
 **Files:** `prompts/quality.md`
-- **`prompts/quality.md`:** Update the system prompt for the `@quality` bot to instruct it on when and how to use the `persist_qa` action.
+
+- Instruct the `@quality` bot that it may write detailed QA notes under `docs/qa/` with `run_shell`.
+- Instruct it to use `persist_qa` to store those existing QA notes once they are ready.
