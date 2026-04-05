@@ -32,6 +32,7 @@ interface RawBotDefinition {
 	};
 	prompt_files?: string[];
 	allow_persist_work?: boolean;
+	allow_persist_qa?: boolean;
 	require_post_persist_verification?: boolean;
 	max_iterations?: number;
 	max_actions_per_turn?: number;

@@ -79,7 +79,8 @@
 				"prompts/shared/task-agent.md",
 				"prompts/shared/read-only-agent.md",
 				"prompts/quality.md"
-			]
+			],
+			"allow_persist_qa": true
 		}
 	]
 }

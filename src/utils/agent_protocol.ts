@@ -35,7 +35,12 @@ export interface PersistWorkAction {
 	type: "persist_work";
 }
 
+export interface PersistQAAction {
+	type: "persist_qa";
+}
+
 export type AgentAction =
+	| PersistQAAction
 	| RunReadOnlyShellAction
 	| RunShellAction
 	| ReplaceInFileAction
