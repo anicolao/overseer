@@ -35,6 +35,8 @@ Configured in [`bots.json`](../bots.json):
 
 Persona prompts are assembled from ordered markdown files under `prompts/`. The prompt loader is [`src/bots/bot_config.ts`](../src/bots/bot_config.ts).
 
+Overseer is intentionally a routing persona. It inspects issue context and repository state, but it is not supposed to invent technical fixes itself. When design, planning, or implementation drift is discovered, the intended behavior is to route that problem back to the owning specialist persona or to human review.
+
 ## Prompt and Task Model
 
 ### Prompt Assembly
@@ -73,6 +75,8 @@ The intended workflow is now design-first:
 1. Overseer asks `product-architect` to create or repair a design doc.
 2. A human approves that design in the issue thread.
 3. Overseer asks `planner` and then `developer-tester` to execute against the approved design.
+
+If a developer run reveals that the design or plan was incomplete, Overseer should route the issue back to architect or planner rather than inventing an unplanned implementation step itself.
 
 ## JSON Agent Protocol
 

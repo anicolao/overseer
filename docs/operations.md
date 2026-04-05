@@ -142,5 +142,6 @@ The current debugging toolchain is artifact-based and post-hoc:
 The current approval gate is prompt-driven rather than hard-enforced in code:
 
 - Overseer is instructed to require human approval on design docs before planning or implementation
+- Overseer is instructed to act as a task router only, rerouting drift or failed specialist work back to the correct persona or to human review
 - planner and developer prompts are instructed to refuse unapproved designs
 - the repository does not currently persist a separate machine-readable approval record beyond issue-thread context

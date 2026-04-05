@@ -5,6 +5,7 @@ describe("bot_config", () => {
 	it("loads bot prompts from markdown files and expands the protocol version", () => {
 		const registry = loadBotRegistry();
 		const developer = getBotOrThrow(registry, "developer-tester");
+		const overseer = getBotOrThrow(registry, "overseer");
 
 		expect(developer.kind).toBe("task");
 		expect(developer.shellAccess).toBe("read_write");
@@ -35,6 +36,15 @@ describe("bot_config", () => {
 		expect(developer.prompt.concatenatedPrompt).toContain('"type":"run_shell"');
 		expect(developer.prompt.concatenatedPrompt).not.toContain(
 			"BEGIN PROMPT FILE:",
+		);
+		expect(overseer.prompt.concatenatedPrompt).toContain(
+			"You are a router of tasks, not a solver of technical subtasks.",
+		);
+		expect(overseer.prompt.concatenatedPrompt).toContain(
+			"do not create ad hoc implementation increments that were not validated by the right specialist",
+		);
+		expect(overseer.prompt.concatenatedPrompt).toContain(
+			"if implementation uncovers a missing step or architectural omission, send the work back to `@product-architect` or `@planner`",
 		);
 	});
 
