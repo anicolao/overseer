@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { extractRepoPathMentions } from "./overseer.js";
+import {
+	extractQuotedCorrectionMentions,
+	extractRepoPathMentions,
+} from "./overseer.js";
 
 describe("extractRepoPathMentions", () => {
 	it("extracts repo paths from human correction comments", () => {
@@ -17,5 +20,19 @@ describe("extractRepoPathMentions", () => {
 			"src/personas/task_persona.ts",
 			"src/bots/bot_config.ts",
 		]);
+	});
+});
+
+describe("extractQuotedCorrectionMentions", () => {
+	it("extracts non-path quoted constraints from human correction comments", () => {
+		const mentions = extractQuotedCorrectionMentions(
+			[
+				"@overseer the design still drifts.",
+				"Please cover both `persist_qa` and `run_shell` for `@quality`,",
+				"and distinguish `prompts/quality.md` from `src/personas/task_persona.ts`.",
+			].join(" "),
+		);
+
+		expect(mentions).toEqual(["persist_qa", "run_shell", "@quality"]);
 	});
 });

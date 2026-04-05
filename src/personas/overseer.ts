@@ -25,6 +25,22 @@ export function extractRepoPathMentions(text: string): string[] {
 	return [...paths];
 }
 
+export function extractQuotedCorrectionMentions(text: string): string[] {
+	const matches = text.matchAll(/`([^`\n]+)`/g);
+	const mentions = new Set<string>();
+	for (const match of matches) {
+		const value = match[1]?.trim();
+		if (!value || /^(?:src|prompts|docs)\//.test(value)) {
+			continue;
+		}
+		if (value === "bots.json" || value === "AGENTS.md") {
+			continue;
+		}
+		mentions.add(value);
+	}
+	return [...mentions];
+}
+
 export class OverseerPersona {
 	private bot: LoadedBotDefinition;
 	private gemini: GeminiService;
@@ -153,6 +169,7 @@ export class OverseerPersona {
 			? `- Do not assign the next step back to ${latestResponder} unless the latest response is a blocker, timeout, or repair request that still belongs with that specialist after you fix the task packet.`
 			: `- Do not assign the next step back to ${latestResponder}.`;
 		const explicitRepoPaths = extractRepoPathMentions(body);
+		const explicitCorrectionMentions = extractQuotedCorrectionMentions(body);
 		const explicitRepoPathsSection =
 			explicitRepoPaths.length > 0
 				? `\nExplicit repo paths mentioned in the latest comment:\n${explicitRepoPaths
@@ -161,12 +178,24 @@ export class OverseerPersona {
 							"\n",
 						)}\n- Preserve these paths in the next handoff when they are relevant to the correction or blocker.`
 				: "";
+		const explicitCorrectionMentionsSection =
+			explicitCorrectionMentions.length > 0
+				? `\nExplicit quoted constraints from the latest comment:\n${explicitCorrectionMentions
+						.map((value) => `- ${value}`)
+						.join(
+							"\n",
+						)}\n- Preserve these quoted constraints in the next handoff's Current Step, Task Summary, Files To Read, or Done When when they are relevant to the correction or blocker.`
+				: "";
 		const taskBody = `The issue has been updated. The latest response came from ${latestResponder}. Review the full context and decide the next micro-task.
 
 Guardrails:
 ${sameResponderGuardrail}
 - If ${latestResponder} claims to have created or updated files, read those files before deciding the next action.
-- If the latest comment names specific repository files or corrects the execution seam, preserve those corrections in the next handoff's Files To Read and Current Step instead of falling back to generic related files.${explicitRepoPathsSection}
+- If the latest comment names specific repository files or corrects the execution seam, preserve those corrections in the next handoff's Files To Read and Current Step instead of falling back to generic related files.
+- If the latest comment gives explicit capability, action, prompt, or bot-role corrections, preserve those corrections in the next handoff instead of collapsing them into a partial summary.${explicitRepoPathsSection}${explicitCorrectionMentionsSection}
+
+LATEST COMMENT TO PRESERVE LITERALLY WHEN RELEVANT:
+${body}
 
 CONTEXT:
 ${fullContext}`;
