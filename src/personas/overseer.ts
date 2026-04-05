@@ -140,6 +140,7 @@ export class OverseerPersona {
 			...(filesToRead.length > 0
 				? filesToRead.map((path) => `- ${path}`)
 				: ["- none"]),
+			`Human Correction: ${correction}`,
 			`Current Step: ${currentStep}`,
 			`Task Summary: Rewrite the stale design sections so they match this human correction literally where relevant: ${correction}`,
 			`Done When: ${doneWhen}`,

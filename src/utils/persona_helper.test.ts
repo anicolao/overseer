@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	extractAutomatedPersonaName,
 	extractPersonaMentions,
 	hasExplicitPersonaMention,
+	isAutomatedPersonaComment,
 	isLimitReached,
 	stripMarkdownCode,
 } from "./persona_helper.js";
@@ -62,6 +64,24 @@ describe("extractPersonaMentions", () => {
 				].join("\n"),
 			),
 		).toEqual(["@overseer"]);
+	});
+});
+
+describe("isAutomatedPersonaComment", () => {
+	it("detects structured automated persona comments", () => {
+		const body =
+			"I am the **Overseer**, and I am responding to issue #85 from @anicolao.\n\nNext step: human review required";
+
+		expect(isAutomatedPersonaComment(body)).toBe(true);
+		expect(extractAutomatedPersonaName(body)).toBe("Overseer");
+	});
+
+	it("does not treat a human owner comment as automated without persona attribution", () => {
+		const body =
+			"@overseer I do not approve this design yet. Route it back to the architect.";
+
+		expect(isAutomatedPersonaComment(body)).toBe(false);
+		expect(extractAutomatedPersonaName(body)).toBeNull();
 	});
 });
 

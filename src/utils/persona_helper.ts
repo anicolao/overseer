@@ -49,6 +49,17 @@ export function extractPersonaMentions(text: string): string[] {
 	return stripMarkdownCode(text).match(/@[a-z-]+/gi) ?? [];
 }
 
+export function extractAutomatedPersonaName(text: string): string | null {
+	const match = text.match(
+		/^I am the \*\*(Overseer|Product\/Architect|Planner|Developer\/Tester|Quality)\*\*, and I am responding to /,
+	);
+	return match?.[1] ?? null;
+}
+
+export function isAutomatedPersonaComment(text: string): boolean {
+	return extractAutomatedPersonaName(text) !== null;
+}
+
 export async function isLimitReached(
 	github: GitHubService,
 	owner: string,

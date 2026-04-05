@@ -15,6 +15,7 @@ export interface TaskPacket {
 	currentStep?: string;
 	smallestUsefulIncrement?: string;
 	stopAfter?: string;
+	humanCorrection?: string;
 	taskSummary: string;
 	doneWhen?: string;
 	progressEvidence: string[];
@@ -33,6 +34,7 @@ type StructuredTaskFields = {
 	currentStep?: string;
 	smallestUsefulIncrement?: string;
 	stopAfter?: string;
+	humanCorrection?: string;
 	taskSummary?: string;
 	doneWhen?: string;
 	progressEvidence: string[];
@@ -49,6 +51,7 @@ export function parseTaskPacket(body: string): TaskPacket {
 			directedTask,
 			hasStructuredHandoff: false,
 			filesToRead: [],
+			humanCorrection: undefined,
 			taskSummary: directedTask,
 			progressEvidence: [],
 			verificationCommands: [],
@@ -89,6 +92,7 @@ export function parseTaskPacket(body: string): TaskPacket {
 			parsed.smallestUsefulIncrement,
 		),
 		stopAfter: normalizeOptionalValue(parsed.stopAfter),
+		humanCorrection: normalizeOptionalValue(parsed.humanCorrection),
 		taskSummary,
 		doneWhen: normalizeOptionalValue(parsed.doneWhen),
 		progressEvidence: parsed.progressEvidence
@@ -116,6 +120,7 @@ export function renderTaskPacketForPrompt(packet: TaskPacket): string {
 		`- Current Step: ${packet.currentStep || "none"}`,
 		`- Smallest Useful Increment: ${packet.smallestUsefulIncrement || "none"}`,
 		`- Stop After: ${packet.stopAfter || "none"}`,
+		`- Human Correction: ${packet.humanCorrection || "none"}`,
 		`- Task Summary: ${packet.taskSummary}`,
 		`- Done When: ${packet.doneWhen || "none"}`,
 		`- Progress Evidence: ${
@@ -181,7 +186,7 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 		}
 
 		const keyMatch = trimmed.match(
-			/^(Task ID|Design File|Design Approval Status|Plan File|Files To Read|Current Step|Smallest Useful Increment|Stop After|Task Summary|Done When|Progress Evidence|Verification|Likely Next Step):\s*(.*)$/i,
+			/^(Task ID|Design File|Design Approval Status|Plan File|Files To Read|Current Step|Smallest Useful Increment|Stop After|Human Correction|Task Summary|Done When|Progress Evidence|Verification|Likely Next Step):\s*(.*)$/i,
 		);
 		if (keyMatch) {
 			activeListKey = null;
@@ -224,6 +229,10 @@ function parseStructuredTaskFields(block: string): StructuredTaskFields {
 			if (rawKey === "stop after") {
 				result.stopAfter = rawValue.trim();
 				activeScalarKey = "stopAfter";
+				continue;
+			}
+			if (rawKey === "human correction") {
+				result.humanCorrection = rawValue.trim();
 				continue;
 			}
 			if (rawKey === "task summary") {

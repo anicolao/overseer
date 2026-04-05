@@ -13,9 +13,11 @@ import {
 } from "./utils/handoff.js";
 import { PersistenceService } from "./utils/persistence.js";
 import {
+	extractAutomatedPersonaName,
 	extractPersonaMentions,
 	getAttribution,
 	hasExplicitPersonaMention,
+	isAutomatedPersonaComment,
 	stripMarkdownCode,
 } from "./utils/persona_helper.js";
 import { truncate } from "./utils/text.js";
@@ -82,6 +84,7 @@ function buildDirectDesignRepairIterationResult(body: string): IterationResult {
 		"Design Approval Status: needs_revision",
 		"Files To Read:",
 		...filesToRead.map((path) => `- ${path}`),
+		`Human Correction: ${correction}`,
 		`Current Step: Revise ${designFile} so it reflects the latest human correction and accurately describes the real prompt, manifest/config, protocol, runtime execution, and runtime wiring seams in this repository.`,
 		`Task Summary: Rewrite the stale sections of ${designFile} to match this correction literally where relevant: ${correction}`,
 		`Done When: ${designFile} accurately explains prompt content in prompts/quality.md, manifest/config in bots.json and src/bots/bot_config.ts, protocol/schema in src/utils/agent_protocol.ts, runtime execution in src/utils/agent_runner.ts, runtime wiring in src/personas/task_persona.ts, and does not invent fields that do not exist in the source.`,
@@ -141,7 +144,6 @@ async function run() {
 	};
 
 	const sender = eventData.sender?.login;
-	const botUser = "anicolao"; // The identity used by OVERSEER_TOKEN
 	logTrace("dispatcher.start", {
 		eventName,
 		sender,
@@ -268,8 +270,10 @@ async function run() {
 			);
 			return;
 		}
+		const automatedPersona = extractAutomatedPersonaName(body);
+		const isAutomatedComment = isAutomatedPersonaComment(body);
 		if (
-			sender !== botUser &&
+			!isAutomatedComment &&
 			activePersona === null &&
 			shouldBypassOverseerForDirectDesignRepair(body)
 		) {
@@ -290,11 +294,8 @@ async function run() {
 		}
 
 		// 1. Identify sender persona if bot
-		if (sender === botUser) {
-			const personaMatch = body.match(/I am the \*\*(.+?)\*\*/);
-			if (personaMatch) {
-				senderPersona = personaMatch[1];
-			}
+		if (automatedPersona) {
+			senderPersona = automatedPersona;
 		}
 
 		// 2. Identify target persona
@@ -359,7 +360,7 @@ async function run() {
 			};
 			// 4. Persona-Specific Bot Protection: Prevent self-triggering
 			if (
-				sender === botUser &&
+				isAutomatedComment &&
 				senderPersona === personaNameMap[executedPersona]
 			) {
 				console.log(`Ignoring self-trigger from ${executedPersona}`);
