@@ -8,7 +8,7 @@ import {
 	rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, relative } from "node:path";
 import { promisify } from "node:util";
 import type { AgentAction } from "./agent_protocol.js";
 import { logTrace, serializeError, textStats } from "./trace.js";
@@ -224,7 +224,11 @@ function createReadOnlySandbox(sourceRepoRoot: string): {
 	mkdirSync(homeDir, { recursive: true });
 	mkdirSync(tempDir, { recursive: true });
 
-	cpSync(sourceRepoRoot, repoDir, { recursive: true });
+	cpSync(sourceRepoRoot, repoDir, {
+		recursive: true,
+		filter: (sourcePath) =>
+			shouldCopyIntoReadOnlySandbox(sourceRepoRoot, sourcePath),
+	});
 	makeDirectoryTreeReadOnly(repoDir);
 
 	return {
@@ -233,6 +237,28 @@ function createReadOnlySandbox(sourceRepoRoot: string): {
 		homeDir,
 		tmpDir: tempDir,
 	};
+}
+
+function shouldCopyIntoReadOnlySandbox(
+	sourceRepoRoot: string,
+	sourcePath: string,
+): boolean {
+	const relPath = relative(sourceRepoRoot, sourcePath);
+	if (relPath === "") {
+		return true;
+	}
+
+	const normalizedRelPath = relPath.replaceAll("\\", "/");
+	const topLevelEntry = normalizedRelPath.split("/", 1)[0];
+	if (!topLevelEntry) {
+		return true;
+	}
+
+	if (topLevelEntry === ".artifacts" || topLevelEntry === ".backstop") {
+		return false;
+	}
+
+	return !/^session_.*\.log$/.test(topLevelEntry);
 }
 
 function makeDirectoryTreeReadOnly(path: string): void {

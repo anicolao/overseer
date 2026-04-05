@@ -68,6 +68,10 @@ export class TaskPersona {
 			};
 		}
 		const canonicalTaskBody = renderTaskPacketForPrompt(taskPacket);
+		const taskPromptBody = this.buildTaskPromptBody(
+			taskPacket,
+			canonicalTaskBody,
+		);
 
 		logTrace("persona.task.promptPrepared", {
 			botId: this.bot.id,
@@ -76,8 +80,8 @@ export class TaskPersona {
 			taskBody: textStats(taskBody),
 			taskBodyRaw: taskBody,
 			taskPacket,
-			canonicalTaskBody: textStats(canonicalTaskBody),
-			canonicalTaskBodyRaw: canonicalTaskBody,
+			canonicalTaskBody: textStats(taskPromptBody),
+			canonicalTaskBodyRaw: taskPromptBody,
 			shellAccess: this.bot.shellAccess,
 			allowPersistWork: this.bot.allowPersistWork,
 			maxIterations: this.bot.maxIterations,
@@ -105,9 +109,33 @@ export class TaskPersona {
 		return this.runner.runAutonomousLoop(
 			this.gemini,
 			this.bot.prompt.concatenatedPrompt,
-			canonicalTaskBody,
+			taskPromptBody,
 			this.bot.maxIterations,
 			runnerOptions,
 		);
+	}
+
+	private buildTaskPromptBody(
+		taskPacket: ReturnType<typeof parseTaskPacket>,
+		canonicalTaskBody: string,
+	): string {
+		if (
+			taskPacket.handoffType === "architect" &&
+			taskPacket.designApprovalStatus === "needs_revision"
+		) {
+			const artifact = taskPacket.designFile || "the design artifact";
+			return [
+				"REPAIR EXECUTION NOTE:",
+				"- This is a semantic design-repair task.",
+				"- The stale file names or abstractions may not appear verbatim in the current design doc.",
+				`- After you inspect the named files once, rewrite the affected sections in ${artifact} so they name the real files, symbols, and seams from the current repository.`,
+				"- Do not spend multiple turns searching for literal stale strings.",
+				"- A no-op search or replace does not satisfy the task; you must leave a real diff in the design artifact or report a blocker.",
+				"",
+				canonicalTaskBody,
+			].join("\n");
+		}
+
+		return canonicalTaskBody;
 	}
 }

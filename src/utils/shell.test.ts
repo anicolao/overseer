@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ShellService, wrapInNixDevelop } from "./shell.js";
 
@@ -19,15 +20,22 @@ describe("wrapInNixDevelop", () => {
 
 describe("ShellService read-only execution", () => {
 	it("prevents writes to repository files in run_ro_shell mode", async () => {
-		const repoDir = resolve(process.cwd());
-		const before = readFileSync(resolve(repoDir, "package.json"), "utf8");
-		const shell = new ShellService(repoDir, (command) => command);
-		const result = await shell.executeCommand(
-			"printf '\\n// should not be written\\n' >> package.json",
-			"read_only",
-		);
+		const repoDir = mkdtempSync(join(tmpdir(), "overseer-shell-test-"));
+		const packageJsonPath = join(repoDir, "package.json");
+		writeFileSync(packageJsonPath, '{ "name": "fixture" }\n', "utf8");
 
-		expect(result.exitCode).not.toBe(0);
-		expect(readFileSync(resolve(repoDir, "package.json"), "utf8")).toBe(before);
+		try {
+			const before = readFileSync(packageJsonPath, "utf8");
+			const shell = new ShellService(repoDir, (command) => command);
+			const result = await shell.executeCommand(
+				"printf '\\n// should not be written\\n' >> package.json",
+				"read_only",
+			);
+
+			expect(result.exitCode).not.toBe(0);
+			expect(readFileSync(packageJsonPath, "utf8")).toBe(before);
+		} finally {
+			rmSync(repoDir, { recursive: true, force: true });
+		}
 	});
 });
