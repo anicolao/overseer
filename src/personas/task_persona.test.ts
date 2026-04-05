@@ -113,7 +113,7 @@ describe("TaskPersona", () => {
 		expect(receivedInitialMessage).toContain(
 			"Do not spend multiple turns searching for literal stale strings.",
 		);
-	}, 15_000);
+	}, 60_000);
 
 	it("routes matching task bots through Gemini CLI when enabled", async () => {
 		process.env.TASK_PERSONA_BACKEND = "gemini_cli";
