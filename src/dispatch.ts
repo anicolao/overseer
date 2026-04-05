@@ -121,8 +121,21 @@ function buildDirectDesignApprovalIterationResult(
 	const designFile =
 		extractDesignDocPathForDirectRepair(body) || "docs/design/persist-qa.md";
 	const planFile = buildPlanPathFromDesignFile(designFile);
+	const planExists = fs.existsSync(planFile);
+	const filesToRead = planExists ? [designFile, planFile] : [designFile];
+	const currentStep = planExists
+		? `Validate or update the existing implementation plan in ${planFile} for the approved design.`
+		: "Create the implementation plan for the approved design.";
+	const taskSummary = planExists
+		? `Review ${planFile} against ${designFile}, keep the existing plan if it is still valid, and update it only where the approved design now requires changes.`
+		: `Decompose ${designFile} into small implementation increments that can be delegated one at a time.`;
+	const doneWhen = planExists
+		? `${planFile} accurately reflects the approved design and describes the implementation steps needed to realize it.`
+		: `${planFile} exists and describes the implementation steps needed to realize the approved design.`;
 	const finalResponse = [
-		"The human has explicitly approved the current design. I am routing the approved artifact directly to the Planner.",
+		planExists
+			? "The human has explicitly approved the current design. I am routing the approved design and the existing plan artifact directly to the Planner for validation or update."
+			: "The human has explicitly approved the current design. I am routing the approved artifact directly to the Planner.",
 		"",
 		"Planner Task:",
 		"Task ID: MVP validation: persist_qa end-to-end",
@@ -130,10 +143,10 @@ function buildDirectDesignApprovalIterationResult(
 		"Design Approval Status: approved",
 		`Plan File: ${planFile}`,
 		"Files To Read:",
-		`- ${designFile}`,
-		"Current Step: Create the implementation plan for the approved design.",
-		`Task Summary: Decompose ${designFile} into small implementation increments that can be delegated one at a time.`,
-		`Done When: ${planFile} exists and describes the implementation steps needed to realize the approved design.`,
+		...filesToRead.map((path) => `- ${path}`),
+		`Current Step: ${currentStep}`,
+		`Task Summary: ${taskSummary}`,
+		`Done When: ${doneWhen}`,
 		"Verification:",
 		`- cat ${planFile}`,
 		"Likely Next Step: Delegate the first implementation increment to @developer-tester.",

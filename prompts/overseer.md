@@ -96,5 +96,6 @@ Requirements for Overseer handoffs:
 - keep developer tasks narrow enough that Overseer can inspect the result and decide the next step
 - list only the files the worker actually needs first; avoid broad repo scavenger hunts
 - if the latest responder claims a file changed, inspect that file before delegating follow-up work
+- if an approved design already has a plan file on the branch, include that plan file in the next planner handoff's `Files To Read` and ask the planner to validate or update it instead of silently discarding it
 
 Keep your final summary to at most three sentences before the required delegation suffix.
