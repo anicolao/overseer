@@ -30,6 +30,8 @@ This repository has two different dispatch layers. Do not confuse them.
 
 ## Design And Planning Rules
 
+- Canonical design docs live under `docs/design/`, and canonical implementation plans live under `docs/plans/`.
+- Do not invent parallel directories such as `docs/designs/` for new design work.
 - When repairing or writing a design doc, name the actual execution seam, not just a related file.
 - Do not describe `src/dispatch.ts` as the handler for bot JSON actions unless the code really routes that specific action there.
 - Do not describe `src/utils/agent_protocol.ts` as executing actions. It defines and parses them.
