@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { resolve } from "node:path";
 import { getBotOrThrow, loadBotRegistry } from "./bots/bot_config.js";
 import { OverseerPersona } from "./personas/overseer.js";
 import { TaskPersona } from "./personas/task_persona.js";
@@ -66,6 +67,79 @@ export function buildPlanPathFromDesignFile(designFile: string): string {
 		.replace(/^docs\/architecture\//, "docs/plans/");
 }
 
+export function findPersistQaDesignValidationFindings(
+	content: string,
+): string[] {
+	const findings: string[] = [];
+	if (!content.includes("prompts/quality.md")) {
+		findings.push(
+			"mention `prompts/quality.md` as the source of the quality prompt",
+		);
+	}
+	if (!content.includes("bots.json")) {
+		findings.push("mention `bots.json` as the manifest/config surface");
+	}
+	if (!content.includes("src/bots/bot_config.ts")) {
+		findings.push(
+			"mention `src/bots/bot_config.ts` as the loaded runtime bot config seam",
+		);
+	}
+	if (!content.includes("src/utils/agent_protocol.ts")) {
+		findings.push("mention `src/utils/agent_protocol.ts` as the protocol seam");
+	}
+	if (!content.includes("src/utils/agent_runner.ts")) {
+		findings.push(
+			"mention `src/utils/agent_runner.ts` as the runtime execution seam",
+		);
+	}
+	if (!content.includes("src/personas/task_persona.ts")) {
+		findings.push(
+			"mention `src/personas/task_persona.ts` as the runtime wiring seam",
+		);
+	}
+	if (!content.includes("run_shell") || !content.includes("persist_qa")) {
+		findings.push(
+			"preserve the two-step semantics where `run_shell` writes files and `persist_qa` persists them",
+		);
+	}
+	if (/\bBotConfig\b/.test(content)) {
+		findings.push(
+			"use the real loaded runtime type from `src/bots/bot_config.ts` instead of inventing `BotConfig`",
+		);
+	}
+	if (/\bcanPersistQA\b/.test(content)) {
+		findings.push(
+			"use a manifest field name that matches `bots.json` conventions, such as `allow_persist_qa`, instead of camelCase `canPersistQA`",
+		);
+	}
+	if (!content.includes("allow_persist_qa")) {
+		findings.push(
+			"name the new manifest capability explicitly as `allow_persist_qa` in `bots.json`",
+		);
+	}
+	return findings;
+}
+
+function validateArchitectDesignForPlanning(
+	designFile: string,
+): { ok: true } | { ok: false; findings: string[] } {
+	const absolutePath = resolve(designFile);
+	if (!fs.existsSync(absolutePath)) {
+		return {
+			ok: false,
+			findings: [`create the design artifact at \`${designFile}\``],
+		};
+	}
+	const content = fs.readFileSync(absolutePath, "utf8");
+	const findings = /persist_qa|@quality|docs\/qa\//.test(content)
+		? findPersistQaDesignValidationFindings(content)
+		: [];
+	if (findings.length > 0) {
+		return { ok: false, findings };
+	}
+	return { ok: true };
+}
+
 export function shouldBypassOverseerForDirectDesignRepair(
 	body: string,
 ): boolean {
@@ -93,7 +167,9 @@ export function shouldBypassOverseerForArchitectPlanningReady(
 ): boolean {
 	return (
 		automatedPersona === "Product/Architect" &&
-		/planning can proceed autonomously|implementation-ready/i.test(body) &&
+		/planning can proceed autonomously|implementation-ready|ready for review and planning|ready for planning/i.test(
+			body,
+		) &&
 		Boolean(extractDesignDocPathForDirectRepair(body))
 	);
 }
@@ -211,6 +287,44 @@ export function buildDirectArchitectPlanningIterationResult(
 		finalResponse,
 		handoffTo: "@planner",
 		log: `DIRECT DISPATCH ARCHITECT TO PLANNER\n\n${finalResponse}`,
+	};
+}
+
+function buildDirectArchitectDesignRepairIterationResult(
+	designFile: string,
+	findings: string[],
+): IterationResult {
+	const correction = findings.map((finding) => `- ${finding}`).join("\n");
+	const finalResponse = [
+		"The Product Architect reported a design ready for planning, but the artifact still does not match the repository well enough to hand to Planner. Routing it straight back for repair with specific repository-grounded corrections.",
+		"",
+		"Architect Task:",
+		"Task ID: MVP validation: persist_qa end-to-end",
+		`Design File: ${designFile}`,
+		"Design Approval Status: needs_revision",
+		"Files To Read:",
+		`- ${designFile}`,
+		"- AGENTS.md",
+		"- prompts/quality.md",
+		"- bots.json",
+		"- src/bots/bot_config.ts",
+		"- src/personas/task_persona.ts",
+		"- src/utils/agent_protocol.ts",
+		"- src/utils/agent_runner.ts",
+		"Human Correction: Framework validation rejected the design for planning until these corrections are made:",
+		correction,
+		"Current Step: Repair the design so it names the real prompt, manifest, loaded runtime config, protocol, runner, and task-persona seams for persist_qa.",
+		`Task Summary: Revise ${designFile} so it is implementation-ready for the persist_qa MVP without inventing config fields or type names that do not exist in the repository.`,
+		`Done When: ${designFile} explicitly uses the real repository seams, preserves the run_shell then persist_qa workflow, and passes the framework's design validation for planning.`,
+		"Verification:",
+		`- cat ${designFile}`,
+		"Likely Next Step: Planner",
+	].join("\n");
+
+	return {
+		finalResponse,
+		handoffTo: "@product-architect",
+		log: `DIRECT DISPATCH ARCHITECT DESIGN REPAIR\n\n${finalResponse}`,
 	};
 }
 
@@ -434,6 +548,10 @@ async function run() {
 				automatedPersona ?? undefined,
 			)
 		) {
+			const designFile =
+				extractDesignDocPathForDirectRepair(body) ||
+				"docs/design/persist-qa.md";
+			const validation = validateArchitectDesignForPlanning(designFile);
 			appendGithubOutput("persona_executed", "true");
 			appendGithubOutput("executed_persona", "overseer");
 			await finalizeRun(
@@ -442,7 +560,12 @@ async function run() {
 				repo,
 				issueNumber,
 				"overseer",
-				buildDirectArchitectPlanningIterationResult(body),
+				validation.ok
+					? buildDirectArchitectPlanningIterationResult(body)
+					: buildDirectArchitectDesignRepairIterationResult(
+							designFile,
+							validation.findings,
+						),
 				personaNameMap,
 				sender,
 				commentUrl,

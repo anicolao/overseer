@@ -3,6 +3,7 @@ import {
 	buildDirectArchitectPlanningIterationResult,
 	buildPlanPathFromDesignFile,
 	extractDesignDocPathForDirectRepair,
+	findPersistQaDesignValidationFindings,
 	shouldBypassOverseerForArchitectPlanningReady,
 } from "./dispatch.js";
 
@@ -12,7 +13,7 @@ describe("dispatch direct architect routing", () => {
 			"I am the **Product/Architect**, and I am responding to the Overseer.",
 			"",
 			"Created the initial MVP design document at `docs/design/persist-qa.md`.",
-			"Planning can proceed autonomously.",
+			"Ready for review and planning.",
 		].join("\n");
 
 		expect(extractDesignDocPathForDirectRepair(body)).toBe(
@@ -45,6 +46,25 @@ describe("dispatch direct architect routing", () => {
 		).toBe(false);
 		expect(shouldBypassOverseerForArchitectPlanningReady(body, undefined)).toBe(
 			false,
+		);
+	});
+
+	it("flags persist_qa design drift before planning", () => {
+		const findings = findPersistQaDesignValidationFindings(`
+			# Design
+			Use canPersistQA in bots.json.
+			Update the BotConfig interface.
+			Handle persist_qa in src/utils/agent_runner.ts.
+		`);
+
+		expect(findings).toContain(
+			"use the real loaded runtime type from `src/bots/bot_config.ts` instead of inventing `BotConfig`",
+		);
+		expect(findings).toContain(
+			"use a manifest field name that matches `bots.json` conventions, such as `allow_persist_qa`, instead of camelCase `canPersistQA`",
+		);
+		expect(findings).toContain(
+			"name the new manifest capability explicitly as `allow_persist_qa` in `bots.json`",
 		);
 	});
 });
