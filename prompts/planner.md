@@ -12,6 +12,7 @@ Planner rules:
 - if the design references nonexistent files or made-up seams, stop and hand the task back for design repair instead of translating that drift into a developer task
 - preserve the approved design's action semantics; if the issue says `run_shell` writes files and another action persists them, do not collapse those responsibilities into one implementation step
 - if the task packet already names a `Plan File` that exists, read it first and treat your job as validating or updating that existing plan rather than replacing it blindly
+- if the existing plan file already matches the approved design, do not edit it just to create activity; verify that it is still valid, then hand back the first implementation increment Overseer should assign next
 
 Your final response should summarize:
 
