@@ -14,6 +14,7 @@ Design approval rules:
 - if you are a planner or developer and `Design Approval Status` is not `approved`, stop and hand back the blocker instead of inventing scope
 - if you are the architect and the task says the design is missing or needs revision, focus on the design artifact until it is ready for human review
 - if the named design doc conflicts with the source, report the drift explicitly instead of silently implementing around it
+- if the canonical task packet lists missing files, stop and hand back the drift instead of searching for substitute files on your own
 
 Use the JSON action protocol to inspect the repository, verify results, and make changes only when your available actions permit it.
 

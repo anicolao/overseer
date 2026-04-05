@@ -11,6 +11,7 @@ import type { PersistenceService } from "../utils/persistence.js";
 import {
 	parseTaskPacket,
 	renderTaskPacketForPrompt,
+	validateTaskPacketForExecution,
 } from "../utils/task_packet.js";
 import { logTrace, textStats } from "../utils/trace.js";
 
@@ -41,6 +42,31 @@ export class TaskPersona {
 			`${this.bot.displayName} handling task for issue #${issueNumber}`,
 		);
 		const taskPacket = parseTaskPacket(taskBody);
+		const taskPacketValidation = validateTaskPacketForExecution(taskPacket);
+		if (!taskPacketValidation.ok) {
+			const finalResponse = [
+				`Blocked before execution: ${taskPacketValidation.message}`,
+				"",
+				"Required next step: route this back to the architect or planner to repair the design/plan so it references real files and seams from the current repository.",
+			].join("\n");
+			const log = [
+				"TASK PACKET PRECHECK FAILED",
+				`Missing files: ${taskPacketValidation.missingFiles.join(", ")}`,
+				`Raw body:\n${taskBody}`,
+			].join("\n\n");
+			logTrace("persona.task.precheckFailed", {
+				botId: this.bot.id,
+				displayName: this.bot.displayName,
+				issueNumber,
+				taskPacket,
+				taskPacketValidation,
+			});
+			return {
+				finalResponse,
+				handoffTo: "@overseer",
+				log,
+			};
+		}
 		const canonicalTaskBody = renderTaskPacketForPrompt(taskPacket);
 
 		logTrace("persona.task.promptPrepared", {
