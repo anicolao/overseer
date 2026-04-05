@@ -4,7 +4,7 @@ import {
 	buildPlanPathFromDesignFile,
 	extractDesignDocPathForDirectRepair,
 	findPersistQaDesignValidationFindings,
-	shouldBypassOverseerForArchitectPlanningReady,
+	shouldBypassOverseerForArchitectDesignReview,
 } from "./dispatch.js";
 
 describe("dispatch direct architect routing", () => {
@@ -23,7 +23,7 @@ describe("dispatch direct architect routing", () => {
 			"docs/plans/persist-qa.md",
 		);
 		expect(
-			shouldBypassOverseerForArchitectPlanningReady(body, "Product/Architect"),
+			shouldBypassOverseerForArchitectDesignReview(body, "Product/Architect"),
 		).toBe(true);
 
 		const result = buildDirectArchitectPlanningIterationResult(body);
@@ -41,10 +41,10 @@ describe("dispatch direct architect routing", () => {
 		const body =
 			"Planning can proceed autonomously. `docs/design/persist-qa.md`";
 
-		expect(
-			shouldBypassOverseerForArchitectPlanningReady(body, "Overseer"),
-		).toBe(false);
-		expect(shouldBypassOverseerForArchitectPlanningReady(body, undefined)).toBe(
+		expect(shouldBypassOverseerForArchitectDesignReview(body, "Overseer")).toBe(
+			false,
+		);
+		expect(shouldBypassOverseerForArchitectDesignReview(body, undefined)).toBe(
 			false,
 		);
 	});

@@ -161,15 +161,12 @@ export function shouldBypassOverseerForApprovedDesign(body: string): boolean {
 	);
 }
 
-export function shouldBypassOverseerForArchitectPlanningReady(
+export function shouldBypassOverseerForArchitectDesignReview(
 	body: string,
 	automatedPersona: string | undefined,
 ): boolean {
 	return (
 		automatedPersona === "Product/Architect" &&
-		/planning can proceed autonomously|implementation-ready|ready for review and planning|ready for planning/i.test(
-			body,
-		) &&
 		Boolean(extractDesignDocPathForDirectRepair(body))
 	);
 }
@@ -543,7 +540,7 @@ async function run() {
 		if (
 			isAutomatedComment &&
 			activePersona === null &&
-			shouldBypassOverseerForArchitectPlanningReady(
+			shouldBypassOverseerForArchitectDesignReview(
 				body,
 				automatedPersona ?? undefined,
 			)
