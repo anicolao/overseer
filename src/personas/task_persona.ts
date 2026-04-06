@@ -159,7 +159,7 @@ export class TaskPersona {
 				? () => this.persistence.persistWork(issueNumber, this.bot.id)
 				: undefined,
 			persistQa: this.bot.allowPersistQa
-				? () => this.persistence.persistWork(issueNumber, this.bot.id)
+				? () => this.persistence.persistQa(issueNumber, this.bot.id)
 				: undefined,
 		};
 
