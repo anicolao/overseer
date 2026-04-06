@@ -345,7 +345,13 @@ export class PersistenceService {
 
 		await this.runCommand(
 			"npx",
-			["biome", "check", "--write", ...formattablePaths],
+			[
+				"biome",
+				"check",
+				"--write",
+				"--no-errors-on-unmatched",
+				...formattablePaths,
+			],
 			"persistence.biomeWrite",
 			{ formattablePaths },
 		);
