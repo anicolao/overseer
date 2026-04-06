@@ -25,6 +25,7 @@ export interface IterationResult {
 
 export interface AgentRunnerOptions {
 	persistWork?: () => Promise<PersistWorkResult>;
+	persistQa?: () => Promise<PersistWorkResult>;
 	requireDoneHandoff?: boolean;
 	loopAbortHandoffTo?: AgentHandoffTarget;
 	modelName?: string;
@@ -491,37 +492,74 @@ export class AgentRunner {
 				continue;
 			}
 
-			if (!options.persistWork) {
-				const denial = {
-					ok: false,
-					branch: "unavailable",
-					error_code: "persist_not_available",
-					message: "persist_work is not available for this persona.",
-				};
+			if (action.type === "persist_work") {
+				if (!options.persistWork) {
+					const denial = {
+						ok: false,
+						branch: "unavailable",
+						error_code: "persist_not_available",
+						message: "persist_work is not available for this persona.",
+					};
+					executedActions.push({
+						type: action.type,
+						ok: false,
+						persistResult: denial,
+						message: denial.message,
+					});
+					const formatted = JSON.stringify(denial, null, 2);
+					outputs.push(formatted);
+					summaries.push(
+						`persist_work unavailable: ${denial.message} (error_code=${denial.error_code})`,
+					);
+					continue;
+				}
+
+				const result = await options.persistWork();
 				executedActions.push({
 					type: action.type,
-					ok: false,
-					persistResult: denial,
-					message: denial.message,
+					ok: result.ok,
+					persistResult: result,
+					message: result.message,
 				});
-				const formatted = JSON.stringify(denial, null, 2);
+				const formatted = JSON.stringify(result, null, 2);
 				outputs.push(formatted);
-				summaries.push(
-					`persist_work unavailable: ${denial.message} (error_code=${denial.error_code})`,
-				);
+				summaries.push(this.summarizePersistResult(result, "persist_work"));
 				continue;
 			}
 
-			const result = await options.persistWork();
-			executedActions.push({
-				type: action.type,
-				ok: result.ok,
-				persistResult: result,
-				message: result.message,
-			});
-			const formatted = JSON.stringify(result, null, 2);
-			outputs.push(formatted);
-			summaries.push(this.summarizePersistResult(result));
+			if (action.type === "persist_qa") {
+				if (!options.persistQa) {
+					const denial = {
+						ok: false,
+						branch: "unavailable",
+						error_code: "persist_qa_not_available",
+						message: "persist_qa is not available for this persona.",
+					};
+					executedActions.push({
+						type: action.type,
+						ok: false,
+						persistResult: denial,
+						message: denial.message,
+					});
+					const formatted = JSON.stringify(denial, null, 2);
+					outputs.push(formatted);
+					summaries.push(
+						`persist_qa unavailable: ${denial.message} (error_code=${denial.error_code})`,
+					);
+					continue;
+				}
+
+				const result = await options.persistQa();
+				executedActions.push({
+					type: action.type,
+					ok: result.ok,
+					persistResult: result,
+					message: result.message,
+				});
+				const formatted = JSON.stringify(result, null, 2);
+				outputs.push(formatted);
+				summaries.push(this.summarizePersistResult(result, "persist_qa"));
+			}
 		}
 
 		return {
@@ -580,14 +618,13 @@ export class AgentRunner {
 				continue;
 			}
 
-			if (action.type === "persist_work") {
+			if (action.type === "persist_work" || action.type === "persist_qa") {
 				if (state.usedWriteAction && action.persistResult?.ok) {
 					state.persistSucceededAfterWrite = true;
 					state.verifiedAfterPersist = false;
 				}
 				continue;
 			}
-
 			if (
 				action.type === "run_ro_shell" &&
 				action.ok &&
@@ -608,11 +645,11 @@ export class AgentRunner {
 		}
 
 		if (!state.persistSucceededAfterWrite) {
-			return 'task_status "done" is not allowed after a successful repository write action until persist_work succeeds';
+			return 'task_status "done" is not allowed after a successful repository write action until persist_work (or persist_qa) succeeds';
 		}
 
 		if (requirePostPersistVerification && !state.verifiedAfterPersist) {
-			return 'task_status "done" is not allowed after persist_work until you verify the persisted branch state with run_ro_shell';
+			return 'task_status "done" is not allowed after a persist action until you verify the persisted branch state with run_ro_shell';
 		}
 
 		return null;
@@ -686,14 +723,13 @@ export class AgentRunner {
 			return undefined;
 		}
 		if (!state.persistSucceededAfterWrite) {
-			return "You have already modified repository files in this task. Do not finish until persist_work succeeds.";
+			return "You have already modified repository files in this task. Do not finish until a persist action (like persist_work or persist_qa) succeeds.";
 		}
 		if (requirePostPersistVerification && !state.verifiedAfterPersist) {
 			return "Persistence succeeded. Run a read-only verification against the persisted branch or file contents before finishing.";
 		}
 		return undefined;
 	}
-
 	private buildLoopFingerprint(
 		parsedResponse: ParsedAgentProtocolResponse,
 		executedActions: ExecutedActionRecord[],
@@ -788,18 +824,20 @@ export class AgentRunner {
 		return parts.join("\n");
 	}
 
-	private summarizePersistResult(result: PersistWorkResult): string {
+	private summarizePersistResult(
+		result: PersistWorkResult,
+		actionName: string,
+	): string {
 		if (result.ok) {
 			const changedFiles =
 				result.changed_files && result.changed_files.length > 0
 					? result.changed_files.join(", ")
 					: "none reported";
-			return `persist_work succeeded on branch ${result.branch} at commit ${result.commit_sha}. Changed files: ${changedFiles}.`;
+			return `${actionName} succeeded on branch ${result.branch} at commit ${result.commit_sha}. Changed files: ${changedFiles}.`;
 		}
 
-		return `persist_work failed with error_code=${result.error_code}: ${result.message}`;
+		return `${actionName} failed with error_code=${result.error_code}: ${result.message}`;
 	}
-
 	private truncateForPrompt(text: string, maxLength: number = 400): string {
 		const normalized = text.trim().replace(/\s+/g, " ");
 		if (normalized.length <= maxLength) {
