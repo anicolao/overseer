@@ -120,7 +120,7 @@ export const overseerWebhook = async (req: Request, res: Response) => {
 };
 
 function verifySignature(
-	payload: any,
+	payload: unknown,
 	signature: string,
 	secret: string,
 ): boolean {

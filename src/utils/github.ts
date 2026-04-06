@@ -108,9 +108,11 @@ export class GitHubService {
 			repo,
 			issue_number: issueNumber,
 		});
-		const labels = issue.labels.map((l: any) =>
-			typeof l === "string" ? l : l.name,
-		);
+		const labels = issue.labels
+			.map((l: string | { name?: string }) =>
+				typeof l === "string" ? l : l.name,
+			)
+			.filter((l): l is string => Boolean(l));
 		logTrace("github.issue.labels", {
 			durationMs: Date.now() - startedAt,
 			labels,
