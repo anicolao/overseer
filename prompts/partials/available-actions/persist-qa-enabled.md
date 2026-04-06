@@ -1,0 +1,1 @@
+- `{"type":"persist_qa"}` for persisting Quality Assurance reports to `docs/qa/`.

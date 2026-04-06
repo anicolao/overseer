@@ -86,6 +86,19 @@ I will comply.
 		expect(parsed.protocol.actions).toEqual([{ type: "persist_work" }]);
 	});
 
+	it("parses persist_qa actions", () => {
+		const parsed = parseAgentProtocolResponse(
+			JSON.stringify({
+				version: AGENT_PROTOCOL_VERSION,
+				plan: ["Persist QA report."],
+				next_step: "Persist QA report.",
+				actions: [{ type: "persist_qa" }],
+				task_status: "in_progress",
+			}),
+		);
+
+		expect(parsed.protocol.actions).toEqual([{ type: "persist_qa" }]);
+	});
 	it("parses replace_in_file actions", () => {
 		const parsed = parseAgentProtocolResponse(
 			JSON.stringify({
