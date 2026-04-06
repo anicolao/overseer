@@ -111,9 +111,17 @@ export class PersistenceService {
 		};
 	}
 
+	async persistQa(
+		issueNumber: number,
+		persona: string,
+	): Promise<PersistWorkResult> {
+		return this.persistWork(issueNumber, persona, "persist qa");
+	}
+
 	async persistWork(
 		issueNumber: number,
 		persona: string,
+		actionLabel = "persist work",
 	): Promise<PersistWorkResult> {
 		const branch = this.getBranchName(issueNumber);
 		try {
@@ -225,7 +233,7 @@ export class PersistenceService {
 
 		const formattedChangedFiles = await this.getStagedChangedPaths();
 
-		const commitMessage = `${persona}: issue #${issueNumber} persist work`;
+		const commitMessage = `${persona}: issue #${issueNumber} ${actionLabel}`;
 		const commitResult = await this.runGitAllowFailure(
 			["commit", "-m", commitMessage],
 			"persistence.commit",
