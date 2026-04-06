@@ -71,8 +71,9 @@
 			"id": "quality",
 			"display_name": "Quality",
 			"kind": "task",
-			"shell_access": "read_only",
+			"shell_access": "read_write",
 			"allow_persist_work": false,
+			"allow_persist_qa": true,
 			"max_iterations": 8,
 			"max_actions_per_turn": 1,
 			"prompt_files": [

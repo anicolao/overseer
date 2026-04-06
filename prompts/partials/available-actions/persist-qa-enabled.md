@@ -1,0 +1,1 @@
+- `{"type":"persist_qa"}` for delegating persistence to the repository's persistence layer after you finish writing files under `docs/qa/`.

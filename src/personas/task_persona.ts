@@ -158,6 +158,9 @@ export class TaskPersona {
 			persistWork: this.bot.allowPersistWork
 				? () => this.persistence.persistWork(issueNumber, this.bot.id)
 				: undefined,
+			persistQa: this.bot.allowPersistQa
+				? () => this.persistence.persistWork(issueNumber, this.bot.id)
+				: undefined,
 		};
 
 		return this.runner.runAutonomousLoop(
