@@ -290,6 +290,9 @@ export class PersistenceService {
 				".",
 				":(glob,exclude).backstop/**",
 				":(glob,exclude)session_*.log",
+				":(glob,exclude)npm-debug.log*",
+				":(glob,exclude)yarn-debug.log*",
+				":(glob,exclude)yarn-error.log*",
 			],
 			"persistence.stage",
 			{ branch },
@@ -307,7 +310,15 @@ export class PersistenceService {
 	}
 
 	private isIgnoredPath(path: string): boolean {
-		return path.startsWith(".backstop/") || /^session_.*\.log$/.test(path);
+		if (path.startsWith(".backstop/") || /^session_.*\.log$/.test(path)) {
+			return true;
+		}
+		const filename = path.split("/").pop() || path;
+		return (
+			filename.startsWith("npm-debug.log") ||
+			filename.startsWith("yarn-debug.log") ||
+			filename.startsWith("yarn-error.log")
+		);
 	}
 
 	private async remoteBranchExists(branchName: string): Promise<boolean> {
