@@ -22,6 +22,7 @@ export interface IterationResult {
 
 export interface AgentRunnerOptions {
 	persistWork?: () => Promise<PersistWorkResult>;
+	persistQa?: () => Promise<PersistWorkResult>;
 	appendGithubComment?: (markdown: string) => Promise<void>;
 	requireDoneHandoff?: boolean;
 	modelName?: string;

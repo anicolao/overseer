@@ -65,6 +65,9 @@ export class TaskPersona {
 			persistWork: this.bot.allowPersistWork
 				? () => this.persistence.persistWork(issueNumber, this.bot.id)
 				: undefined,
+			persistQa: this.bot.allowPersistQa
+				? () => this.persistence.persistWork(issueNumber, this.bot.id)
+				: undefined,
 			appendGithubComment: async (markdown: string) => {
 				const body = `${getAttribution(this.bot.displayName, issueNumber)}${markdown}`;
 				await this.github.addCommentToIssue(owner, repo, issueNumber, body);

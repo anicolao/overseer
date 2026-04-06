@@ -40,10 +40,12 @@ export function renderBotListMarkdown(bots: LoadedBotDefinition[]): string {
 		"",
 		"| ID | Name | Kind | Model | Persist | Prompt Files |",
 		"| --- | --- | --- | --- | --- | ---: |",
-		...bots.map(
-			(bot) =>
-				`| \`${bot.id}\` | ${bot.displayName} | \`${bot.kind}\` | \`${bot.llm.model}\` | ${bot.allowPersistWork ? "yes" : "no"} | ${bot.prompt.promptFiles.length} |`,
-		),
+		...[...bots]
+			.sort((a, b) => a.id.localeCompare(b.id))
+			.map(
+				(bot) =>
+					`| \`${bot.id}\` | ${bot.displayName} | \`${bot.kind}\` | \`${bot.llm.model}\` | ${bot.allowPersistWork ? "yes" : "no"} | ${bot.prompt.promptFiles.length} |`,
+			),
 		"",
 		"Usage:",
 		"",
