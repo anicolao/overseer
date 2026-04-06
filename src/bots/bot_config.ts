@@ -411,10 +411,15 @@ function buildExampleActionsJson(
 			: "prompts/partials/example-actions/read-only.json";
 	const actions = JSON.parse(loadPromptFile(examplePath, repoRoot)) as Array<{
 		type: string;
-		command: string;
+		command?: string;
 	}>;
 
-	return JSON.stringify(actions.slice(0, context.maxActionsPerTurn), null, 2);
+	const sliced = actions.slice(0, context.maxActionsPerTurn);
+	if (context.allowPersistQa && sliced.length > 0) {
+		sliced[sliced.length - 1] = { type: "persist_qa" };
+	}
+
+	return JSON.stringify(sliced, null, 2);
 }
 
 function buildShellActionRules(
