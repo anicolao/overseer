@@ -71,10 +71,13 @@ describe("bot_config", () => {
 			"if implementation uncovers a missing step or architectural omission, send the work back to `@product-architect` or `@planner`",
 		);
 		expect(overseer.prompt.concatenatedPrompt).toContain(
-			"route directly to planning when it is grounded in the current repository and does not leave unresolved product decisions",
+			"after @product-architect creates or repairs a design doc, inspect the artifact and summarize its readiness for human review",
 		);
 		expect(overseer.prompt.concatenatedPrompt).toContain(
-			"place it under `docs/design/` and place the matching plan under `docs/plans/`",
+			"you must wait for a human to explicitly approve the design doc in the issue thread before routing to planning or implementation",
+		);
+		expect(overseer.prompt.concatenatedPrompt).toContain(
+			"place it under docs/design/ and place the matching plan under docs/plans/",
 		);
 		expect(overseer.prompt.concatenatedPrompt).toContain(
 			"you may send a repaired task back to that same specialist instead of escalating immediately to human review",
