@@ -385,6 +385,7 @@ async function run() {
 	let issueNumber: number;
 	let owner: string;
 	let repo: string;
+	let targetedPersonaFromProject: string | null = null;
 
 	if (eventName === "issues") {
 		issueNumber = eventData.issue.number;
@@ -394,6 +395,38 @@ async function run() {
 		issueNumber = eventData.issue.number;
 		owner = eventData.repository.owner.login;
 		repo = eventData.repository.name;
+	} else if (eventName === "projects_v2_item") {
+		const contentNodeId = eventData.projects_v2_item?.content_node_id;
+		if (!contentNodeId) {
+			console.log("projects_v2_item event missing content_node_id. Ignoring.");
+			return;
+		}
+
+		const details = await github.getIssueDetailsFromNodeId(contentNodeId);
+		if (!details) {
+			console.log(
+				`Could not resolve issue details for node_id: ${contentNodeId}`,
+			);
+			return;
+		}
+
+		issueNumber = details.number;
+		owner = details.owner;
+		repo = details.repo;
+
+		if (eventData.action === "edited" && eventData.changes?.field_value) {
+			const newValue = eventData.changes.field_value.to?.name;
+			if (newValue) {
+				const projectStatusMap: Record<string, string> = {
+					Triage: "overseer",
+					Architecting: "product-architect",
+					Planning: "planner",
+					Implementing: "developer-tester",
+					Reviewing: "quality",
+				};
+				targetedPersonaFromProject = projectStatusMap[newValue] || null;
+			}
+		}
 	} else {
 		console.log(`Ignoring event type: ${eventName}`);
 		return;
@@ -703,6 +736,92 @@ async function run() {
 					log: `CRITICAL ERROR: ${error}`,
 				};
 			}
+		}
+	} else if (
+		eventName === "projects_v2_item" &&
+		eventData.action === "edited"
+	) {
+		const targetedPersona = targetedPersonaFromProject;
+		if (!targetedPersona) {
+			console.log("No targeted persona from project field change.");
+			return;
+		}
+
+		executedPersona = targetedPersona;
+		const body = `Project status changed. @${targetedPersona} to take action.`;
+
+		appendGithubOutput("persona_executed", "true");
+		appendGithubOutput("executed_persona", executedPersona);
+		traceContext = {
+			traceId: makeTraceId({
+				runId: process.env.GITHUB_RUN_ID,
+				persona: executedPersona,
+				issueNumber,
+			}),
+			persona: executedPersona,
+			owner,
+			repo,
+			issueNumber,
+			runId: process.env.GITHUB_RUN_ID,
+			eventName,
+			sender,
+		};
+
+		console.log(
+			`Executing persona: ${executedPersona} from projects_v2_item event`,
+		);
+		try {
+			iterationResult = await runWithTraceContext(traceContext, async () => {
+				logTrace("dispatcher.persona.dispatch", {
+					trigger: "projects_v2_item.edited",
+					targetedPersona,
+					body: textStats(body),
+				});
+
+				if (executedPersona === "overseer") {
+					return personas.overseer.handleComment(
+						owner,
+						repo,
+						issueNumber,
+						sender,
+						body,
+					);
+				}
+				if (executedPersona === "product-architect") {
+					return personas.productArchitect.handleTask(
+						owner,
+						repo,
+						issueNumber,
+						body,
+					);
+				}
+				if (executedPersona === "planner") {
+					return personas.planner.handleTask(owner, repo, issueNumber, body);
+				}
+				if (executedPersona === "developer-tester") {
+					return personas.developerTester.handleTask(
+						owner,
+						repo,
+						issueNumber,
+						body,
+					);
+				}
+				if (executedPersona === "quality") {
+					return personas.quality.handleTask(owner, repo, issueNumber, body);
+				}
+				return null;
+			});
+		} catch (error) {
+			console.error(`Persona failed: ${executedPersona}`, error);
+			await runWithTraceContext(traceContext, async () => {
+				logTrace("dispatcher.persona.error", {
+					error: error instanceof Error ? error.stack || error.message : error,
+				});
+			});
+			iterationResult = {
+				finalResponse: `ERROR: Execution failed. Details: ${error instanceof Error ? error.message : String(error)}`,
+				log: `CRITICAL ERROR: ${error}`,
+			};
 		}
 	}
 

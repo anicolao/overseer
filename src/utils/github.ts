@@ -311,4 +311,44 @@ export class GitHubService {
 			optionId,
 		});
 	}
+
+	async getIssueDetailsFromNodeId(
+		nodeId: string,
+	): Promise<{ number: number; owner: string; repo: string } | null> {
+		const query = `
+			query($nodeId: ID!) {
+				node(id: $nodeId) {
+					... on Issue {
+						number
+						repository {
+							name
+							owner {
+								login
+							}
+						}
+					}
+					... on PullRequest {
+						number
+						repository {
+							name
+							owner {
+								login
+							}
+						}
+					}
+				}
+			}
+		`;
+
+		const response = await this.octokit.graphql<any>(query, { nodeId });
+		const node = response.node;
+		if (node && node.number && node.repository) {
+			return {
+				number: node.number,
+				owner: node.repository.owner.login,
+				repo: node.repository.name,
+			};
+		}
+		return null;
+	}
 }
