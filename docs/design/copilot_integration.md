@@ -30,7 +30,7 @@ No new framework actions are introduced. The core execution workflow remains unc
   Create a new `CopilotService` class that implements `AiService`. This service will connect to the GitHub Copilot / Models API and support the configured model backend (e.g., GPT 5.4 or Opus 4.6).
 
 - **`src/personas/overseer.ts` & `src/personas/task_persona.ts`:**
-  Update the constructor signatures to accept `AiService` instead of `GeminiService`. The existing `geminiCli` dependencies remain unaffected so that the Gemini CLI integration can run alongside it.
+  Update the `OverseerPersona` (in `src/personas/overseer.ts`) and `TaskPersona` constructor signatures to accept `AiService` instead of `GeminiService`. The existing `geminiCli` dependencies remain unaffected so that the Gemini CLI integration can run alongside it.
 
 - **`src/utils/agent_runner.ts`:**
   Update the runtime execution seam, specifically `AgentRunner.runAutonomousLoop`, to depend on `AiService` rather than `GeminiService`.
@@ -51,6 +51,6 @@ No new framework actions are introduced. The core execution workflow remains unc
 3. Modify `bots.json` to assign per-bot configurations if any bots should use Copilot defaults.
 4. Refactor `src/utils/gemini.ts` to implement the updated strict `AiService`.
 5. Create `src/utils/copilot.ts` and implement `CopilotService` with HTTP fetch logic.
-6. Update `AgentRunner`, `OverseerPersona`, and `TaskPersona` to consume the generic `AiService`. Remove the hardcoded `options.modelName` fallback in `agent_runner.ts`.
+6. Update `AgentRunner`, `OverseerPersona` (in `src/personas/overseer.ts`), and `TaskPersona` to consume the generic `AiService`. Remove the hardcoded `options.modelName` fallback in `agent_runner.ts`.
 7. Extract the duplicated `personas` object creation from `src/index.ts` and `src/dispatch.ts` into a shared utility, wiring the correct provider (with `process.env.COPILOT_API_KEY` or `GITHUB_TOKEN` fallback) at startup based on the loaded bot configuration.
 8. Delete `fix_test.cjs`, `patch_dispatch.cjs`, and `patch_index.cjs` from the repository root.
