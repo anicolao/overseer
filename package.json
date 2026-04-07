@@ -1,45 +1,46 @@
 {
-  "name": "overseer",
-  "version": "1.0.0",
-  "description": "Overseer is a GitHub-native agent coordination system designed to enable AI agents to collaborate autonomously as a virtual engineering team.",
-  "main": "index.js",
-  "scripts": {
-    "test": "vitest run",
-    "build": "tsc",
-    "prepare": "husky",
-    "lint": "biome check src/",
-    "format": "biome format --write src/",
-    "bots:inspect": "tsx src/scripts/inspect_bots.ts",
-    "runs:inspect": "tsx src/scripts/inspect_run.ts",
-    "persona:run": "tsx src/scripts/run_task_persona.ts"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/anicolao/overseer.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
-  "bugs": {
-    "url": "https://github.com/anicolao/overseer/issues"
-  },
-  "homepage": "https://github.com/anicolao/overseer#readme",
-  "dependencies": {
-    "@google/gemini-cli": "^0.36.0",
-    "@google/generative-ai": "^0.24.1",
-    "@octokit/rest": "^22.0.1",
-    "@octokit/webhooks-methods": "^6.0.0",
-    "dotenv": "^17.3.1",
-    "express": "^5.2.1"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "2.4.10",
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.5.0",
-    "husky": "^9.1.7",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
-  }
+	"name": "overseer",
+	"version": "1.0.0",
+	"description": "Overseer is a GitHub-native agent coordination system designed to enable AI agents to collaborate autonomously as a virtual engineering team.",
+	"main": "index.js",
+	"scripts": {
+		"test": "vitest run",
+		"build": "tsc",
+		"prepare": "husky",
+		"lint": "biome check src/",
+		"format": "biome format --write src/",
+		"bots:inspect": "tsx src/scripts/inspect_bots.ts",
+		"runs:inspect": "tsx src/scripts/inspect_run.ts",
+		"persona:run": "tsx src/scripts/run_task_persona.ts"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/anicolao/overseer.git"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"type": "module",
+	"bugs": {
+		"url": "https://github.com/anicolao/overseer/issues"
+	},
+	"homepage": "https://github.com/anicolao/overseer#readme",
+	"dependencies": {
+		"@google/gemini-cli": "^0.36.0",
+		"@google/generative-ai": "^0.24.1",
+		"@octokit/auth-app": "^8.2.0",
+		"@octokit/rest": "^22.0.1",
+		"@octokit/webhooks-methods": "^6.0.0",
+		"dotenv": "^17.3.1",
+		"express": "^5.2.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.10",
+		"@types/express": "^5.0.6",
+		"@types/node": "^25.5.0",
+		"husky": "^9.1.7",
+		"tsx": "^4.21.0",
+		"typescript": "^6.0.2",
+		"vitest": "^4.1.2"
+	}
 }

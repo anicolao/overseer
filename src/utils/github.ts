@@ -1,3 +1,4 @@
+import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { isWorkflowNoiseComment } from "./comment_markers.js";
 import { truncate } from "./text.js";
@@ -7,7 +8,20 @@ export class GitHubService {
 	private octokit: Octokit;
 
 	constructor(token: string) {
-		this.octokit = new Octokit({ auth: token });
+		const appId = process.env.APP_ID;
+		const privateKey = process.env.PRIVATE_KEY;
+
+		if (appId && privateKey) {
+			this.octokit = new Octokit({
+				authStrategy: createAppAuth,
+				auth: {
+					appId,
+					privateKey,
+				},
+			});
+		} else {
+			this.octokit = new Octokit({ auth: token });
+		}
 	}
 
 	async addCommentToIssue(
