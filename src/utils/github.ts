@@ -1,3 +1,4 @@
+import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { isWorkflowNoiseComment } from "./comment_markers.js";
 import { truncate } from "./text.js";
@@ -263,5 +264,51 @@ export class GitHubService {
 			head,
 			base,
 		});
+	}
+}
+
+export class AppTokenManager {
+	public appId: string;
+	public privateKey: string;
+	public webhookSecret: string;
+
+	constructor() {
+		this.appId = process.env.GITHUB_APP_ID || "";
+		this.privateKey = process.env.GITHUB_APP_PRIVATE_KEY || "";
+		this.webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "";
+	}
+
+	async getInstallationToken(owner: string, repo: string): Promise<string> {
+		if (!this.appId || !this.privateKey) {
+			throw new Error(
+				"GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY are required to get an installation token.",
+			);
+		}
+
+		const auth = createAppAuth({
+			appId: this.appId,
+			privateKey: this.privateKey,
+		});
+
+		const appOctokit = new Octokit({
+			authStrategy: createAppAuth,
+			auth: {
+				appId: this.appId,
+				privateKey: this.privateKey,
+			},
+		});
+
+		const { data: installation } =
+			await appOctokit.rest.apps.getRepoInstallation({
+				owner,
+				repo,
+			});
+
+		const installationAuth = await auth({
+			type: "installation",
+			installationId: installation.id,
+		});
+
+		return installationAuth.token;
 	}
 }

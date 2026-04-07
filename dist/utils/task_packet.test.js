@@ -12,6 +12,7 @@ describe("task_packet", () => {
             "Files To Read:",
             "- src/parser.ts",
             "- src/parser.test.ts",
+            "Human Correction: Do not invent parser-v1 classes that are not present in the repository.",
             "Current Step: Repair the design so it matches the current parser pipeline.",
             "Task Summary: Update the parser design doc to reflect the real implementation seams before planning further work.",
             "Done When: docs/architecture/parser-v2.md matches the source layout and calls out open decisions for human review.",
@@ -26,6 +27,7 @@ describe("task_packet", () => {
         expect(packet.handoffType).toBe("architect");
         expect(packet.designFile).toBe("docs/architecture/parser-v2.md");
         expect(packet.designApprovalStatus).toBe("needs_revision");
+        expect(packet.humanCorrection).toContain("Do not invent parser-v1 classes");
         expect(packet.filesToRead).toEqual([
             "docs/architecture/parser-v2.md",
             "src/parser.ts",
@@ -100,6 +102,7 @@ describe("task_packet", () => {
             "Design Approval Status: approved",
             "Plan File: docs/plans/one.md",
             "Files To Read: src/one.ts, src/two.ts",
+            "Human Correction: Keep the change limited to one token shape.",
             "Current Step: Update the parser incrementally.",
             "Smallest Useful Increment: Teach the parser about one new token.",
             "Stop After: The parser accepts the new token and one focused test passes.",
@@ -115,6 +118,7 @@ describe("task_packet", () => {
         expect(rendered).toContain("Design Approval Status: approved");
         expect(rendered).toContain("Files To Read: docs/architecture/parser.md, docs/plans/one.md, src/one.ts, src/two.ts");
         expect(rendered).toContain("Smallest Useful Increment: Teach the parser about one new token.");
+        expect(rendered).toContain("Human Correction: Keep the change limited to one token shape.");
         expect(rendered).toContain("Progress Evidence: git diff -- src/one.ts");
         expect(rendered).toContain("Likely Next Step: Expand coverage to the next token case.");
         expect(rendered).toContain("Missing Files: docs/architecture/parser.md");
@@ -152,6 +156,21 @@ describe("task_packet", () => {
             "Files To Read:",
             "- src/index.ts",
             "Task Summary: Draft the missing design.",
+        ].join("\n"));
+        const validation = validateTaskPacketForExecution(packet);
+        expect(validation.ok).toBe(true);
+        expect(validation.missingFiles).toEqual([]);
+    });
+    it("allows planners to create a missing plan file", () => {
+        const packet = parseTaskPacket([
+            "Planner Task:",
+            "Task ID: create-plan",
+            "Design File: README.md",
+            "Design Approval Status: approved",
+            "Plan File: docs/plans/new-feature.md",
+            "Files To Read:",
+            "- README.md",
+            "Task Summary: Draft the implementation plan.",
         ].join("\n"));
         const validation = validateTaskPacketForExecution(packet);
         expect(validation.ok).toBe(true);
