@@ -35,6 +35,34 @@ Instead of using `github.setActivePersona` to manage issue labels, the system wi
 - **Detect Persona Shifts**: When the designated field changes, the workflow payload (`github.event.projects_v2_item` and `github.event.changes`) identifies the new state. The system maps the new value to a persona handle and dispatches the task to the respective persona.
 - **Update State on Handoff**: When a persona completes a turn and yields via `handoffTo` (in `src/utils/handoff.ts` or `src/dispatch.ts`), the dispatcher updates the Projects V2 item field via GraphQL instead of updating repository issue labels.
 
+## Setup and Deployment
+
+Deploying the multi-repo configuration involves configuring the GitHub App, the centralized hub repository, and the target repositories.
+
+### 1. GitHub App Configuration
+- **Create the App**: Register a new GitHub App in your organization or user account settings.
+- **Permissions**: Grant the App necessary permissions:
+  - Repository permissions: Issues (Read & write), Metadata (Read-only), Contents (Read & write).
+  - Organization/User permissions: Projects (Read & write).
+- **Events**: Subscribe to `projects_v2_item`, `issues`, and `issue_comment` events.
+- **Keys**: Generate a Private Key and note the App ID.
+
+### 2. Projects V2 Setup
+- **Create Project**: Create an Organization or User-level Project V2.
+- **Status Field**: Add a Single Select field (e.g., "Persona Status") with options mapping to the personas (`Triage`, `Architecting`, `Planning`, `Implementing`, `Reviewing`).
+- **Note IDs**: Retrieve the global node IDs for the Project and the specific Status field.
+
+### 3. Central Hub Repository
+- **Secrets Configuration**: Add the following Actions secrets to the hub repository:
+  - `APP_ID`: The GitHub App ID.
+  - `PRIVATE_KEY`: The GitHub App Private Key.
+  - `PROJECT_ID`: The node ID of the Projects V2 board.
+  - `FIELD_ID`: The node ID of the Single Select field.
+- **Workflow Deployment**: Push the updated `.github/workflows/overseer.yml` file to the central repository.
+
+### 4. Target Repository Onboarding
+- **App Installation**: Install the GitHub App on any repository that needs to be managed by Overseer. No separate token or workflow configuration is required in the target repositories; the central hub dynamically checks out the code when processing issues linked to the Project.
+
 ## Affected Files and Seams
 
 - `.github/workflows/overseer.yml` (or equivalent central workflow):
