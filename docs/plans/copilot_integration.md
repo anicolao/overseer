@@ -6,8 +6,9 @@ This document outlines the step-by-step plan to integrate GitHub Copilot alongsi
 
 ### 1. Extract `AiService` Interface
 **Goal:** Define the abstraction layer for AI providers.
+**Files to Create:**
+- `src/utils/ai_provider.ts`
 **Files to Modify:**
-- `src/utils/ai_provider.ts` (Create)
 - `src/utils/gemini.ts`
 **Details:**
 - Create `src/utils/ai_provider.ts` and define `AiService` and `AiChatSession` interfaces.
@@ -19,8 +20,10 @@ This document outlines the step-by-step plan to integrate GitHub Copilot alongsi
 
 ### 2. Implement `CopilotService`
 **Goal:** Create the GitHub Copilot API backend implementation for `AiService`.
+**Files to Create:**
+- `src/utils/copilot.ts`
 **Files to Modify:**
-- `src/utils/copilot.ts` (Create)
+- (None)
 **Details:**
 - Create `src/utils/copilot.ts` and implement the `AiService` interface in a `CopilotService` class.
 - The `CopilotService` should use the `GITHUB_TOKEN` (or a dedicated `COPILOT_API_KEY`) to interact with the GitHub Copilot API.
