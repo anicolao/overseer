@@ -28,7 +28,7 @@ export interface AgentRunnerOptions {
 	persistQa?: () => Promise<PersistWorkResult>;
 	requireDoneHandoff?: boolean;
 	loopAbortHandoffTo?: AgentHandoffTarget;
-	modelName?: string;
+	modelName: string;
 	shellAccess?: ShellExecutionMode;
 	maxActionsPerTurn?: number;
 	requirePostPersistVerification?: boolean;
@@ -95,12 +95,12 @@ export class AgentRunner {
 		systemInstruction: string,
 		initialMessage: string,
 		maxIterations: number = 50,
-		options: AgentRunnerOptions = {},
+		options: AgentRunnerOptions,
 	): Promise<IterationResult> {
 		const repositoryGuidance = this.loadRepositoryGuidance();
 		logTrace("agent.loop.start", {
 			maxIterations,
-			modelName: options.modelName || "gemini-3.1-pro-preview",
+			modelName: options.modelName,
 			systemInstruction: textStats(systemInstruction),
 			systemInstructionRaw: systemInstruction,
 			initialMessage: textStats(initialMessage),
@@ -116,7 +116,7 @@ export class AgentRunner {
 		const chat = ai.startChat(
 			systemInstruction,
 			repositoryGuidance.history,
-			options.modelName || "gemini-3.1-pro-preview",
+			options.modelName,
 		);
 		const originalTask = initialMessage;
 		let currentMessage = initialMessage;
