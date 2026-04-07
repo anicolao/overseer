@@ -6,7 +6,7 @@ import type {
 	IterationResult,
 } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
-import type { GeminiService } from "../utils/gemini.js";
+import type { AiService } from "../utils/ai_provider.js";
 import {
 	GeminiCliService,
 	shouldUseGeminiCliForTaskBot,
@@ -21,19 +21,19 @@ import { logTrace, textStats } from "../utils/trace.js";
 
 export class TaskPersona {
 	private bot: LoadedBotDefinition;
-	private gemini: GeminiService;
+	private ai: AiService;
 	private persistence: PersistenceService;
 	private runner: AgentRunner;
 	private geminiCli: GeminiCliService;
 
 	constructor(
 		bot: LoadedBotDefinition,
-		gemini: GeminiService,
+		ai: AiService,
 		persistence: PersistenceService,
 		geminiCli: GeminiCliService = new GeminiCliService(),
 	) {
 		this.bot = bot;
-		this.gemini = gemini;
+		this.ai = ai;
 		this.persistence = persistence;
 		this.runner = new AgentRunnerClass();
 		this.geminiCli = geminiCli;
@@ -164,7 +164,7 @@ export class TaskPersona {
 		};
 
 		return this.runner.runAutonomousLoop(
-			this.gemini,
+			this.ai,
 			this.bot.prompt.concatenatedPrompt,
 			taskPromptBody,
 			this.bot.maxIterations,

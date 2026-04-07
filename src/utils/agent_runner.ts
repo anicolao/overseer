@@ -10,7 +10,7 @@ import {
 	type ParsedAgentProtocolResponse,
 	parseAgentProtocolResponse,
 } from "./agent_protocol.js";
-import type { GeminiService } from "./gemini.js";
+import type { AiService } from "./ai_provider.js";
 import type { PersistWorkResult } from "./persistence.js";
 import type { ShellExecutionMode } from "./shell.js";
 import { ShellService } from "./shell.js";
@@ -91,7 +91,7 @@ export class AgentRunner {
 	}
 
 	async runAutonomousLoop(
-		gemini: GeminiService,
+		ai: AiService,
 		systemInstruction: string,
 		initialMessage: string,
 		maxIterations: number = 50,
@@ -113,7 +113,7 @@ export class AgentRunner {
 			repositoryGuidanceRaw: repositoryGuidance.content,
 			repositoryGuidanceHistory: repositoryGuidance.history,
 		});
-		const chat = gemini.startChat(
+		const chat = ai.startChat(
 			systemInstruction,
 			repositoryGuidance.history,
 			options.modelName,

@@ -4,7 +4,9 @@ import { getBotOrThrow, loadBotRegistry } from "./bots/bot_config.js";
 import { OverseerPersona } from "./personas/overseer.js";
 import { TaskPersona } from "./personas/task_persona.js";
 import type { IterationResult } from "./utils/agent_runner.js";
+import type { AiService } from "./utils/ai_provider.js";
 import { isWorkflowNoiseComment } from "./utils/comment_markers.js";
+import { CopilotService } from "./utils/copilot.js";
 import { GeminiService } from "./utils/gemini.js";
 import { GitHubService } from "./utils/github.js";
 import {
@@ -335,7 +337,13 @@ async function run() {
 	const geminiApiKey = process.env.GEMINI_API_KEY || "";
 	const githubToken = process.env.GITHUB_TOKEN || "";
 
-	const gemini = new GeminiService(geminiApiKey);
+	const aiProvider = process.env.AI_PROVIDER || "gemini";
+	const ai: AiService =
+		aiProvider === "copilot"
+			? new CopilotService(
+					process.env.COPILOT_API_KEY || process.env.GITHUB_TOKEN || "",
+				)
+			: new GeminiService(geminiApiKey);
 	const github = new GitHubService(githubToken);
 	const persistence = new PersistenceService();
 	const botRegistry = loadBotRegistry();
@@ -343,27 +351,27 @@ async function run() {
 	const personas = {
 		overseer: new OverseerPersona(
 			getBotOrThrow(botRegistry, "overseer"),
-			gemini,
+			ai,
 			github,
 		),
 		productArchitect: new TaskPersona(
 			getBotOrThrow(botRegistry, "product-architect"),
-			gemini,
+			ai,
 			persistence,
 		),
 		planner: new TaskPersona(
 			getBotOrThrow(botRegistry, "planner"),
-			gemini,
+			ai,
 			persistence,
 		),
 		developerTester: new TaskPersona(
 			getBotOrThrow(botRegistry, "developer-tester"),
-			gemini,
+			ai,
 			persistence,
 		),
 		quality: new TaskPersona(
 			getBotOrThrow(botRegistry, "quality"),
-			gemini,
+			ai,
 			persistence,
 		),
 	};

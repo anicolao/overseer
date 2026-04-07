@@ -6,7 +6,7 @@ import type {
 	IterationResult,
 } from "../utils/agent_runner.js";
 import { AgentRunner as AgentRunnerClass } from "../utils/agent_runner.js";
-import type { GeminiService } from "../utils/gemini.js";
+import type { AiService } from "../utils/ai_provider.js";
 import type { GitHubService } from "../utils/github.js";
 import { isLimitReached } from "../utils/persona_helper.js";
 import { logTrace, textStats } from "../utils/trace.js";
@@ -72,17 +72,13 @@ function shouldDirectRouteDesignRepair(
 
 export class OverseerPersona {
 	private bot: LoadedBotDefinition;
-	private gemini: GeminiService;
+	private ai: AiService;
 	private github: GitHubService;
 	private runner: AgentRunner;
 
-	constructor(
-		bot: LoadedBotDefinition,
-		gemini: GeminiService,
-		github: GitHubService,
-	) {
+	constructor(bot: LoadedBotDefinition, ai: AiService, github: GitHubService) {
 		this.bot = bot;
-		this.gemini = gemini;
+		this.ai = ai;
 		this.github = github;
 		this.runner = new AgentRunnerClass();
 	}
@@ -193,7 +189,7 @@ export class OverseerPersona {
 		});
 
 		return this.runner.runAutonomousLoop(
-			this.gemini,
+			this.ai,
 			this.bot.prompt.concatenatedPrompt,
 			taskBody,
 			this.bot.maxIterations,
@@ -313,7 +309,7 @@ ${fullContext}`;
 		});
 
 		return this.runner.runAutonomousLoop(
-			this.gemini,
+			this.ai,
 			this.bot.prompt.concatenatedPrompt,
 			taskBody,
 			this.bot.maxIterations,
