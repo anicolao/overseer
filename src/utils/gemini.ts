@@ -8,6 +8,7 @@ import {
 	GoogleGenerativeAI,
 } from "@google/generative-ai";
 import { AGENT_PROTOCOL_VERSION } from "./agent_protocol.js";
+import type { AiChatSession, AiService } from "./ai_provider.js";
 import {
 	describeContent,
 	installFetchInstrumentation,
@@ -27,7 +28,7 @@ export interface GeminiChatResult {
 	response: EnhancedGenerateContentResponse;
 }
 
-export interface GeminiChatSession {
+export interface GeminiChatSession extends AiChatSession {
 	sendMessage(
 		content: string | Array<string | Part>,
 	): Promise<GeminiChatResult>;
@@ -43,7 +44,7 @@ function serializeContentForTrace(
 	return JSON.stringify(content, null, 2);
 }
 
-export class GeminiService {
+export class GeminiService implements AiService {
 	private genAI: GoogleGenerativeAI;
 	private readonly defaultModelName: string;
 	private readonly requestTimeoutMs: number;
