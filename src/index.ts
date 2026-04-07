@@ -3,6 +3,8 @@ import type { Request, Response } from "express";
 import { getBotOrThrow, loadBotRegistry } from "./bots/bot_config.js";
 import { OverseerPersona } from "./personas/overseer.js";
 import { TaskPersona } from "./personas/task_persona.js";
+import type { AiService } from "./utils/ai_provider.js";
+import { CopilotService } from "./utils/copilot.js";
 import { GeminiService } from "./utils/gemini.js";
 import { GitHubService } from "./utils/github.js";
 import { PersistenceService } from "./utils/persistence.js";
@@ -12,39 +14,45 @@ const geminiApiKey = process.env.GEMINI_API_KEY || "";
 const githubToken = process.env.GITHUB_TOKEN || "";
 const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "";
 
-const gemini = new GeminiService(geminiApiKey);
 const github = new GitHubService(githubToken);
 const persistence = new PersistenceService();
 const botRegistry = loadBotRegistry();
 
+function getAiForBot(botId: string): AiService {
+	const bot = getBotOrThrow(botRegistry, botId);
+	if (bot.llm.provider === "copilot") {
+		return new CopilotService(process.env.COPILOT_API_KEY || githubToken);
+	}
+	return new GeminiService(geminiApiKey);
+}
+
 const personas = {
 	overseer: new OverseerPersona(
 		getBotOrThrow(botRegistry, "overseer"),
-		gemini,
+		getAiForBot("overseer"),
 		github,
 	),
 	productArchitect: new TaskPersona(
 		getBotOrThrow(botRegistry, "product-architect"),
-		gemini,
+		getAiForBot("product-architect"),
 		persistence,
 	),
 	planner: new TaskPersona(
 		getBotOrThrow(botRegistry, "planner"),
-		gemini,
+		getAiForBot("planner"),
 		persistence,
 	),
 	developerTester: new TaskPersona(
 		getBotOrThrow(botRegistry, "developer-tester"),
-		gemini,
+		getAiForBot("developer-tester"),
 		persistence,
 	),
 	quality: new TaskPersona(
 		getBotOrThrow(botRegistry, "quality"),
-		gemini,
+		getAiForBot("quality"),
 		persistence,
 	),
 };
-
 export const overseerWebhook = async (req: Request, res: Response) => {
 	// 1. Verify Webhook Signature
 	const signature = req.headers["x-hub-signature-256"] as string;

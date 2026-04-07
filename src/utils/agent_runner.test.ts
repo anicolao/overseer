@@ -77,6 +77,7 @@ describe("AgentRunner", () => {
 			"Initial message",
 			5,
 			{
+				modelName: "test-model",
 				shellAccess: "read_write",
 				maxActionsPerTurn: 2,
 			},
@@ -150,6 +151,7 @@ describe("AgentRunner", () => {
 			"Initial message",
 			5,
 			{
+				modelName: "test-model",
 				persistWork: async () => ({
 					ok: true,
 					branch: "bot/issue-35",
@@ -211,6 +213,9 @@ describe("AgentRunner", () => {
 			"System instruction",
 			"Initial message",
 			5,
+			{
+				modelName: "test-model",
+			},
 		);
 
 		expect(postedComments).toEqual([]);
@@ -264,6 +269,7 @@ describe("AgentRunner", () => {
 			"Initial message",
 			5,
 			{
+				modelName: "test-model",
 				shellAccess: "read_only",
 			},
 		);
@@ -339,6 +345,7 @@ describe("AgentRunner", () => {
 				"Initial message",
 				6,
 				{
+					modelName: "test-model",
 					shellAccess: "read_write",
 					maxActionsPerTurn: 1,
 					requirePostPersistVerification: false,
@@ -410,6 +417,7 @@ describe("AgentRunner", () => {
 			"Initial message",
 			5,
 			{
+				modelName: "test-model",
 				requireDoneHandoff: true,
 			},
 		);
@@ -463,6 +471,7 @@ describe("AgentRunner", () => {
 				"System instruction",
 				"Initial message",
 				5,
+				{ modelName: "test-model" },
 			);
 		} finally {
 			process.chdir(originalCwd);
@@ -573,6 +582,7 @@ describe("AgentRunner", () => {
 			"Initial message",
 			8,
 			{
+				modelName: "test-model",
 				shellAccess: "read_write",
 				maxActionsPerTurn: 1,
 				persistWork: async () => ({
@@ -647,6 +657,7 @@ describe("AgentRunner", () => {
 			"Initial message",
 			6,
 			{
+				modelName: "test-model",
 				shellAccess: "read_write",
 				maxActionsPerTurn: 1,
 				requirePostPersistVerification: false,
@@ -736,6 +747,7 @@ describe("AgentRunner", () => {
 			"Initial message",
 			6,
 			{
+				modelName: "test-model",
 				shellAccess: "read_only",
 				maxActionsPerTurn: 1,
 			},
@@ -795,6 +807,7 @@ describe("AgentRunner", () => {
 			"Initial message",
 			8,
 			{
+				modelName: "test-model",
 				shellAccess: "read_only",
 				maxActionsPerTurn: 1,
 			},
@@ -866,6 +879,7 @@ describe("AgentRunner", () => {
 			"Initial message",
 			6,
 			{
+				modelName: "test-model",
 				shellAccess: "read_only",
 				maxActionsPerTurn: 1,
 			},
