@@ -14,45 +14,45 @@ const geminiApiKey = process.env.GEMINI_API_KEY || "";
 const githubToken = process.env.GITHUB_TOKEN || "";
 const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "";
 
-const aiProvider = process.env.AI_PROVIDER || "gemini";
-const ai: AiService =
-	aiProvider === "copilot"
-		? new CopilotService(
-				process.env.COPILOT_API_KEY || process.env.GITHUB_TOKEN || "",
-			)
-		: new GeminiService(geminiApiKey);
 const github = new GitHubService(githubToken);
 const persistence = new PersistenceService();
 const botRegistry = loadBotRegistry();
 
+function getAiForBot(botId: string): AiService {
+	const bot = getBotOrThrow(botRegistry, botId);
+	if (bot.llm.provider === "copilot") {
+		return new CopilotService(process.env.COPILOT_API_KEY || githubToken);
+	}
+	return new GeminiService(geminiApiKey);
+}
+
 const personas = {
 	overseer: new OverseerPersona(
 		getBotOrThrow(botRegistry, "overseer"),
-		ai,
+		getAiForBot("overseer"),
 		github,
 	),
 	productArchitect: new TaskPersona(
 		getBotOrThrow(botRegistry, "product-architect"),
-		ai,
+		getAiForBot("product-architect"),
 		persistence,
 	),
 	planner: new TaskPersona(
 		getBotOrThrow(botRegistry, "planner"),
-		ai,
+		getAiForBot("planner"),
 		persistence,
 	),
 	developerTester: new TaskPersona(
 		getBotOrThrow(botRegistry, "developer-tester"),
-		ai,
+		getAiForBot("developer-tester"),
 		persistence,
 	),
 	quality: new TaskPersona(
 		getBotOrThrow(botRegistry, "quality"),
-		ai,
+		getAiForBot("quality"),
 		persistence,
 	),
 };
-
 export const overseerWebhook = async (req: Request, res: Response) => {
 	// 1. Verify Webhook Signature
 	const signature = req.headers["x-hub-signature-256"] as string;
