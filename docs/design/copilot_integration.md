@@ -1,7 +1,7 @@
 # Copilot Integration Design
 
 ## Objective
-Add support for GitHub Copilot integration (backed by GPT 5.4 or Opus 4.6) as an alternative AI service provider for the framework, operating seamlessly alongside the existing `GeminiCliService` integration and replacing the hardcoded Google Generative AI coupling.
+Add support for GitHub Copilot integration (backed by GPT 5.4 or Opus 4.6) as an alternative AI service provider for the framework, operating seamlessly alongside the existing `GeminiCliService` integration and replacing the hardcoded Google Generative AI coupling. In addition, address framework technical debt by removing duplicated persona code, eliminating hardcoded model fallbacks, and cleaning up unused patches.
 
 ## Action Semantics
 No new framework actions are introduced. The core execution workflow remains unchanged, but the underlying prompts and completions must be routed through the Copilot API when configured, relying on an abstract interface instead of a concrete `GeminiService`.
@@ -33,10 +33,16 @@ No new framework actions are introduced. The core execution workflow remains unc
   Update the constructor signatures to accept `AiService` instead of `GeminiService`. The existing `geminiCli` dependencies remain unaffected so that the Gemini CLI integration can run alongside it.
 
 - **`src/utils/agent_runner.ts`:**
-  Update the runtime execution seam, specifically `AgentRunnerClass.runAutonomousLoop`, to depend on `AiService` rather than `GeminiService`.
+  Update the runtime execution seam, specifically `AgentRunner.runAutonomousLoop`, to depend on `AiService` rather than `GeminiService`.
+  **Crucially:** Remove the `options.modelName || "gemini-3.1-pro-preview"` fallback around line 119 and in `logTrace`. The runner must rely entirely on `options.modelName` or the configured bot provider details, without silently falling back to a hardcoded gemini model name.
 
-- **`src/index.ts` & `src/dispatch.ts`:**
-  Update the root initialization logic. Read the AI provider and model from the loaded bot configuration (via `src/bots/bot_config.ts` from `bots.json`) rather than environment variables, to instantiate either `CopilotService` or `GeminiService`, and pass that abstract instance to the persona constructors.
+- **`src/index.ts`, `src/dispatch.ts`, & `src/bots/personas.ts` (New File or Utility):**
+  Update the root initialization logic to instantiate `CopilotService` or `GeminiService` based on `bots.json` instead of environment variables.
+  **API Key Source:** Clarify that `COPILOT_API_KEY` should be sourced from `process.env.COPILOT_API_KEY`, falling back to `process.env.GITHUB_TOKEN` to authenticate the GitHub Copilot API.
+  **Deduplication:** Deduplicate the shared persona creation code (the `personas` object instantiation with `OverseerPersona` and `TaskPersona`) by extracting it into a common initialization module or utility shared by both `index.ts` and `dispatch.ts`.
+
+- **Project Root (Cruft Removal):**
+  Delete temporary patch scripts and cruft files from the root repository, specifically: `fix_test.cjs`, `patch_dispatch.cjs`, and `patch_index.cjs`.
 
 ## Implementation Steps
 
@@ -44,6 +50,7 @@ No new framework actions are introduced. The core execution workflow remains unc
 2. Update `src/bots/bot_config.ts` to support `"copilot"` as an `LlmProvider`.
 3. Modify `bots.json` to assign per-bot configurations if any bots should use Copilot defaults.
 4. Refactor `src/utils/gemini.ts` to implement the updated strict `AiService`.
-5. Create `src/utils/copilot.ts` and implement `CopilotService` with HTTP fetch logic to the Copilot backend.
-6. Update `AgentRunner`, `OverseerPersona`, and `TaskPersona` to consume the generic `AiService`.
-7. Wire the correct provider at startup in `src/dispatch.ts` and `src/index.ts` based on the loaded bot configuration.
+5. Create `src/utils/copilot.ts` and implement `CopilotService` with HTTP fetch logic.
+6. Update `AgentRunner`, `OverseerPersona`, and `TaskPersona` to consume the generic `AiService`. Remove the hardcoded `options.modelName` fallback in `agent_runner.ts`.
+7. Extract the duplicated `personas` object creation from `src/index.ts` and `src/dispatch.ts` into a shared utility, wiring the correct provider (with `process.env.COPILOT_API_KEY` or `GITHUB_TOKEN` fallback) at startup based on the loaded bot configuration.
+8. Delete `fix_test.cjs`, `patch_dispatch.cjs`, and `patch_index.cjs` from the repository root.
