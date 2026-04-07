@@ -325,12 +325,14 @@ function buildDirectArchitectDesignRepairIterationResult(
 	};
 }
 
-async function run() {
-	const eventPath = process.env.GITHUB_EVENT_PATH;
-	if (!eventPath) throw new Error("GITHUB_EVENT_PATH not found");
+export interface DispatchContext {
+	eventName: string;
+	eventData: any;
+	runId?: string;
+}
 
-	const eventData = JSON.parse(fs.readFileSync(eventPath, "utf8"));
-	const eventName = process.env.GITHUB_EVENT_NAME;
+export async function processDispatchEvent(context: DispatchContext) {
+	const { eventName, eventData, runId } = context;
 
 	const geminiApiKey = process.env.GEMINI_API_KEY || "";
 	const githubToken = process.env.GITHUB_TOKEN || "";
@@ -372,7 +374,7 @@ async function run() {
 	logTrace("dispatcher.start", {
 		eventName,
 		sender,
-		runId: process.env.GITHUB_RUN_ID,
+		runId: runId,
 		nodeVersion: process.version,
 		hasGeminiApiKey: geminiApiKey.length > 0,
 		hasGithubToken: githubToken.length > 0,
@@ -457,7 +459,7 @@ async function run() {
 		appendGithubOutput("executed_persona", executedPersona);
 		traceContext = {
 			traceId: makeTraceId({
-				runId: process.env.GITHUB_RUN_ID,
+				runId: runId,
 				persona: executedPersona,
 				issueNumber,
 			}),
@@ -465,7 +467,7 @@ async function run() {
 			owner,
 			repo,
 			issueNumber,
-			runId: process.env.GITHUB_RUN_ID,
+			runId: runId,
 			eventName,
 			sender,
 		};
@@ -622,7 +624,7 @@ async function run() {
 			appendGithubOutput("executed_persona", executedPersona);
 			traceContext = {
 				traceId: makeTraceId({
-					runId: process.env.GITHUB_RUN_ID,
+					runId: runId,
 					persona: executedPersona,
 					issueNumber,
 				}),
@@ -630,7 +632,7 @@ async function run() {
 				owner,
 				repo,
 				issueNumber,
-				runId: process.env.GITHUB_RUN_ID,
+				runId: runId,
 				eventName,
 				sender,
 				commentUrl,
@@ -711,7 +713,7 @@ async function run() {
 			traceContext ||
 			({
 				traceId: makeTraceId({
-					runId: process.env.GITHUB_RUN_ID,
+					runId: runId,
 					persona: executedPersona,
 					issueNumber,
 				}),
@@ -719,7 +721,7 @@ async function run() {
 				owner,
 				repo,
 				issueNumber,
-				runId: process.env.GITHUB_RUN_ID,
+				runId: runId,
 				eventName,
 				sender,
 				commentUrl,
@@ -814,13 +816,20 @@ async function finalizeRun(
 	}
 }
 
-if (process.env.VITEST !== "true") {
-	run()
-		.then(() => {
-			process.exit(0);
+if (process.env.VITEST !== "true" && process.env.GITHUB_ACTIONS === "true") {
+	const eventPath = process.env.GITHUB_EVENT_PATH;
+	if (eventPath) {
+		const eventData = JSON.parse(fs.readFileSync(eventPath, "utf8"));
+		const eventName = process.env.GITHUB_EVENT_NAME || "unknown";
+		processDispatchEvent({
+			eventName,
+			eventData,
+			runId: process.env.GITHUB_RUN_ID,
 		})
-		.catch((error) => {
-			console.error("Fatal error in dispatcher:", error);
-			process.exit(1);
-		});
+			.then(() => process.exit(0))
+			.catch((error) => {
+				console.error("Fatal error in dispatcher:", error);
+				process.exit(1);
+			});
+	}
 }

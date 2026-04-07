@@ -1,7 +1,9 @@
-import * as crypto from "node:crypto";
+const fs = require("fs");
+
+const code = `import * as crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { processDispatchEvent } from "./dispatch.js";
-import { AppTokenManager, GitHubService } from "./utils/github.js";
+import { GitHubService } from "./utils/github.js";
 
 const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "";
 const ALLOWED_USERS = (process.env.OVERSEER_ALLOWED_USERS || "")
@@ -20,7 +22,7 @@ export const overseerWebhook = async (req: Request, res: Response) => {
 	const eventName = req.headers["x-github-event"] as string;
 	const eventData = req.body;
 
-	console.log(`Received GitHub event: ${eventName}`);
+	console.log(\`Received GitHub event: \${eventName}\`);
 
 	try {
 		// Implement access control checks
@@ -28,40 +30,28 @@ export const overseerWebhook = async (req: Request, res: Response) => {
 		if (sender) {
 			const repoOwner = eventData.repository?.owner?.login;
 			const repoName = eventData.repository?.name;
-
+			
 			let isAuthorized = false;
-
+			
 			if (ALLOWED_USERS.length > 0 && ALLOWED_USERS.includes(sender)) {
 				isAuthorized = true;
 			} else if (repoOwner && repoName) {
-				const appTokenManager = new AppTokenManager();
-				const githubToken =
-					process.env.GITHUB_TOKEN ||
-					(await appTokenManager
-						.getInstallationToken(repoOwner, repoName)
-						.catch(() => ""));
+				const githubToken = process.env.GITHUB_TOKEN || "";
 				if (githubToken) {
 					const github = new GitHubService(githubToken);
 					try {
-						const isCollaborator = await github.checkCollaborator(
-							repoOwner,
-							repoName,
-							sender,
-						);
+						const isCollaborator = await github.checkCollaborator(repoOwner, repoName, sender);
 						if (isCollaborator) {
 							isAuthorized = true;
 						}
 					} catch (err) {
-						console.warn(
-							`Could not verify collaborator status for ${sender}:`,
-							err,
-						);
+						console.warn(\`Could not verify collaborator status for \${sender}:\`, err);
 					}
 				}
 			}
 
 			if (!isAuthorized) {
-				console.log(`User ${sender} is not authorized. Dropping event.`);
+				console.log(\`User \${sender} is not authorized. Dropping event.\`);
 				return res.status(403).send("User not authorized");
 			}
 		}
@@ -87,6 +77,9 @@ function verifySignature(
 ): boolean {
 	if (!signature || !secret) return false;
 	const hmac = crypto.createHmac("sha256", secret);
-	const digest = `sha256=${hmac.update(JSON.stringify(payload)).digest("hex")}`;
+	const digest = \`sha256=\${hmac.update(JSON.stringify(payload)).digest("hex")}\`;
 	return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
 }
+`;
+
+fs.writeFileSync("src/index.ts", code);

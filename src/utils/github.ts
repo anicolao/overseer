@@ -265,6 +265,26 @@ export class GitHubService {
 			base,
 		});
 	}
+
+	async checkCollaborator(
+		owner: string,
+		repo: string,
+		username: string,
+	): Promise<boolean> {
+		try {
+			await this.octokit.rest.repos.checkCollaborator({
+				owner,
+				repo,
+				username,
+			});
+			return true;
+		} catch (error: any) {
+			if (error.status === 404) {
+				return false;
+			}
+			throw error;
+		}
+	}
 }
 
 export class AppTokenManager {
