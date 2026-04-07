@@ -8,23 +8,26 @@ No new framework actions are introduced. The core execution workflow remains unc
 
 ## Affected Files and Seams
 
-- **`src/utils/ai_provider.ts` (New File):**
-  Extract an `AiService` interface to represent the provider abstraction based on the existing `GeminiService` methods.
+- **`src/utils/ai_provider.ts`:**
+  Ensure the `AiService` interface represents the provider abstraction and takes no optional parameters (strict interface).
   ```typescript
   export interface AiChatSession {
       sendMessage(content: string | Array<unknown>): Promise<{ text: string, response: unknown }>;
   }
   export interface AiService {
-      promptPersona(systemInstruction: string, userMessage: string, context?: string, modelName?: string): Promise<string>;
-      startChat(systemInstruction: string, history?: unknown[], modelName?: string): AiChatSession;
+      promptPersona(systemInstruction: string, userMessage: string, context: string, modelName: string): Promise<string>;
+      startChat(systemInstruction: string, history: unknown[], modelName: string): AiChatSession;
   }
   ```
 
+- **`bots.json` & `src/bots/bot_config.ts`:**
+  Update the `LlmProvider` type in `src/bots/bot_config.ts` to include `"copilot"`. The configuration for the AI provider and model will be defined per bot in `bots.json` under the `llm` key so that multiple AI implementations can collaborate on the same project. Update the provider parsing in `bot_config.ts` to allow "copilot" alongside "gemini".
+
 - **`src/utils/gemini.ts`:**
-  Update the existing `GeminiService` class to explicitly implement the new `AiService` interface without changing its core behavior.
+  Update the existing `GeminiService` class to explicitly implement the new strict `AiService` interface without changing its core behavior.
 
 - **`src/utils/copilot.ts` (New File):**
-  Create a new `CopilotService` class that implements `AiService`. This service will connect to the GitHub Copilot / Models API and support configuring the model backend (e.g., GPT 5.4 or Opus 4.6).
+  Create a new `CopilotService` class that implements `AiService`. This service will connect to the GitHub Copilot / Models API and support the configured model backend (e.g., GPT 5.4 or Opus 4.6).
 
 - **`src/personas/overseer.ts` & `src/personas/task_persona.ts`:**
   Update the constructor signatures to accept `AiService` instead of `GeminiService`. The existing `geminiCli` dependencies remain unaffected so that the Gemini CLI integration can run alongside it.
@@ -33,12 +36,14 @@ No new framework actions are introduced. The core execution workflow remains unc
   Update the runtime execution seam, specifically `AgentRunnerClass.runAutonomousLoop`, to depend on `AiService` rather than `GeminiService`.
 
 - **`src/index.ts` & `src/dispatch.ts`:**
-  Update the root initialization logic. Read environment variables (e.g., `AI_PROVIDER=copilot` and `COPILOT_API_KEY`) to instantiate either `CopilotService` or `GeminiService`, and pass that abstract instance to the persona constructors.
+  Update the root initialization logic. Read the AI provider and model from the loaded bot configuration (via `src/bots/bot_config.ts` from `bots.json`) rather than environment variables, to instantiate either `CopilotService` or `GeminiService`, and pass that abstract instance to the persona constructors.
 
 ## Implementation Steps
 
-1. Create `src/utils/ai_provider.ts` and define the `AiService` and `AiChatSession` interfaces.
-2. Refactor `src/utils/gemini.ts` to implement `AiService`.
-3. Create `src/utils/copilot.ts` and implement `CopilotService` with HTTP fetch logic to the Copilot backend.
-4. Update `AgentRunner`, `OverseerPersona`, and `TaskPersona` to consume the generic `AiService`.
-5. Wire the correct provider at startup in `src/dispatch.ts` and `src/index.ts`.
+1. Update `src/utils/ai_provider.ts` to define the strict `AiService` and `AiChatSession` interfaces without optional parameters.
+2. Update `src/bots/bot_config.ts` to support `"copilot"` as an `LlmProvider`.
+3. Modify `bots.json` to assign per-bot configurations if any bots should use Copilot defaults.
+4. Refactor `src/utils/gemini.ts` to implement the updated strict `AiService`.
+5. Create `src/utils/copilot.ts` and implement `CopilotService` with HTTP fetch logic to the Copilot backend.
+6. Update `AgentRunner`, `OverseerPersona`, and `TaskPersona` to consume the generic `AiService`.
+7. Wire the correct provider at startup in `src/dispatch.ts` and `src/index.ts` based on the loaded bot configuration.
