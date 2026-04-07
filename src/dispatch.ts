@@ -171,6 +171,33 @@ export function shouldBypassOverseerForArchitectDesignReview(
 	);
 }
 
+export function parseProjectsV2ItemEvent(eventData: any): {
+	contentNodeId: string | null;
+	targetedPersonaFromProject: string | null;
+} {
+	const contentNodeId = eventData.projects_v2_item?.content_node_id || null;
+	let targetedPersonaFromProject: string | null = null;
+
+	if (eventData.action === "edited" && eventData.changes?.field_value) {
+		const newValue = eventData.changes.field_value.to?.name;
+		if (newValue) {
+			const projectStatusMap: Record<string, string> = {
+				Triage: "overseer",
+				Architecting: "product-architect",
+				Planning: "planner",
+				Implementing: "developer-tester",
+				Reviewing: "quality",
+			};
+			targetedPersonaFromProject = projectStatusMap[newValue] || null;
+		}
+	}
+
+	return {
+		contentNodeId,
+		targetedPersonaFromProject,
+	};
+}
+
 export function buildDirectDesignRepairIterationResult(
 	body: string,
 ): IterationResult {
@@ -396,16 +423,18 @@ async function run() {
 		owner = eventData.repository.owner.login;
 		repo = eventData.repository.name;
 	} else if (eventName === "projects_v2_item") {
-		const contentNodeId = eventData.projects_v2_item?.content_node_id;
-		if (!contentNodeId) {
+		const parsed = parseProjectsV2ItemEvent(eventData);
+		if (!parsed.contentNodeId) {
 			console.log("projects_v2_item event missing content_node_id. Ignoring.");
 			return;
 		}
 
-		const details = await github.getIssueDetailsFromNodeId(contentNodeId);
+		const details = await github.getIssueDetailsFromNodeId(
+			parsed.contentNodeId,
+		);
 		if (!details) {
 			console.log(
-				`Could not resolve issue details for node_id: ${contentNodeId}`,
+				`Could not resolve issue details for node_id: ${parsed.contentNodeId}`,
 			);
 			return;
 		}
@@ -413,20 +442,7 @@ async function run() {
 		issueNumber = details.number;
 		owner = details.owner;
 		repo = details.repo;
-
-		if (eventData.action === "edited" && eventData.changes?.field_value) {
-			const newValue = eventData.changes.field_value.to?.name;
-			if (newValue) {
-				const projectStatusMap: Record<string, string> = {
-					Triage: "overseer",
-					Architecting: "product-architect",
-					Planning: "planner",
-					Implementing: "developer-tester",
-					Reviewing: "quality",
-				};
-				targetedPersonaFromProject = projectStatusMap[newValue] || null;
-			}
-		}
+		targetedPersonaFromProject = parsed.targetedPersonaFromProject;
 	} else {
 		console.log(`Ignoring event type: ${eventName}`);
 		return;
