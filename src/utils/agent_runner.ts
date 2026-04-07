@@ -100,7 +100,7 @@ export class AgentRunner {
 		const repositoryGuidance = this.loadRepositoryGuidance();
 		logTrace("agent.loop.start", {
 			maxIterations,
-			modelName: options.modelName,
+			modelName: options.modelName || "gemini-3.1-pro-preview",
 			systemInstruction: textStats(systemInstruction),
 			systemInstructionRaw: systemInstruction,
 			initialMessage: textStats(initialMessage),
@@ -116,7 +116,7 @@ export class AgentRunner {
 		const chat = ai.startChat(
 			systemInstruction,
 			repositoryGuidance.history,
-			options.modelName,
+			options.modelName || "gemini-3.1-pro-preview",
 		);
 		const originalTask = initialMessage;
 		let currentMessage = initialMessage;

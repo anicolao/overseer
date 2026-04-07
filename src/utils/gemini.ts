@@ -58,17 +58,17 @@ export class GeminiService implements AiService {
 		this.genAI = new GoogleGenerativeAI(apiKey);
 	}
 
-	private getModel(modelName?: string): GenerativeModel {
+	private getModel(modelName: string): GenerativeModel {
 		return this.genAI.getGenerativeModel({
-			model: modelName || this.defaultModelName,
+			model: modelName,
 		});
 	}
 
 	async promptPersona(
 		systemInstruction: string,
 		userMessage: string,
-		context?: string,
-		modelName?: string,
+		context: string,
+		modelName: string,
 	): Promise<string> {
 		const fullPrompt = `
 	SYSTEM INSTRUCTION:
@@ -84,7 +84,7 @@ export class GeminiService implements AiService {
 		let retries = 0;
 		const maxRetries = 3;
 		logTrace("gemini.promptPersona.prepare", {
-			model: modelName || this.defaultModelName,
+			model: modelName,
 			systemInstruction: textStats(systemInstruction),
 			systemInstructionRaw: systemInstruction,
 			userMessage: textStats(userMessage),
@@ -98,7 +98,7 @@ export class GeminiService implements AiService {
 		while (retries < maxRetries) {
 			const attempt = retries + 1;
 			const startedAt = Date.now();
-			const resolvedModelName = modelName || this.defaultModelName;
+			const resolvedModelName = modelName;
 			logTrace("gemini.promptPersona.begin", {
 				model: resolvedModelName,
 				attempt,
@@ -139,10 +139,10 @@ export class GeminiService implements AiService {
 
 	startChat(
 		systemInstruction: string,
-		history: Content[] = [],
-		modelName?: string,
+		history: Content[],
+		modelName: string,
 	): GeminiChatSession {
-		const resolvedModelName = modelName || this.defaultModelName;
+		const resolvedModelName = modelName;
 		logTrace("gemini.startChat", {
 			model: resolvedModelName,
 			systemInstruction: textStats(systemInstruction),

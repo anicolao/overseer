@@ -21,6 +21,10 @@
 			"allow_persist_work": false,
 			"max_iterations": 12,
 			"max_actions_per_turn": 2,
+			"llm": {
+				"provider": "gemini",
+				"model": "gemini-3.1-pro-preview"
+			},
 			"prompt_files": ["prompts/shared/overseer-core.md", "prompts/overseer.md"]
 		},
 		{
@@ -60,6 +64,10 @@
 			"require_post_persist_verification": false,
 			"max_iterations": 50,
 			"max_actions_per_turn": 2,
+			"llm": {
+				"provider": "gemini",
+				"model": "gemini-3.1-pro-preview"
+			},
 			"prompt_files": [
 				"prompts/shared/task-agent.md",
 				"prompts/shared/persisting-agent.md",

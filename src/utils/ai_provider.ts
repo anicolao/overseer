@@ -8,12 +8,12 @@ export interface AiService {
 	promptPersona(
 		systemInstruction: string,
 		userMessage: string,
-		context?: string,
-		modelName?: string,
+		context: string,
+		modelName: string,
 	): Promise<string>;
 	startChat(
 		systemInstruction: string,
-		history?: unknown[],
-		modelName?: string,
+		history: unknown[],
+		modelName: string,
 	): AiChatSession;
 }

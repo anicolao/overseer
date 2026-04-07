@@ -5,7 +5,7 @@ import { loadPromptFile, renderPromptFile } from "../utils/prompt_files.js";
 import { textStats } from "../utils/trace.js";
 
 export type BotKind = "overseer" | "task";
-export type LlmProvider = "gemini";
+export type LlmProvider = "gemini" | "copilot";
 export type ShellAccess = "read_only" | "read_write";
 
 interface RawBotManifest {
@@ -287,10 +287,10 @@ function parseProvider(
 	value: string | undefined,
 	fieldName: string,
 ): LlmProvider {
-	if (value === "gemini") {
+	if (value === "gemini" || value === "copilot") {
 		return value;
 	}
-	throw new Error(`${fieldName} must be "gemini"`);
+	throw new Error(`${fieldName} must be "gemini" or "copilot"`);
 }
 
 function parsePositiveInteger(value: unknown, fieldName: string): number {
