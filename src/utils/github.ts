@@ -278,4 +278,37 @@ export class GitHubService {
 			base,
 		});
 	}
+
+	async updateProjectV2ItemFieldValue(
+		projectId: string,
+		itemId: string,
+		fieldId: string,
+		optionId: string,
+	) {
+		const query = `
+			mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+				updateProjectV2ItemFieldValue(
+					input: {
+						projectId: $projectId
+						itemId: $itemId
+						fieldId: $fieldId
+						value: {
+							singleSelectOptionId: $optionId
+						}
+					}
+				) {
+					projectV2Item {
+						id
+					}
+				}
+			}
+		`;
+
+		return this.octokit.graphql(query, {
+			projectId,
+			itemId,
+			fieldId,
+			optionId,
+		});
+	}
 }
