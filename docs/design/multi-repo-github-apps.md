@@ -13,11 +13,11 @@ Migrate the current single-repo Overseer MVP (which relies on per-repository Git
 We will use a **Hub and Spoke** model powered by a **GitHub App**.
 
 1. **GitHub App:** We will register Overseer as a GitHub App. This provides:
-   - Webhook delivery to a central service (replacing the GitHub Actions runner for event dispatch).
+   - Webhook delivery to a central service hosted on **Firebase / Google Cloud Functions (GCF)** (replacing the GitHub Actions runner for event dispatch).
    - Higher rate limits.
    - Granular permissions (read/write code, issues, pull requests) across all installed repositories.
    - Secure generation of short-lived Installation Access Tokens.
-2. **Hub Repository (Central Management):** All task planning, Overseer routing, and human interaction occur in a single central repository (e.g., `org/overseer-hub`). The Overseer issue-comment loop lives here.
+2. **Hub Repository (Dynamic Setup):** We will support a dynamic setup flow where any repository can act as a hub. By simply installing the Overseer App on the intended hub and spoke repositories, users can route work from an issue in the hub to code changes in the spokes. No hardcoded configuration of a single hub repo is required; the hub is implicitly the repo where the issue is managed.
 3. **Spoke Repositories (Code):** The repositories where the actual code modifications take place. The task packet specifies which repository the agents should clone and modify.
 
 ### Alternative Considered: Projects V2
@@ -26,7 +26,8 @@ We considered using GitHub Projects V2 to aggregate issues from multiple reposit
 ## Affected Seams and Files
 
 - **`src/index.ts` (Webhook Entrypoint):**
-  - Currently scaffolds `overseerWebhook`. This will become the primary entry point, receiving webhook payloads from the GitHub App.
+  - Currently scaffolds `overseerWebhook`. This will become the primary entry point, receiving webhook payloads from the GitHub App deployed to Firebase/GCF.
+  - Implement access control checks to verify the user triggering the webhook.
 - **`src/utils/github.ts` (Authentication & API):**
   - Needs to support `@octokit/auth-app` to authenticate as a GitHub App.
   - Must map a given `owner/repo` to an Installation ID to generate an access token dynamically.
@@ -40,6 +41,14 @@ We considered using GitHub Projects V2 to aggregate issues from multiple reposit
   - Currently assumes it operates in the local GitHub Action checkout.
   - Must clone the Target Repository dynamically, checkout a branch, commit, and push back to the Target Repository using the App Installation token.
 
+## Installation and Access Permissions
+
+To ensure security and restrict who can use Overseer:
+- **App Installation Restriction:** The GitHub App installation must be restricted to specific organizations or repositories. When configuring the GitHub App, it should be set to "Private" (only installable on the owner's account/organization) or, if Public, the webhook handler must maintain an explicit allowlist of authorized Installation IDs or Organization IDs.
+- **Usage Restriction:** Not every user in a repository should be able to trigger Overseer. The webhook handler in `src/index.ts` must verify the user interacting with the issue/comment. This can be achieved by:
+  - Validating the user's role (e.g., must be a `collaborator` with `write` access or an organization `member`).
+  - Checking against an explicit allowlist of GitHub usernames or teams authorized to issue commands to Overseer.
+
 ## Implementation Steps
 
 1. **GitHub App Authentication Utility:**
@@ -48,8 +57,9 @@ We considered using GitHub Projects V2 to aggregate issues from multiple reposit
    - Implement `getInstallationToken(owner, repo)` to dynamically fetch tokens.
 
 2. **Webhook Dispatcher Standup:**
-   - Fleshing out the `src/index.ts` Express webhook to fully handle `issues` and `issue_comment` events with App verification.
-   - Decouple `src/dispatch.ts` from reading `process.env.GITHUB_EVENT_PATH` and instead accept the event payload directly from `src/index.ts`.
+   - Implement the `src/index.ts` webhook handler for deployment to Firebase / GCF.
+   - Decouple `src/dispatch.ts` from reading `process.env.GITHUB_EVENT_PATH` and instead accept the event payload directly from the webhook.
+   - Add the access and permission boundary checks to drop unauthorized events.
 
 3. **Task Packet Schema Update:**
    - Update task packets in Overseer interactions to include a `Target Repository: owner/repo` field.
@@ -58,7 +68,3 @@ We considered using GitHub Projects V2 to aggregate issues from multiple reposit
    - Update `src/utils/persistence.ts` to accept `owner` and `repo` parameters.
    - Implement shallow cloning (`git clone --depth 1 https://x-access-token:<token>@github.com/<owner>/<repo>.git`).
    - Run task shell commands inside the cloned repository directory instead of the current working directory.
-
-## Unresolved Human Decisions
-- **Hosting the Webhook:** To use a GitHub App, `src/index.ts` must be hosted (e.g., Google Cloud Run, AWS Lambda, or a persistent VPS). Where will the canonical Overseer instance be hosted?
-- **Repository Strategy:** Should we strictly enforce a single Hub repo, or allow the GitHub App to run on *any* repo where an issue is opened (meaning any repo can act as its own Hub)? Allowing any repo to be a Hub is more flexible but might fragment work. For the initial phase, we recommend testing with a designated Hub repo.
