@@ -1,0 +1,33 @@
+--- src/utils/github.ts
++++ src/utils/github.ts
+@@ -298,4 +298,50 @@
+ 			optionId,
+ 		});
+ 	}
++
++	async clearProjectV2ItemFieldValue(
++		projectId: string,
++		itemId: string,
++		fieldId: string,
++	) {
++		const query = `
++			mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!) {
++				clearProjectV2ItemFieldValue(
++					input: {
++						projectId: $projectId
++						itemId: $itemId
++						fieldId: $fieldId
++					}
++				) {
++					projectV2Item {
++						id
++					}
++				}
++			}
++		`;
++		return this.octokit.graphql(query, {
++			projectId,
++			itemId,
++			fieldId,
++		});
++	}
