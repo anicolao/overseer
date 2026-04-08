@@ -887,7 +887,7 @@ function stripNextStepHandle(body: string): string | null {
 	return nextStepMatch?.[1] || null;
 }
 
-async function finalizeRun(
+export async function finalizeRun(
 	github: GitHubService,
 	owner: string,
 	repo: string,

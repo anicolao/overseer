@@ -371,11 +371,20 @@ export class GitHubService {
 			}
 		`;
 
-		const response = await this.octokit.graphql<any>(query, {
+		const response = await this.octokit.graphql<{
+			node?: {
+				projectItems?: {
+					nodes?: Array<{
+						id: string;
+						project: { id: string };
+					}>;
+				};
+			};
+		}>(query, {
 			nodeId: issueNodeId,
 		});
 		const items = response.node?.projectItems?.nodes || [];
-		const item = items.find((i: any) => i.project.id === projectId);
+		const item = items.find((i) => i?.project?.id === projectId);
 		return item ? item.id : null;
 	}
 
@@ -396,9 +405,16 @@ export class GitHubService {
 			}
 		`;
 
-		const response = await this.octokit.graphql<any>(query, { fieldId });
+		const response = await this.octokit.graphql<{
+			node?: {
+				options?: Array<{
+					id: string;
+					name: string;
+				}>;
+			};
+		}>(query, { fieldId });
 		const options = response.node?.options || [];
-		const option = options.find((o: any) => o.name === optionName);
+		const option = options.find((o) => o?.name === optionName);
 		return option ? option.id : null;
 	}
 
@@ -430,9 +446,19 @@ export class GitHubService {
 			}
 		`;
 
-		const response = await this.octokit.graphql<any>(query, { nodeId });
+		const response = await this.octokit.graphql<{
+			node?: {
+				number?: number;
+				repository?: {
+					name: string;
+					owner: {
+						login: string;
+					};
+				};
+			};
+		}>(query, { nodeId });
 		const node = response.node;
-		if (node && node.number && node.repository) {
+		if (node?.number && node.repository) {
 			return {
 				number: node.number,
 				owner: node.repository.owner.login,

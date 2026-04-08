@@ -1,12 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	buildDirectArchitectPlanningIterationResult,
 	buildPlanPathFromDesignFile,
 	extractDesignDocPathForDirectRepair,
+	finalizeRun,
 	findPersistQaDesignValidationFindings,
 	parseProjectsV2ItemEvent,
 	shouldBypassOverseerForArchitectDesignReview,
 } from "./dispatch.js";
+import type { GitHubService } from "./utils/github.js";
+
+vi.mock("node:fs", () => ({
+	writeFileSync: vi.fn(),
+	readFileSync: vi.fn(),
+	appendFileSync: vi.fn(),
+	existsSync: vi.fn(),
+}));
 
 describe("dispatch direct architect routing", () => {
 	it("recognizes implementation-ready architect comments and routes directly to planner", () => {
@@ -144,5 +153,142 @@ describe("projects_v2_item event parsing", () => {
 		};
 		const parsed = parseProjectsV2ItemEvent(payload);
 		expect(parsed.targetedPersonaFromProject).toBeNull();
+	});
+});
+
+describe("finalizeRun projects v2 handling", () => {
+	// biome-ignore lint/suspicious/noExplicitAny: mock
+	let githubMock: any;
+
+	beforeEach(() => {
+		githubMock = {
+			getIssue: vi
+				.fn()
+				.mockResolvedValue({ data: { node_id: "ISSUE_NODE_ID" } }),
+			getProjectItemForIssue: vi.fn().mockResolvedValue("ITEM_ID"),
+			getProjectV2FieldOptionId: vi.fn().mockResolvedValue("OPTION_ID"),
+			updateProjectV2ItemFieldValue: vi.fn().mockResolvedValue(undefined),
+			clearProjectV2ItemFieldValue: vi.fn().mockResolvedValue(undefined),
+			setActivePersona: vi.fn().mockResolvedValue(undefined),
+			addCommentToIssue: vi.fn().mockResolvedValue(undefined),
+		};
+		vi.stubEnv("PROJECT_ID", "PROJ_123");
+		vi.stubEnv("FIELD_ID", "FIELD_456");
+		vi.stubEnv("GITHUB_RUN_ID", "9999");
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.unstubAllEnvs();
+	});
+
+	it("updates project field value when handoffTo maps to an option and itemId exists", async () => {
+		const result = { log: "log", handoffTo: "@planner", finalResponse: "done" };
+		const personaMap = { planner: "Planner" };
+
+		await finalizeRun(
+			githubMock as GitHubService,
+			"owner",
+			"repo",
+			1,
+			"overseer",
+			result as unknown as import("./utils/agent_runner.js").IterationResult,
+			personaMap,
+		);
+
+		expect(githubMock.getProjectItemForIssue).toHaveBeenCalledWith(
+			"ISSUE_NODE_ID",
+			"PROJ_123",
+		);
+		expect(githubMock.getProjectV2FieldOptionId).toHaveBeenCalledWith(
+			"FIELD_456",
+			"Planning",
+		);
+		expect(githubMock.updateProjectV2ItemFieldValue).toHaveBeenCalledWith(
+			"PROJ_123",
+			"ITEM_ID",
+			"FIELD_456",
+			"OPTION_ID",
+		);
+		expect(githubMock.setActivePersona).not.toHaveBeenCalled();
+	});
+
+	it("clears project field value when there is no handoffTo but itemId exists", async () => {
+		const result = { log: "log", finalResponse: "done" }; // no handoffTo
+		const personaMap = { overseer: "Overseer" };
+
+		await finalizeRun(
+			githubMock as GitHubService,
+			"owner",
+			"repo",
+			1,
+			"overseer",
+			result as unknown as import("./utils/agent_runner.js").IterationResult,
+			personaMap,
+		);
+
+		expect(githubMock.getProjectItemForIssue).toHaveBeenCalledWith(
+			"ISSUE_NODE_ID",
+			"PROJ_123",
+		);
+		expect(githubMock.clearProjectV2ItemFieldValue).toHaveBeenCalledWith(
+			"PROJ_123",
+			"ITEM_ID",
+			"FIELD_456",
+		);
+		expect(githubMock.updateProjectV2ItemFieldValue).not.toHaveBeenCalled();
+		expect(githubMock.setActivePersona).not.toHaveBeenCalled();
+	});
+
+	it("falls back to labels when ITEM_ID is not found", async () => {
+		githubMock.getProjectItemForIssue.mockResolvedValue(null);
+		const result = { log: "log", handoffTo: "@planner", finalResponse: "done" };
+		const personaMap = { planner: "Planner" };
+
+		await finalizeRun(
+			githubMock as GitHubService,
+			"owner",
+			"repo",
+			1,
+			"overseer",
+			result as unknown as import("./utils/agent_runner.js").IterationResult,
+			personaMap,
+		);
+
+		expect(githubMock.getProjectItemForIssue).toHaveBeenCalledWith(
+			"ISSUE_NODE_ID",
+			"PROJ_123",
+		);
+		expect(githubMock.setActivePersona).toHaveBeenCalledWith(
+			"owner",
+			"repo",
+			1,
+			"planner",
+		);
+		expect(githubMock.updateProjectV2ItemFieldValue).not.toHaveBeenCalled();
+	});
+
+	it("falls back to labels when PROJECT_ID is not set", async () => {
+		vi.stubEnv("PROJECT_ID", "");
+		const result = { log: "log", handoffTo: "@planner", finalResponse: "done" };
+		const personaMap = { planner: "Planner" };
+
+		await finalizeRun(
+			githubMock as GitHubService,
+			"owner",
+			"repo",
+			1,
+			"overseer",
+			result as unknown as import("./utils/agent_runner.js").IterationResult,
+			personaMap,
+		);
+
+		expect(githubMock.getProjectItemForIssue).not.toHaveBeenCalled();
+		expect(githubMock.setActivePersona).toHaveBeenCalledWith(
+			"owner",
+			"repo",
+			1,
+			"planner",
+		);
 	});
 });
