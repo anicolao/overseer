@@ -4,6 +4,7 @@ import {
 	buildPlanPathFromDesignFile,
 	extractDesignDocPathForDirectRepair,
 	findPersistQaDesignValidationFindings,
+	parseProjectsV2ItemEvent,
 	shouldBypassOverseerForArchitectDesignReview,
 } from "./dispatch.js";
 
@@ -66,5 +67,82 @@ describe("dispatch direct architect routing", () => {
 		expect(findings).toContain(
 			"name the new manifest capability explicitly as `allow_persist_qa` in `bots.json`",
 		);
+	});
+});
+
+describe("projects_v2_item event parsing", () => {
+	it("extracts content_node_id when available", () => {
+		const payload = {
+			projects_v2_item: {
+				content_node_id: "I_kwDOMexample",
+			},
+			action: "created",
+		};
+		const parsed = parseProjectsV2ItemEvent(payload);
+		expect(parsed.contentNodeId).toBe("I_kwDOMexample");
+		expect(parsed.targetedPersonaFromProject).toBeNull();
+	});
+
+	it("maps Triage status to overseer persona", () => {
+		const payload = {
+			projects_v2_item: {
+				content_node_id: "I_kwDOMexample",
+			},
+			action: "edited",
+			changes: {
+				field_value: {
+					to: {
+						name: "Triage",
+					},
+				},
+			},
+		};
+		const parsed = parseProjectsV2ItemEvent(payload);
+		expect(parsed.targetedPersonaFromProject).toBe("overseer");
+	});
+
+	it("maps Planning status to planner persona", () => {
+		const payload = {
+			projects_v2_item: {
+				content_node_id: "I_kwDOMexample",
+			},
+			action: "edited",
+			changes: {
+				field_value: {
+					to: {
+						name: "Planning",
+					},
+				},
+			},
+		};
+		const parsed = parseProjectsV2ItemEvent(payload);
+		expect(parsed.targetedPersonaFromProject).toBe("planner");
+	});
+
+	it("handles missing content_node_id gracefully", () => {
+		const payload = {
+			action: "edited",
+		};
+		const parsed = parseProjectsV2ItemEvent(payload);
+		expect(parsed.contentNodeId).toBeNull();
+		expect(parsed.targetedPersonaFromProject).toBeNull();
+	});
+
+	it("ignores unrelated status changes", () => {
+		const payload = {
+			projects_v2_item: {
+				content_node_id: "I_kwDOMexample",
+			},
+			action: "edited",
+			changes: {
+				field_value: {
+					to: {
+						name: "SomeOtherStatus",
+					},
+				},
+			},
+		};
+		const parsed = parseProjectsV2ItemEvent(payload);
+		expect(parsed.targetedPersonaFromProject).toBeNull();
 	});
 });
