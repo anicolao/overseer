@@ -1,3 +1,4 @@
+import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { isWorkflowNoiseComment } from "./comment_markers.js";
 import { truncate } from "./text.js";
@@ -7,7 +8,20 @@ export class GitHubService {
 	private octokit: Octokit;
 
 	constructor(token: string) {
-		this.octokit = new Octokit({ auth: token });
+		const appId = process.env.APP_ID;
+		const privateKey = process.env.PRIVATE_KEY;
+
+		if (appId && privateKey) {
+			this.octokit = new Octokit({
+				authStrategy: createAppAuth,
+				auth: {
+					appId,
+					privateKey,
+				},
+			});
+		} else {
+			this.octokit = new Octokit({ auth: token });
+		}
 	}
 
 	async addCommentToIssue(
@@ -263,5 +277,194 @@ export class GitHubService {
 			head,
 			base,
 		});
+	}
+
+	async updateProjectV2ItemFieldValue(
+		projectId: string,
+		itemId: string,
+		fieldId: string,
+		optionId: string,
+	) {
+		const query = `
+			mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+				updateProjectV2ItemFieldValue(
+					input: {
+						projectId: $projectId
+						itemId: $itemId
+						fieldId: $fieldId
+						value: {
+							singleSelectOptionId: $optionId
+						}
+					}
+				) {
+					projectV2Item {
+						id
+					}
+				}
+			}
+		`;
+
+		return this.octokit.graphql(query, {
+			projectId,
+			itemId,
+			fieldId,
+			optionId,
+		});
+	}
+
+	async clearProjectV2ItemFieldValue(
+		projectId: string,
+		itemId: string,
+		fieldId: string,
+	) {
+		const query = `
+			mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!) {
+				clearProjectV2ItemFieldValue(
+					input: {
+						projectId: $projectId
+						itemId: $itemId
+						fieldId: $fieldId
+					}
+				) {
+					projectV2Item {
+						id
+					}
+				}
+			}
+		`;
+
+		return this.octokit.graphql(query, {
+			projectId,
+			itemId,
+			fieldId,
+		});
+	}
+
+	async getProjectItemForIssue(
+		issueNodeId: string,
+		projectId: string,
+	): Promise<string | null> {
+		const query = `
+			query($nodeId: ID!) {
+				node(id: $nodeId) {
+					... on Issue {
+						projectItems(first: 10) {
+							nodes {
+								id
+								project {
+									id
+								}
+							}
+						}
+					}
+					... on PullRequest {
+						projectItems(first: 10) {
+							nodes {
+								id
+								project {
+									id
+								}
+							}
+						}
+					}
+				}
+			}
+		`;
+
+		const response = await this.octokit.graphql<{
+			node?: {
+				projectItems?: {
+					nodes?: Array<{
+						id: string;
+						project: { id: string };
+					}>;
+				};
+			};
+		}>(query, {
+			nodeId: issueNodeId,
+		});
+		const items = response.node?.projectItems?.nodes || [];
+		const item = items.find((i) => i?.project?.id === projectId);
+		return item ? item.id : null;
+	}
+
+	async getProjectV2FieldOptionId(
+		fieldId: string,
+		optionName: string,
+	): Promise<string | null> {
+		const query = `
+			query($fieldId: ID!) {
+				node(id: $fieldId) {
+					... on ProjectV2SingleSelectField {
+						options {
+							id
+							name
+						}
+					}
+				}
+			}
+		`;
+
+		const response = await this.octokit.graphql<{
+			node?: {
+				options?: Array<{
+					id: string;
+					name: string;
+				}>;
+			};
+		}>(query, { fieldId });
+		const options = response.node?.options || [];
+		const option = options.find((o) => o?.name === optionName);
+		return option ? option.id : null;
+	}
+
+	async getIssueDetailsFromNodeId(
+		nodeId: string,
+	): Promise<{ number: number; owner: string; repo: string } | null> {
+		const query = `
+			query($nodeId: ID!) {
+				node(id: $nodeId) {
+					... on Issue {
+						number
+						repository {
+							name
+							owner {
+								login
+							}
+						}
+					}
+					... on PullRequest {
+						number
+						repository {
+							name
+							owner {
+								login
+							}
+						}
+					}
+				}
+			}
+		`;
+
+		const response = await this.octokit.graphql<{
+			node?: {
+				number?: number;
+				repository?: {
+					name: string;
+					owner: {
+						login: string;
+					};
+				};
+			};
+		}>(query, { nodeId });
+		const node = response.node;
+		if (node?.number && node.repository) {
+			return {
+				number: node.number,
+				owner: node.repository.owner.login,
+				repo: node.repository.name,
+			};
+		}
+		return null;
 	}
 }
